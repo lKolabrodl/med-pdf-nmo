@@ -15,6 +15,17 @@ function tokenCount(text) {
   return tokenize(text, { keepStopwords: true, stem: false }).length;
 }
 
+/**
+ * Создает поисковые чанки из извлеченного текста PDF.
+ *
+ * Predictor комбинирует окна предложений, отдельные строки, пары строк и
+ * контексты списков/заголовков, чтобы scorers могли находить и обычный текст,
+ * и характерные для рекомендаций таблицы/списки.
+ *
+ * @param pdfText Результат `extractPdfText`.
+ * @param options Настройки размера чанка и перекрытия предложений.
+ * @returns Поисковые чанки с нормализованным текстом и токенами.
+ */
 export function buildChunks(pdfText, { targetTokens = 95, overlapSentences = 2 } = {}) {
   const chunks = [];
 

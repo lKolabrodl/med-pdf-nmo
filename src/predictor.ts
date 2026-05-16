@@ -4923,6 +4923,20 @@ function scoreAnswer(context) {
   return { raw, evidence };
 }
 
+/**
+ * Запускает локальный non-LLM predictor для выбора ответа.
+ *
+ * Predictor получает источник PDF, текст вопроса, варианты ответа и режим
+ * (`single` или `multi`). Он извлекает или переиспользует текст PDF, считает
+ * score для каждого варианта по документу и возвращает id выбранных ответов
+ * вместе с evidence-фрагментами.
+ *
+ * Runtime использует только данные, переданные вызывающим кодом.
+ *
+ * @param input Запрос с PDF-данными/путем/URL, вопросом, ответами и режимом.
+ * @param options Необязательные runtime-зависимости, например явный модуль PDF.js.
+ * @returns ID выбранных ответов, калиброванные score, raw score, evidence и метаданные.
+ */
 export async function predict(input, options: any = {}) {
   const config = { ...DEFAULT_CONFIG, ...options };
   const pdfInput = input.pdfData ?? input.pdfBuffer ?? input.pdf ?? input.file ?? input.blob ?? input.pdfUrl ?? input.url ?? input.pdfPath;
@@ -5024,6 +5038,9 @@ export async function predict(input, options: any = {}) {
   };
 }
 
+/**
+ * Очищает in-memory кеши predictor, включая кешированный текст PDF и runtime-состояние.
+ */
 export function clearPredictorCache() {
   clearPdfRuntimeCache();
 }

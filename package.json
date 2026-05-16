@@ -1,12 +1,45 @@
 {
   "name": "nmo-pdf-easy-browser",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Browser-first NMO PDF answer predictor packaged as a plain JS library.",
-  "main": "dist/nmo-pdf-easy.browser.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "browser": "./dist/nmo-pdf-easy.browser.mjs",
+  "unpkg": "./dist/nmo-pdf-easy.browser.js",
+  "jsdelivr": "./dist/nmo-pdf-easy.browser.js",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "bin": {
+    "nmo-pdf-easy": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/nmo-pdf-easy.browser.mjs",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/nmo-pdf-easy.browser.mjs",
+      "default": "./dist/nmo-pdf-easy.browser.mjs"
+    },
+    "./dist/nmo-pdf-easy.browser.js": "./dist/nmo-pdf-easy.browser.js",
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "build": "esbuild src/browser.ts --bundle --format=iife --global-name=NmoPdfEasy --outfile=dist/nmo-pdf-easy.browser.js --platform=browser --target=es2020 --external:pdfjs-dist/legacy/build/pdf.mjs --legal-comments=none",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && npm run build:esm && npm run build:browser && npm run build:browser:esm",
+    "build:esm": "tsc -p tsconfig.package.json",
+    "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=NmoPdfEasy --outfile=dist/nmo-pdf-easy.browser.js --platform=browser --target=es2020 --external:pdfjs-dist/legacy/build/pdf.mjs --legal-comments=none",
+    "build:browser:esm": "esbuild src/browser.ts --bundle --format=esm --outfile=dist/nmo-pdf-easy.browser.mjs --platform=browser --target=es2020 --external:pdfjs-dist/legacy/build/pdf.mjs --legal-comments=none",
+    "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "predict": "tsx src/cli.ts",

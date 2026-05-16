@@ -37,6 +37,9 @@ const BROAD_EVIDENCE_KINDS = new Set([
 
 const NOISY_SHARED_EVIDENCE_KINDS = new Set(["question_chunk_answer", "bm25_question_answer", "shared_multi_segment"]);
 
+/**
+ * Преобразует raw score вариантов в относительные confidence-like score.
+ */
 export function calibrateScores(answerScores: AnswerScore[]) {
   const rawValues = answerScores.map((item) => item.raw);
   const max = Math.max(...rawValues, 0.0001);
@@ -53,6 +56,13 @@ export function calibrateScores(answerScores: AnswerScore[]) {
   });
 }
 
+/**
+ * Применяет зафиксированные post-scoring корректировки, оставленные после
+ * валидационных прогонов.
+ *
+ * Это по-прежнему детерминированная non-LLM логика: она использует только
+ * признаки score/evidence, полученные эвристическими scorers.
+ */
 export function applyFrozenFeatureRanker(answerScores: AnswerScore[], mode: AnswerMode, config: PredictorConfig, context: { question?: string } = {}) {
   if (!config.frozenFeatureRanker) return answerScores;
   const allowMultiPruning = mode === "multi" && multiPruningAllowed(context.question ?? "");
@@ -78,6 +88,9 @@ export function applyFrozenFeatureRanker(answerScores: AnswerScore[], mode: Answ
   return config.structuralClusterAdjustments ? applyStructuralClusterAdjustments(contrasted, mode, allowMultiPruning) : contrasted;
 }
 
+/**
+ * Выбирает финальные id ответов из калиброванных score для single/multi режима.
+ */
 export function selectAnswers(scored: ReturnType<typeof calibrateScores>, mode: AnswerMode, config: PredictorConfig) {
   const sorted = [...scored].sort((a, b) => b.raw - a.raw);
   if (mode === "single") return selectSingleAnswer(sorted, config);
@@ -283,6 +296,9 @@ function applyMultiAllOptionsGuard(sorted: ReturnType<typeof calibrateScores>, s
   return sorted.slice(0, 2).map((item) => item.answer.id);
 }
 
+/**
+ * Округляет числовой score до четырех знаков после запятой.
+ */
 export function round4(value: number) {
   return Math.round((Number.isFinite(value) ? value : 0) * 10000) / 10000;
 }

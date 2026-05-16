@@ -1,3 +1,7 @@
+/**
+ * Зафиксированная конфигурация predictor, выбранная по результатам
+ * измеримых валидационных прогонов.
+ */
 export const DEFAULT_CONFIG = {
   multiRelativeThreshold: 0.84,
   multiAbsoluteThreshold: 12,
@@ -20,4 +24,5 @@ export const DEFAULT_CONFIG = {
   evidenceLimit: 8,
 };
 
+/** Runtime-форма объекта конфигурации predictor. */
 export type PredictorConfig = typeof DEFAULT_CONFIG;

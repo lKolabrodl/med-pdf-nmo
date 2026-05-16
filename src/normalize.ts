@@ -31,6 +31,9 @@ const LATIN_LOOKALIKES = new Map([
 const DASHES = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g;
 const SPACES = /[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000]/g;
 
+/**
+ * Стоп-слова, которые удаляются из большинства поисковых token-запросов.
+ */
 export const RUSSIAN_STOPWORDS = new Set([
   "а",
   "без",
@@ -240,6 +243,13 @@ const NUMBER_WORD_PAIRS = [
 let foldedNumberWords = null;
 let foldedStemSuffixes = null;
 
+/**
+ * Нормализует сырой текст PDF, вопроса или ответа перед поисковой обработкой.
+ *
+ * Обрабатывает Unicode-форму, пробелы, варианты тире, десятичные разделители и
+ * частые медицинские символы, сохраняя структуру текста для дальнейшей
+ * токенизации.
+ */
 export function normalizeText(text) {
   return String(text ?? "")
     .normalize("NFKC")
@@ -265,6 +275,9 @@ export function normalizeText(text) {
     .toLowerCase();
 }
 
+/**
+ * Приводит визуально похожие кириллические и латинские символы к общей форме.
+ */
 export function foldLookalikes(text) {
   const source = normalizeText(text);
   let out = "";
@@ -274,6 +287,9 @@ export function foldLookalikes(text) {
   return out;
 }
 
+/**
+ * Переводит текст в нормализованную поисковую форму для фразового и token-match.
+ */
 export function normalizeForSearch(text) {
   return foldLookalikes(text)
     .replace(/([0-9])\s*%\s*/g, "$1% ")
@@ -282,6 +298,13 @@ export function normalizeForSearch(text) {
     .trim();
 }
 
+/**
+ * Токенизирует текст для поиска и скоринга.
+ *
+ * @param text Сырой или нормализованный текст.
+ * @param options Переключатели фильтрации стоп-слов и стемминга.
+ * @returns Поисковые токены и безопасные расширения для составных/медицинских форм.
+ */
 export function tokenize(text, { keepStopwords = false, stem = true } = {}) {
   const normalized = normalizeForSearch(text);
   const tokens = normalized.match(/[a-zа-я0-9]+(?:[.%/+-][a-zа-я0-9]+)*/giu) ?? [];
@@ -302,10 +325,17 @@ export function tokenize(text, { keepStopwords = false, stem = true } = {}) {
   return result;
 }
 
+/**
+ * Токенизирует текст и удаляет дубликаты, сохраняя порядок первого появления.
+ */
 export function uniqueTokens(text, options = {}) {
   return [...new Set(tokenize(text, options))];
 }
 
+/**
+ * Применяет легкий русский/медицинский suffix-стеммер для эвристического
+ * predictor.
+ */
 export function stemToken(token) {
   if (/^[0-9]+(?:[./+-][0-9a-zа-я]+)*%?$/iu.test(token)) return token;
   if (token.length <= 4) return token;
@@ -344,6 +374,9 @@ function expandToken(token) {
   return out.filter((item) => item !== token);
 }
 
+/**
+ * Извлекает числовые токены и поддержанные русские числительные из текста.
+ */
 export function extractNumbers(text) {
   const normalized = normalizeForSearch(text);
   const numeric = normalized.match(/\d+(?:[.,]\d+)?(?:-\d+(?:[.,]\d+)?)?%?/g) ?? [];
@@ -365,6 +398,9 @@ function numberWordValue(token) {
   return foldedNumberWords.get(String(token ?? "").toLowerCase());
 }
 
+/**
+ * Определяет общие признаки вопроса, которые используют downstream scorers.
+ */
 export function detectQuestionIntent(question) {
   const q = normalizeForSearch(question);
   const raw = normalizeText(question);
@@ -379,6 +415,9 @@ export function detectQuestionIntent(question) {
   return { negative, exception, numeric, listLike };
 }
 
+/**
+ * Считает Jaccard similarity для двух массивов токенов.
+ */
 export function jaccard(a, b) {
   if (!a.length || !b.length) return 0;
   const setA = new Set(a);
@@ -389,6 +428,9 @@ export function jaccard(a, b) {
   return hit / Math.max(setA.size, new Set(b).size);
 }
 
+/**
+ * Доля уникальных токенов запроса, найденных среди токенов документа.
+ */
 export function coverage(queryTokens, documentTokens) {
   if (!queryTokens.length || !documentTokens.length) return 0;
   const doc = new Set(documentTokens);
@@ -400,14 +442,23 @@ export function coverage(queryTokens, documentTokens) {
   return hit / uniq.length;
 }
 
+/**
+ * Экранирует текст для безопасного использования как literal-фрагмент RegExp.
+ */
 export function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Токенизирует фразу без стемминга и удаления стоп-слов.
+ */
 export function phraseTokens(text) {
   return tokenize(text, { keepStopwords: true, stem: false });
 }
 
+/**
+ * Создает мягкий whitespace-tolerant RegExp для нормализованной фразы.
+ */
 export function phrasePattern(text) {
   const tokens = phraseTokens(text);
   if (!tokens.length) return null;

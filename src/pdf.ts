@@ -2,6 +2,14 @@ import { normalizeForSearch } from "./normalize.js";
 
 let configuredPdfJs: any = null;
 
+/**
+ * Настраивает модуль PDF.js, который будет использовать runtime.
+ *
+ * В браузере это удобно вызывать, когда PDF.js загружен с CDN или через
+ * собственный bundler. В Node.js обычно достаточно пакетного импорта.
+ *
+ * @param pdfjsLib Объект модуля с методом `getDocument`.
+ */
 export function setPdfJsLib(pdfjsLib: any) {
   configuredPdfJs = pdfjsLib;
 }
@@ -127,6 +135,17 @@ function buildPageText(lines: string[]) {
   return out.join("\n");
 }
 
+/**
+ * Извлекает текст и легкие layout-метаданные из PDF.
+ *
+ * Экстрактор принимает байты, браузерные File/Blob, ArrayBuffer-подобные
+ * объекты или URL-строки. Возвращает текст страниц, строки, нормализованный
+ * текст и флаг `ocrNeeded`, если в PDF найдено подозрительно мало текста.
+ *
+ * @param pdfInput Байты PDF, File/Blob, ArrayBuffer, Uint8Array или URL.
+ * @param options Необязательный `cacheKey` и явно переданный `pdfjsLib`.
+ * @returns Текст страниц и метаданные, которые использует predictor.
+ */
 export async function extractPdfText(pdfInput: any, options: any = {}) {
   const pdfjs = await resolvePdfJs(options);
   const data = await toUint8Array(pdfInput);
@@ -169,6 +188,12 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
   };
 }
 
+/**
+ * Очищает кеш извлечения PDF.
+ *
+ * Текущая browser-first реализация хранит текст PDF в runtime-кеше predictor,
+ * поэтому эта функция намеренно оставлена как совместимый no-op.
+ */
 export function clearPdfMemoryCache() {
   // Browser build keeps PDF text in the predictor runtime cache.
 }

@@ -11,6 +11,9 @@ function answerId(index) {
   return `A${index + 1}`;
 }
 
+/**
+ * Нормализует публичные варианты ответа в стабильные объекты `{ id, text }`.
+ */
 export function normalizeAnswers(answers) {
   return answers.map((answer, index) => {
     if (typeof answer === "string") {
@@ -27,6 +30,12 @@ function objectKey(input) {
   return input && typeof input === "object" ? input : null;
 }
 
+/**
+ * Создает или переиспользует runtime-состояние PDF для одного предсказания.
+ *
+ * Runtime содержит извлеченный текст PDF, поисковые чанки и BM25-индекс.
+ * Кеширование идет по явному `cacheKey`, URL-строке или identity объекта.
+ */
 export async function getPdfRuntime(pdfInput, options: any = {}) {
   const cacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
   if (cacheKey && keyedRuntimeCache.has(cacheKey)) return keyedRuntimeCache.get(cacheKey);
@@ -47,6 +56,9 @@ export async function getPdfRuntime(pdfInput, options: any = {}) {
   return runtimePromise;
 }
 
+/**
+ * Очищает keyed runtime-кеш PDF.
+ */
 export function clearPdfRuntimeCache() {
   keyedRuntimeCache.clear();
 }

@@ -1,10 +1,18 @@
 import { tokenize } from "./normalize.js";
 
+/**
+ * Документ, сохраненный в поисковом BM25-индексе.
+ *
+ * Чанки predictor добавляют дополнительные метаданные: страницу, тип, текст и id.
+ */
 export type BM25Document = {
   tokens?: string[];
   [key: string]: unknown;
 };
 
+/**
+ * Небольшая реализация BM25 для локального поиска по чанкам PDF.
+ */
 export class BM25Index {
   documents: BM25Document[];
   k1: number;
@@ -14,6 +22,12 @@ export class BM25Index {
   lengths: number[];
   avgdl: number;
 
+  /**
+   * Создает индекс для уже токенизированных документов.
+   *
+   * @param documents Документы с необязательными массивами `tokens`.
+   * @param options Параметры настройки BM25.
+   */
   constructor(documents: BM25Document[], { k1 = 1.35, b = 0.72 } = {}) {
     this.documents = documents;
     this.k1 = k1;
@@ -38,12 +52,18 @@ export class BM25Index {
     this.avgdl = documents.length ? totalLength / documents.length : 0;
   }
 
+  /**
+   * Считает inverse document frequency для одного нормализованного токена.
+   */
   idf(token: string) {
     const n = this.documents.length;
     const df = this.docFreq.get(token) ?? 0;
     return Math.log(1 + (n - df + 0.5) / (df + 0.5));
   }
 
+  /**
+   * Считает score токенизированного запроса для одного документа в индексе.
+   */
   scoreTokens(queryTokens: string[], docIndex: number) {
     const frequencies = this.termFreqs[docIndex];
     if (!frequencies) return 0;
@@ -59,6 +79,11 @@ export class BM25Index {
     return score;
   }
 
+  /**
+   * Ищет по индексу сырой текст или заранее токенизированный запрос.
+   *
+   * @returns Лучшие совпадающие чанки с положительным BM25 score.
+   */
   search(query: string | string[], { limit = 10 } = {}) {
     const queryTokens = Array.isArray(query) ? query : tokenize(query);
     if (!queryTokens.length) return [];
