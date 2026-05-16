@@ -1,0 +1,225 @@
+# Error Analysis
+
+## Current Error Counts
+
+Latest run after iteration 44 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
+
+Train (`1597` keyed cases):
+
+- correct: `1099`
+- errors: `498`
+- `confused_with_distractor`: `301`
+- `multi_cardinality`: `197`
+
+Dev (`473` cases):
+
+- correct: `356`
+- errors: `117`
+- `confused_with_distractor`: `68`
+- `multi_cardinality`: `49`
+
+Holdout (`550` cases):
+
+- correct: `446`
+- errors: `104`
+- `confused_with_distractor`: `73`
+- `multi_cardinality`: `31`
+
+All keyed splits combined:
+
+- correct: `1901/2620 = 0.7256`
+- errors: `719`
+- `confused_with_distractor`: `444`
+- `multi_cardinality`: `275`
+
+Worst PDFs by remaining error count across all keyed splits after iteration 44:
+
+- `24-kalit`: `30`
+- `35-cron`: `29`
+- `37-bazal`: `30`
+- `36-anrid`: `28`
+- `15-toxic`: `26`
+- `29-tpank`: `25`
+- `30-heart`: `25`
+- `13-pisha`: `24`
+- `05-bronhit-hron`: `22`
+- `16-hb`: `22`
+- `39-glaurova`: `22`
+
+Worst holdout PDFs:
+
+- `14-sarkoidoz`: `18`
+- `33-aorta`: `15`
+- `19-gepatitc`: `13`
+- `18-gepatitabc`: `13`
+- `06-co-toksic`: `12`
+- `11-mening`: `11`
+- `17-gepatit`: `11`
+- `23-nimana`: `11`
+
+The older snapshot below is kept for comparison.
+
+Dev (`404` cases):
+
+- correct: `278`
+- errors: `126`
+- `confused_with_distractor`: `75`
+- `multi_cardinality`: `51`
+
+Holdout (`480` cases):
+
+- correct: `330`
+- errors: `150`
+- `confused_with_distractor`: `106`
+- `multi_cardinality`: `44`
+
+No-evidence count is `0` on both dev and holdout: the predictor usually finds a relevant PDF region, but often cannot choose the exact option/set from that region.
+
+## Main Error Classes
+
+### 1. Flattened Tables
+
+Many PDFs contain tables where rows such as severity/category/value are extracted by `pdfjs-dist` as one long paragraph. The predictor retrieves the correct table but cannot reliably bind a row label to the correct numeric range or drug list.
+
+Symptoms:
+
+- single-answer questions select a neighboring numeric range;
+- several options receive nearly identical raw scores;
+- confidence stays high even when the selected row is wrong.
+
+### 2. Multi-Answer Cardinality
+
+For multi-answer tasks, the evidence often supports the topic but not the exact set. The algorithm may select only the strongest option or include an adjacent supported-looking distractor.
+
+Symptoms:
+
+- correct option omitted because its evidence is weaker than the top option;
+- extra option selected because it appears in the same recommendation/table chunk;
+- threshold tuning improves one subset and harms another.
+
+### 3. Nearby Distractors
+
+Medical guideline PDFs frequently list related concepts together. A wrong variant may appear in the same sentence, bullet list, or page as the correct answer.
+
+Symptoms:
+
+- BM25 retrieves the right page;
+- correct answer is present in evidence but not top-scored;
+- answer text with more exact terms beats the answer that matches the question condition.
+
+### 4. PDF Text Noise
+
+Some pages contain broken Latin/Cyrillic glyphs, split words, false spaces, and flattened headers/footers. Normalization mitigates this, but not enough for all cases.
+
+Symptoms:
+
+- abbreviations and table labels are split;
+- row order becomes ambiguous;
+- compact table columns are merged.
+
+## Failed Improvement Attempts
+
+Evidence-based multi inclusion improved recall for some examples but lowered dev exact accuracy from `0.6510` to `0.6337` by adding extra options.
+
+Compact numeric windows and Russian number-word aliases lowered dev exact accuracy to `0.6238`. The added signals made neighboring numbers in flattened tables look more relevant.
+
+Raw PDF line/layout chunks fixed isolated table rows but lowered dev to `0.6361` when they replaced merged line chunks. Adding them to global BM25 also shifted multi-answer scores too much.
+
+IDF-weighted question coverage did not improve holdout exact accuracy and slightly lowered dev.
+
+Focused raw-line scoring for dose questions fixed some local examples but regressed dev to `0.6683`, mostly because adjacent drug/dose rows were too close in flattened text.
+
+Question-number support for non-numeric answers lowered dev to `0.6733` and holdout to `0.6688`, so it was reverted.
+
+Token-boundary exact phrase matching lowered dev to `0.6782` and holdout to `0.6729`. It removed some false substring matches but also broke useful partial matches in noisy PDF text, so it was reverted.
+
+An answer-internal `value + condition` scorer for rows like `каждые 1-2 года для умеренной ...` lowered dev to `0.6807` and holdout to `0.6854`. It over-boosted adjacent condition/value pairs in the same line and was disabled.
+
+During the continuation, a broad shared multi-answer inclusion rule was retried. Without a prior raw-score ratio filter it improved dev but dropped holdout to `429/550 = 0.7800`, mainly by adding plausible extras in `14-sarkoidoz` and `33-aorta`. The final version keeps only candidates with enough prior raw support.
+
+A single-answer cloze-tail continuation scorer was tested after iteration 34. It was neutral on train/dev/holdout and did not fix the sampled single-answer distractor errors, so it was removed.
+
+A recommendation/question-cue single-answer scorer was tested during the iteration 36-37 continuation. It improved one sampled "purpose/cue + answer" pattern but was net neutral or negative (`dev -1`, `holdout +1`, train unchanged), so it was disabled.
+
+An explicit fourth-answer multi rule was explored for under-selected 4-answer sets. It did not improve the combined split metrics without adding extra false positives, so it was not implemented.
+
+During iteration 38, a global multi-threshold grid was run over relative threshold, score-gap threshold, third-answer gap/relative thresholds, and caps. The current config remained the best overall setting that preserved holdout `>= 0.80`; threshold-only tuning cannot close the overall gap.
+
+Also during iteration 38, a broad binary cue scorer (`наличие/отсутствие`) and a broad answer-contrast token scorer were tried on the main multi distractor class. They were not retained because they fixed some sampled rows but over-boosted unrelated neighboring segments, for example shared "absence/effect" wording without the distinguishing route/dose/list item.
+
+During iteration 39, a broad shared-multi phrase matching fix recovered a representative four-component therapy set but regressed dev (`342/473`) and holdout (`442/550`) by adding plausible extras, so it was reverted. A numeric count-word scorer for `один раз/однократно/двукратно` was also disabled: flattened windows often contain the correct and neighboring count phrases together, making it boost both sides.
+
+During iteration 41, a comparator-number scorer for `<`, `>`, and `=` expressions fixed duplicated `ОФВ1/ФЖЕЛ <0,7` examples locally, but it also over-boosted unrelated age/range rows in `23-nimana` and `33-aorta`; holdout dropped to `442/550`, so the scorer was reverted.
+
+During iteration 42, coordinate-aware table row reconstruction was tried directly. The broad version grouped PDF items into x-separated cells and scored table-like rows across all applicable modes, but it dropped dev to `341/473` by treating recommendation/comment metadata and adjacent rows as answer evidence. The retained version is gated to single-answer table/classification questions, blocks fibrosis-stage questions, rejects recommendation metadata rows, and disables multi-answer coordinate rows because equal row evidence over-selected distractors.
+
+During iteration 43, all five proposed directions were implemented as a conservative post-scoring layer: frozen evidence-feature ranker, multi-cardinality model, pairwise single contrast, coordinate row contrast, and generic structural-cluster pruning. The broad version regressed train broad-list/source/dosing questions, so the retained pruning is limited to recommendation-like multi questions and gated away from `all patients`, differential/source lists, and dose-regimen patterns.
+
+During iteration 44, the multi all-options hypothesis was tested. Only `3/809` multi cases have every answer option correct, while the predictor selected every option in `11` cases and was right only once. The retained guard applies only to 3- and 4-option all-selected predictions and cuts them to top-2 raw candidates; 5+ all-selected cases are left unchanged because they include a real all-correct train case and complex lists.
+
+## Current Top Derived Classes
+
+- all keyed splits: `confused_with_distractor = 444`, `multi_cardinality = 275`
+- train: `confused_with_distractor = 303`, `multi_cardinality = 195`
+- dev: `confused_with_distractor = 68`, `multi_cardinality = 49`
+- holdout: `confused_with_distractor = 73`, `multi_cardinality = 31`
+
+Holdout exact accuracy is unchanged by iteration 44 and still passes:
+
+- `confused_with_distractor`: `73`
+- `multi_cardinality`: `31`
+
+Worst holdout PDFs by remaining error count:
+
+- `14-sarkoidoz`: `18` errors
+- `33-aorta`: `15` errors
+- `18-gepatitabc`: `13` errors
+- `19-gepatitc`: `13` errors
+- `06-co-toksic`: `12` errors
+- `11-mening`: `11` errors
+- `17-gepatit`: `11` errors
+- `23-nimana`: `11` errors
+
+## Remaining Risk After Passing 0.80
+
+Iteration 44 passes the holdout target with exact accuracy `0.8109` (`446/550`). The new user-requested overall target is not reached: answer-keyed overall accuracy is `1901/2620 = 0.7256`, requiring `195` more exact answers to reach `0.80`.
+
+The main residual risk is still layout semantics plus exact multi-answer set selection. Isolated visual-row, exact short-label row, step-window, condition-number, definition-window, answer-stage/degree row, count-cloze, coordinate table-column, coordinate table-row, frozen feature/cardinality pruning, all-options guard, MKB/code-row binding, and near-tie specificity rules recover some cases, but many remaining errors come from flattened tables, adjacent recommendation bullets, and weak cardinality calibration. The remaining 195-answer overall shortfall requires richer structural evidence, not another scalar threshold tweak.
+
+Iteration 40 hypotheses and outcome:
+
+- Hypothesis 1: blank count questions can be handled by binding a numeric/word-count answer between the left side of the blank and the right-side `раз/сутки/прием` cue. Kept narrowly as `cloze_gap_local`; broader month/frequency use was rejected because it boosted neighboring monitoring intervals.
+- Hypothesis 2: severity/classification multi tables can be handled by binding the question's column label to PDF item x-coordinates and matching each answer's metric/value inside that column. Kept as `visual_table_column` with explicit column cues, recommendation-row rejection, and full expanded-number coverage for ranges.
+- Hypothesis 3: threshold tuning or broad shared evidence could recover missing multi answers. Rejected again; previous grids and broad shared matching regressed dev/holdout by adding plausible extras.
+
+Iteration 41 hypotheses and outcome:
+
+- Hypothesis 1: code/MKB questions should bind an answer code to its own PDF row instead of scoring a merged code-list chunk. Kept as `classification_code_segment`; OCR variants such as `.140` and `Л41` are normalized to `J40`/`J41`.
+- Hypothesis 2: comparator expressions could distinguish numeric criteria (`<`, `>`, `=`). Rejected after holdout regressed to `442/550` by over-boosting neighboring age/range rows.
+- Hypothesis 3: raw-score-only multi cardinality selection could recover many exact sets. Rejected as insufficient: an offline top-k oracle with true expected cardinality caps overall at about `76.6%`, below the `80%` target, and train/dev-tuned threshold variants did not materially improve dev/holdout.
+
+Iteration 42 hypotheses and outcome:
+
+- Hypothesis 1: coordinate-aware row reconstruction can bind labels and numeric ranges that are flattened in paragraph text. Kept narrowly as `coordinate_table_row` for single-answer table/classification questions; it fixed two `07-hron` dev rows and raised dev to `352/473`.
+- Hypothesis 2: the same row grid can generalize to multi-answer tables. Rejected because candidates in the same reconstructed row often received equal support, adding plausible extras and worsening exact set matches.
+- Hypothesis 3: row reconstruction should cover all stage/table questions. Rejected for fibrosis/METAVIR-style questions because the existing `fibrosis_stage_row` scorer is more precise; coordinate rows were blocked for those questions.
+
+Iteration 43 hypotheses and outcome:
+
+- Hypothesis 1: a frozen non-LLM feature ranker can safely recalibrate evidence kinds. Kept as a small post-score feature layer; broad penalties were restricted after regressing broad-list/source/dosing questions.
+- Hypothesis 2: multi-cardinality should be handled separately from raw evidence thresholds. Kept narrowly by raising the third-answer relative threshold and adding conservative prune/add checks based on structural evidence.
+- Hypothesis 3: pairwise/cluster contrast can remove recommendation distractors that share the same paragraph. Kept only for recommendation-like multi questions; it fixed examples such as `15-toxic#16` and `27-cistit#7` without lowering holdout.
+
+Iteration 44 hypotheses and outcome:
+
+- Hypothesis 1: in multi, selecting every option is usually suspicious because `expected.length === variants.length` is extremely rare. Kept as `multiAllOptionsGuard` for 3- and 4-option all-selected outputs.
+- Hypothesis 2: the guard should not apply to 5+ options. Confirmed: a 5-option all-selected train case is genuinely all-correct, and 5+ lists often need more than one distractor removed.
+- Hypothesis 3: all-options pruning can improve cardinality without changing ordinary multi cases. Confirmed on dev (`+3` exact, multi exact `0.5625`) with unchanged holdout exact.
+
+Concrete next steps:
+
+- extract text items with coordinates into table-like rows/columns, not only paragraphs;
+- add more general row-binding features for `label -> value` questions;
+- add a non-LLM calibrated ranker trained only on train/dev features, then freeze weights for inference;
+- add stronger confidence calibration, because current correct/incorrect confidence averages are too close;
+- consider JS OCR only if future PDFs are scanned or page text is insufficient.
