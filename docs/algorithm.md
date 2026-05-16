@@ -68,6 +68,7 @@ The predictor returns machine-readable JSON:
    - `section_list_segment` for `по <section>` list questions, binding answers to the matching section until the next `По ...` heading;
    - `row_label_segment` for explicit row/list labels in the question, including `МКБ-10 ... кодируется`, stage labels, localized/generalized/rare forms, and age-form labels;
    - `classification_code_segment` for code/MKB questions: an answer code is matched to its own PDF row/window, with OCR normalization for extracted `J` codes such as `.140` and `Л41`;
+   - `mkb_class_exclusion_absent` for narrow MKB class exclusion questions: options found in member rows such as `C44.0`/`C44.1` are treated as included in the class, while absent options answer `not included` wording;
    - `polarity_match` / `polarity_mismatch` for increase/decrease and more/less direction near the answer term;
    - `latin_fuzzy_ocr` for multi-answer Latin tokens degraded by PDF OCR/extraction noise;
    - `label_number_proximity` for category/range questions such as severity labels followed by numeric ranges;
@@ -76,6 +77,7 @@ The predictor returns machine-readable JSON:
    - `visual_table_column` for multi-answer severity/classification tables: the scorer finds the question's column label in PDF `lineItems` by x-coordinate, then accepts an answer only when its metric token and fully covered numeric/range value appear in that same column;
    - `coordinate_table_row` for single-answer table/classification questions: the scorer groups PDF `lineItems` into x-separated cells, merges nearby row continuations, rejects recommendation/comment metadata rows, and scores the answer only when its cell has enough table context and distinctive question-focus support;
    - `gene_sentence_segment` for mutation/polymorphism gene questions: short Latin gene-symbol answers are matched inside the single sentence that contains the question focus, including OCR variants such as Cyrillic lookalike genes and spaced digit forms;
+   - `clinical_feature_segment` for narrow `has following clinical signs` multi questions: positive feature sentences near the form/disease focus are boosted, while same-sentence `not typical/not characteristic/absent` cues become `clinical_feature_negated` penalties;
    - `bounded_list_segment` for local list evidence tied to syndrome names, age clauses, and `triad` cues;
    - `ordinal_list_segment` for numbered stages, therapy-line questions, and numeric `N-я ступень` step lists, including page-break continuation; heading-like `терапия N-й линии` windows are narrowed so previous-line drugs do not leak into the current line;
    - `answer_ordinal_row` for answer options that are themselves stage/degree labels (`1/2/3`, `I/II/III`) and must be bound back to the matching classification row;

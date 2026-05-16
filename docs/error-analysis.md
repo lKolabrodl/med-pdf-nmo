@@ -2,14 +2,14 @@
 
 ## Current Error Counts
 
-Latest run after iteration 47 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
+Latest run after iteration 49 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
 
 Train (`1597` keyed cases):
 
-- correct: `1102`
-- errors: `495`
-- `confused_with_distractor`: `316`
-- `multi_cardinality`: `179`
+- correct: `1104`
+- errors: `493`
+- `confused_with_distractor`: `315`
+- `multi_cardinality`: `178`
 
 Dev (`473` cases):
 
@@ -27,15 +27,15 @@ Holdout (`550` cases):
 
 All keyed splits combined:
 
-- correct: `1906/2620 = 0.7275`
-- errors: `714`
-- `confused_with_distractor`: `462`
-- `multi_cardinality`: `252`
+- correct: `1908/2620 = 0.7282`
+- errors: `712`
+- `confused_with_distractor`: `461`
+- `multi_cardinality`: `251`
 
-Worst PDFs by remaining error count across all keyed splits after iteration 47:
+Worst PDFs by remaining error count across all keyed splits after iteration 49:
 
 - `35-cron`: `31`
-- `37-bazal`: `30`
+- `37-bazal`: `28`
 - `24-kalit`: `28`
 - `15-toxic`: `27`
 - `30-heart`: `27`
@@ -159,8 +159,8 @@ During iteration 44, the multi all-options hypothesis was tested. Only `3/809` m
 
 ## Current Top Derived Classes
 
-- all keyed splits: `confused_with_distractor = 462`, `multi_cardinality = 252`
-- train: `confused_with_distractor = 316`, `multi_cardinality = 179`
+- all keyed splits: `confused_with_distractor = 461`, `multi_cardinality = 251`
+- train: `confused_with_distractor = 315`, `multi_cardinality = 178`
 - dev: `confused_with_distractor = 75`, `multi_cardinality = 43`
 - holdout: `confused_with_distractor = 71`, `multi_cardinality = 30`
 
@@ -182,9 +182,9 @@ Worst holdout PDFs by remaining error count:
 
 ## Remaining Risk After Passing 0.80
 
-Iteration 47 passes the holdout target with exact accuracy `0.8164` (`449/550`). The new user-requested overall target is not reached: answer-keyed overall accuracy is `1906/2620 = 0.7275`, requiring `190` more exact answers to reach `0.80`.
+Iteration 49 passes the holdout target with exact accuracy `0.8164` (`449/550`). The new user-requested overall target is not reached: answer-keyed overall accuracy is `1908/2620 = 0.7282`, requiring `188` more exact answers to reach `0.80`.
 
-The main residual risk is still layout semantics plus exact multi-answer set selection. Isolated visual-row, exact short-label row, step-window, condition-number, definition-window, answer-stage/degree row, count-cloze, coordinate table-column, coordinate table-row, gene-symbol sentence binding, frozen feature/cardinality pruning, all-options/crowded-tail guards, MKB/code-row binding, and near-tie specificity rules recover some cases, but many remaining errors come from flattened tables, adjacent recommendation bullets, and weak cardinality calibration. The remaining 190-answer overall shortfall requires richer structural evidence, not another scalar threshold tweak.
+The main residual risk is still layout semantics plus exact multi-answer set selection. Isolated visual-row, exact short-label row, step-window, condition-number, definition-window, answer-stage/degree row, count-cloze, coordinate table-column, coordinate table-row, gene-symbol sentence binding, narrow clinical-feature sentence binding, MKB class exclusion binding, frozen feature/cardinality pruning, all-options/crowded-tail guards, MKB/code-row binding, and near-tie specificity rules recover some cases, but many remaining errors come from flattened tables, adjacent recommendation bullets, and weak cardinality calibration. The remaining 188-answer overall shortfall requires richer structural evidence, not another scalar threshold tweak.
 
 Iteration 45 hypothesis and outcome:
 
@@ -211,6 +211,19 @@ Iteration 47 gene-symbol sentence outcome:
 - Hypothesis: short Latin gene symbols in answer options can be extracted from PDFs as Cyrillic lookalikes or spaced digit forms, but for mutation/polymorphism questions the correct symbols are often in one sentence with the question focus.
 - Kept: `gene_sentence_segment` matches only mutation/polymorphism gene questions, only inside the sentence with focus tokens, and supports OCR variants such as `FCGR3A -> РСОКЗА`, `MMP9 -> ММР9`, `CC10 -> СС10`, and `NOD2 -> N 0 0 2`.
 - Outcome: fixed `14-sarkoidoz#57` and `14-sarkoidoz#39`; holdout improved to `449/550 = 0.8164`, while dev and train stayed unchanged.
+
+Iteration 48 clinical-feature sentence outcome:
+
+- Hypothesis: in multi questions phrased as `имеет следующие клинические признаки`, correct features are often listed in adjacent sentences near the named form, while distractors can be explicitly negated as `не типично` or `не характерно`.
+- Kept narrowly: `clinical_feature_segment` boosts only this wording class and only near the question focus; `clinical_feature_negated` penalizes same-sentence negative cues.
+- Rejected: a broader version for symptoms, clinical picture, stages, and generic clinical-sign tables regressed train to `1097/1597`.
+- Outcome: the Pincus fibroepithelioma case is fixed; train improves to `1103/1597`, dev remains `355/473`, and holdout remains `449/550`.
+
+Iteration 49 MKB class exclusion outcome:
+
+- Hypothesis: for questions like `по МКБ-10 в класс Cxx не включены`, rows beginning with `Cxx.y` are positive class members, so they should be rejected for negative membership wording.
+- Kept narrowly: `mkb_class_exclusion_absent` only triggers for multi questions with `МКБ`, explicit `класс`, a class code, and negative wording such as `не включены`/`исключены`.
+- Outcome: fixed `37-bazal#32`, where `C44.0` skin lip and `C44.1` eyelid rows were included in the class and should not be selected; train improves to `1104/1597`, dev and holdout remain unchanged.
 
 Iteration 40 hypotheses and outcome:
 

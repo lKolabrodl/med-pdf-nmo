@@ -11,6 +11,8 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     answer_ordinal_row: 1.05,
     fibrosis_stage_row: 1.2,
     gene_sentence_segment: 1.1,
+    clinical_feature_segment: 1.0,
+    mkb_class_exclusion_absent: 1.0,
     classification_code_segment: 1.15,
     label_number_proximity: 1.0,
     label_definition_segment: 1.0,

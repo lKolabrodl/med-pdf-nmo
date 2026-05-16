@@ -632,6 +632,124 @@ function bestGeneSentenceSupport({ pages, topQuestionPages, question, answer }) 
   return best;
 }
 
+const CLINICAL_FEATURE_GENERIC_TOKENS = new Set(
+  [
+    "\u0438\u043c\u0435\u0435\u0442",
+    "\u0441\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0435",
+    "\u043a\u043b\u0438\u043d\u0438\u0447\u0435\u0441\u043a\u0438\u0435",
+    "\u043a\u043b\u0438\u043d\u0438\u0447\u0435\u0441\u043a\u0438",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a\u0438",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a",
+    "\u0441\u0438\u043c\u043f\u0442\u043e\u043c\u044b",
+    "\u0441\u0438\u043c\u043f\u0442\u043e\u043c",
+    "\u043f\u0440\u043e\u044f\u0432\u043b\u0435\u043d\u0438\u044f",
+    "\u043f\u0440\u043e\u044f\u0432\u043b\u0435\u043d\u0438\u0435",
+    "\u0444\u043e\u0440\u043c\u0430",
+    "\u0444\u043e\u0440\u043c\u044b",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+const CLINICAL_FEATURE_ANSWER_GENERIC_TOKENS = new Set(
+  ["\u043e\u0431\u044b\u0447\u043d\u043e", "\u0442\u0438\u043f\u0438\u0447\u043d\u043e", "\u0446\u0432\u0435\u0442\u0430", "\u0446\u0432\u0435\u0442"].flatMap((item) => uniqueTokens(item)),
+);
+
+function clinicalFeatureQuestion({ mode, question, intent }) {
+  if (mode !== "multi" || intent.negative || intent.exception) return false;
+  const normalized = normalizeForSearch(question);
+  return (
+    containsNormalizedPhrase(normalized, "\u0438\u043c\u0435") &&
+    containsNormalizedPhrase(normalized, "\u0441\u043b\u0435\u0434\u0443\u044e") &&
+    containsNormalizedPhrase(normalized, "\u043a\u043b\u0438\u043d\u0438\u0447") &&
+    containsNormalizedPhrase(normalized, "\u043f\u0440\u0438\u0437\u043d")
+  );
+}
+
+function clinicalFeatureFocusTokens(question) {
+  return uniqueTokens(question).filter((token) => token.length >= 4 && !CLINICAL_FEATURE_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
+}
+
+function clinicalFeatureAnswerTokens(answerText) {
+  return uniqueTokens(answerText).filter((token) => token.length >= 4 && !CLINICAL_FEATURE_ANSWER_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
+}
+
+function answerHasNegativeClinicalCue(answerText) {
+  const normalized = normalizeForSearch(answerText);
+  return (
+    containsNormalizedPhrase(normalized, "\u043d\u0435 ") ||
+    containsNormalizedPhrase(normalized, "\u0431\u0435\u0437 ") ||
+    containsNormalizedPhrase(normalized, "\u043e\u0442\u0441\u0443\u0442") ||
+    containsNormalizedPhrase(normalized, "\u043d\u0435\u0442\u0438\u043f\u0438\u0447")
+  );
+}
+
+function clinicalFeatureSentenceNegative(normalizedSentence) {
+  return (
+    containsNormalizedPhrase(normalizedSentence, "\u043d\u0435 \u0442\u0438\u043f\u0438\u0447") ||
+    containsNormalizedPhrase(normalizedSentence, "\u043d\u0435\u0442\u0438\u043f\u0438\u0447") ||
+    containsNormalizedPhrase(normalizedSentence, "\u043d\u0435 \u0445\u0430\u0440\u0430\u043a\u0442\u0435\u0440") ||
+    containsNormalizedPhrase(normalizedSentence, "\u043d\u0435 \u044f\u0432\u043b\u044f") ||
+    containsNormalizedPhrase(normalizedSentence, "\u043e\u0442\u0441\u0443\u0442") ||
+    containsNormalizedPhrase(normalizedSentence, "\u0431\u0435\u0437 ")
+  );
+}
+
+function clinicalFeatureCandidateSentences(pageText, focusTokens) {
+  const sentences = sentenceSegments(pageText).map((sentence) => {
+    const normalized = normalizeForSearch(sentence);
+    const tokens = tokenizeNormalized(normalized);
+    return { sentence, normalized, tokens, focusHits: tokenHitCount(focusTokens, tokens) };
+  });
+  const anchors = sentences.map((item, index) => (item.focusHits > 0 ? index : -1)).filter((index) => index >= 0);
+  if (!anchors.length) return [];
+
+  return sentences
+    .map((item, index) => {
+      const distance = Math.min(...anchors.map((anchor) => (index >= anchor ? index - anchor : Infinity)));
+      return { ...item, distance };
+    })
+    .filter((item) => item.focusHits > 0 || item.distance <= 4);
+}
+
+function clinicalFeatureAdjustment(context) {
+  const { pages, topQuestionPages, mode, question, answer, intent } = context;
+  if (!clinicalFeatureQuestion({ mode, question, intent })) return { support: null, adjustment: 0, evidence: null };
+  const focusTokens = clinicalFeatureFocusTokens(question);
+  if (!focusTokens.length) return { support: null, adjustment: 0, evidence: null };
+  const answerTokens = clinicalFeatureAnswerTokens(answer.text);
+  if (answerTokens.length < 2) return { support: null, adjustment: 0, evidence: null };
+  const answerNegative = answerHasNegativeClinicalCue(answer.text);
+  let bestSupport = null;
+  let bestNegated = null;
+
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const item of clinicalFeatureCandidateSentences(page.text, focusTokens)) {
+      const answerCoverage = Math.max(strictSoftCoverage(answerTokens, item.tokens), softCoverage(answerTokens, item.tokens), rawSoftCoverage(answerTokens, item.tokens));
+      if (answerCoverage < 0.5) continue;
+      const negated = clinicalFeatureSentenceNegative(item.normalized);
+      const focusBonus = Math.min(2, item.focusHits) * 1.1;
+      const distanceBonus = Math.max(0, 4 - item.distance) * 0.35;
+      const score = 12.4 + answerCoverage * 5.2 + focusBonus + distanceBonus;
+      const evidence = {
+        answerId: answer.id,
+        page: page.page,
+        text: item.sentence,
+        score,
+        kind: negated && !answerNegative ? "clinical_feature_negated" : "clinical_feature_segment",
+      };
+      if (negated && !answerNegative) bestNegated = betterEvidence(bestNegated, evidence);
+      else bestSupport = betterEvidence(bestSupport, evidence);
+    }
+  }
+
+  if (bestNegated && (!bestSupport || bestNegated.score >= bestSupport.score - 0.8)) {
+    return { support: null, adjustment: -8.4, evidence: bestNegated };
+  }
+  return bestSupport ? { support: bestSupport, adjustment: 0, evidence: null } : { support: null, adjustment: 0, evidence: null };
+}
+
 function questionLabelCues(question) {
   const normalized = normalizeForSearch(question);
   return LABEL_CUES.filter((cue) => normalized.includes(cue));
@@ -817,6 +935,146 @@ function bestClassificationCodeSupport({ pages, topQuestionPages, question, answ
     }
   }
   return best;
+}
+
+const MKB_CLASS_EXCLUSION_GENERIC_TOKENS = new Set(
+  [
+    "\u0437\u043b\u043e\u043a\u0430\u0447\u0435\u0441\u0442\u0432\u0435\u043d\u043d\u044b\u0435",
+    "\u0437\u043b\u043e\u043a\u0430\u0447\u0435\u0441\u0442\u0432\u0435\u043d\u043d\u0430\u044f",
+    "\u043d\u043e\u0432\u043e\u043e\u0431\u0440\u0430\u0437\u043e\u0432\u0430\u043d\u0438\u044f",
+    "\u043d\u043e\u0432\u043e\u043e\u0431\u0440\u0430\u0437\u043e\u0432\u0430\u043d\u0438\u0435",
+    "\u043a\u043e\u0436\u0438",
+    "\u043a\u043e\u0436\u0430",
+    "\u0434\u0440\u0443\u0433\u0438\u0435",
+    "\u043a\u043b\u0430\u0441\u0441",
+    "\u043c\u043a\u0431",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+function mkbClassExclusionQuestion(mode, question) {
+  if (mode !== "multi") return false;
+  const normalized = normalizeForSearch(question);
+  const hasMkb = containsNormalizedPhrase(normalized, "\u043c\u043a\u0431");
+  const hasClass = containsNormalizedPhrase(normalized, "\u043a\u043b\u0430\u0441\u0441");
+  const asksExcluded =
+    containsNormalizedPhrase(normalized, "\u043d\u0435 \u0432\u043a\u043b\u044e\u0447") ||
+    containsNormalizedPhrase(normalized, "\u0438\u0441\u043a\u043b\u044e\u0447") ||
+    containsNormalizedPhrase(normalized, "\u043d\u0435 \u043e\u0442\u043d\u043e\u0441");
+  return hasMkb && hasClass && asksExcluded && Boolean(questionMkbClassCode(question));
+}
+
+function questionMkbClassCode(question) {
+  return canonicalClassificationCodes(question).find((code) => !code.includes(".")) ?? null;
+}
+
+function sameMkbClass(code, classCode) {
+  return code === classCode || code.startsWith(`${classCode}.`);
+}
+
+function lineHasMkbClass(line, classCode) {
+  return canonicalClassificationCodes(line).some((code) => sameMkbClass(code, classCode));
+}
+
+function mkbClassSectionLines(pages, topQuestionPages, classCode) {
+  let startPageIndex = -1;
+  let startLineIndex = -1;
+  const candidates = topQuestionPages?.size ? pages.filter((page) => topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1)) : pages;
+
+  for (const page of candidates) {
+    const lines = page.lines ?? [];
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!lineHasMkbClass(lines[index], classCode)) continue;
+      startPageIndex = pages.findIndex((candidate) => candidate.page === page.page);
+      startLineIndex = index;
+      break;
+    }
+    if (startPageIndex >= 0) break;
+  }
+  if (startPageIndex < 0) return [];
+
+  const out = [];
+  for (let pageIndex = startPageIndex; pageIndex < Math.min(pages.length, startPageIndex + 3); pageIndex += 1) {
+    const lines = pages[pageIndex].lines ?? [];
+    const from = pageIndex === startPageIndex ? startLineIndex : 0;
+    for (let index = from; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (out.length && /^\s*\d+(?:\.\d+)+\s+/u.test(normalizeText(line)) && !lineHasMkbClass(line, classCode)) return out;
+      out.push(line);
+      if (out.length >= 90) return out;
+    }
+  }
+  return out;
+}
+
+function mkbClassIncludedRows(sectionLines, classCode) {
+  const rows = [];
+  for (let index = 0; index < sectionLines.length; index += 1) {
+    const line = sectionLines[index];
+    const codes = canonicalClassificationCodes(line);
+    if (!codes.some((code) => code.startsWith(`${classCode}.`))) continue;
+    const row = [line];
+    for (let next = index + 1; next < Math.min(sectionLines.length, index + 4); next += 1) {
+      const nextLine = sectionLines[next];
+      const nextCodes = canonicalClassificationCodes(nextLine);
+      if (nextCodes.some((code) => sameMkbClass(code, classCode))) break;
+      if (containsNormalizedPhrase(normalizeForSearch(nextLine), "\u0438\u0441\u043a\u043b\u044e\u0447")) break;
+      row.push(nextLine);
+      if (/[.;:]$/u.test(normalizeText(nextLine))) break;
+    }
+    rows.push(row.join(" ").replace(/\s+/g, " ").trim());
+  }
+  return rows;
+}
+
+function mkbClassAnswerTokens(answerText) {
+  return uniqueTokens(answerText).filter((token) => token.length >= 4 && !MKB_CLASS_EXCLUSION_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
+}
+
+function mkbClassIncludedRowHit(row, answerText) {
+  const tokens = mkbClassAnswerTokens(answerText);
+  if (!tokens.length) return false;
+  const rowTokens = tokenize(row);
+  const strict = strictSoftCoverage(tokens, rowTokens);
+  const soft = softCoverage(tokens, rowTokens);
+  const raw = rawSoftCoverage(tokens, tokenize(row, { keepStopwords: true, stem: false }));
+  const threshold = tokens.length <= 1 ? 1 : 0.58;
+  return Math.max(strict, soft, raw) >= threshold;
+}
+
+function bestMkbClassExclusionSupport({ pages, topQuestionPages, mode, question, answer }) {
+  if (!mkbClassExclusionQuestion(mode, question)) return { support: null, adjustment: 0, evidence: null };
+  const classCode = questionMkbClassCode(question);
+  if (!classCode) return { support: null, adjustment: 0, evidence: null };
+  const sectionLines = mkbClassSectionLines(pages, topQuestionPages, classCode);
+  if (sectionLines.length < 3) return { support: null, adjustment: 0, evidence: null };
+  const includedRows = mkbClassIncludedRows(sectionLines, classCode);
+  if (includedRows.length < 2) return { support: null, adjustment: 0, evidence: null };
+  const includedRow = includedRows.find((row) => mkbClassIncludedRowHit(row, answer.text));
+  if (includedRow) {
+    return {
+      support: null,
+      adjustment: -9.4,
+      evidence: {
+        answerId: answer.id,
+        page: topQuestionPages?.values().next().value ?? 0,
+        text: includedRow,
+        score: 17.2,
+        kind: "mkb_class_included_mismatch",
+      },
+    };
+  }
+  const sectionText = sectionLines.join(" ").replace(/\s+/g, " ").trim();
+  return {
+    support: {
+      answerId: answer.id,
+      page: topQuestionPages?.values().next().value ?? 0,
+      text: sectionText.slice(0, 900),
+      score: 15.8,
+      kind: "mkb_class_exclusion_absent",
+    },
+    adjustment: 0,
+    evidence: null,
+  };
 }
 
 function canonicalShortLabel(value) {
@@ -4949,6 +5207,8 @@ function scoreAnswer(context) {
   const coordinateTableRow = bestCoordinateTableRowSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
+  const clinicalFeature = clinicalFeatureAdjustment(context);
+  const mkbClassExclusion = bestMkbClassExclusionSupport(context);
   const labelNumber = bestLabelNumberSupport(context);
   const classificationCode = bestClassificationCodeSupport(context);
   const exactShortLabelRow = bestExactShortLabelRowSupport(context);
@@ -5007,6 +5267,10 @@ function scoreAnswer(context) {
     (coordinateTableRow?.score ?? 0) * 1.12 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
+    (clinicalFeature.support?.score ?? 0) * 1.12 +
+    clinicalFeature.adjustment +
+    (mkbClassExclusion.support?.score ?? 0) * 1.12 +
+    mkbClassExclusion.adjustment +
     (labelNumber?.score ?? 0) * 1.15 +
     (classificationCode?.score ?? 0) * 1.15 +
     (exactShortLabelRow?.score ?? 0) * 1.2 +
@@ -5067,6 +5331,10 @@ function scoreAnswer(context) {
     coordinateTableRow,
     latinFuzzy,
     geneSentence,
+    clinicalFeature.support,
+    clinicalFeature.evidence,
+    mkbClassExclusion.support,
+    mkbClassExclusion.evidence,
     labelNumber,
     classificationCode,
     exactShortLabelRow,

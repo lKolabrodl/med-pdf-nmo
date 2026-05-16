@@ -112,17 +112,17 @@ Holdout by PDF:
 
 ## Current All 42 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1906/2620 = 0.7275` exact accuracy across all answer-keyed groups (`72.75%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1906/2637 = 0.7228`.
+Combining train, dev, and holdout diagnostic runs gives `1908/2620 = 0.7282` exact accuracy across all answer-keyed groups (`72.82%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1908/2637 = 0.7235`.
 
 Latest split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |
-| train | `1102/1597` | `69.00%` |
+| train | `1104/1597` | `69.13%` |
 | dev | `355/473` | `75.05%` |
 | holdout | `449/550` | `81.64%` |
-| all answer-keyed cases | `1906/2620` | `72.75%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1906/2637` | `72.28%` |
+| all answer-keyed cases | `1908/2620` | `72.82%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1908/2637` | `72.35%` |
 
 Per-PDF percentages across all 42 groups:
 
@@ -164,7 +164,7 @@ Per-PDF percentages across all 42 groups:
 | `34-covid` | `57/70` | `81.43%` |
 | `35-cron` | `41/72` | `56.94%` |
 | `36-anrid` | `43/70` | `61.43%` |
-| `37-bazal` | `40/70` | `57.14%` |
+| `37-bazal` | `42/70` | `60.00%` |
 | `38-katarakta` | `23/30` | `76.67%` |
 | `39-glaurova` | `47/69` | `68.12%` |
 | `40-deficit` | `38/50` | `76.00%` |
