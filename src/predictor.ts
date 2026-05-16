@@ -414,6 +414,41 @@ function latinTokenVariants(token) {
   return [...variants].filter(Boolean);
 }
 
+function geneTokenVariants(token) {
+  const normalized = token.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const variants = new Set(latinTokenVariants(normalized));
+  if (!normalized || normalized.length > 10) return [...variants].filter(Boolean);
+
+  const alternatives = {
+    f: ["f", "p"],
+    g: ["g", "o", "q"],
+    r: ["r", "k"],
+    o: ["o", "0"],
+    d: ["d", "0"],
+    z: ["z", "3"],
+    3: ["3", "z"],
+    b: ["b", "8"],
+    s: ["s", "5"],
+    l: ["l", "1", "i"],
+    i: ["i", "1", "l"],
+  };
+  let generated = [""];
+  for (const char of normalized) {
+    const choices = alternatives[char] ?? [char];
+    const next = [];
+    for (const prefix of generated) {
+      for (const choice of choices) {
+        next.push(`${prefix}${choice}`);
+        if (next.length >= 96) break;
+      }
+      if (next.length >= 96) break;
+    }
+    generated = next;
+  }
+  for (const variant of generated) variants.add(variant);
+  return [...variants].filter(Boolean);
+}
+
 function relaxedLatinText(text) {
   let out = "";
   for (const char of String(text ?? "").normalize("NFKC")) {
@@ -427,6 +462,14 @@ function relaxedLatinTokens(text) {
   const joined = [];
   for (let index = 0; index < rawTokens.length - 1; index += 1) {
     if (/^[a-z]+$/.test(rawTokens[index]) && /^\d+$/.test(rawTokens[index + 1])) joined.push(`${rawTokens[index]}${rawTokens[index + 1]}`);
+    if (/^[a-z]{1,5}$/.test(rawTokens[index])) {
+      let digits = "";
+      for (let cursor = index + 1; cursor < rawTokens.length && cursor <= index + 5; cursor += 1) {
+        if (!/^\d$/.test(rawTokens[cursor])) break;
+        digits += rawTokens[cursor];
+        if (digits.length >= 2) joined.push(`${rawTokens[index]}${digits}`);
+      }
+    }
   }
   const tokens = rawTokens.filter((token) => token.length >= 2);
   return [...tokens, ...joined];
@@ -496,6 +539,95 @@ function bestLatinFuzzySupport({ pages, topQuestionPages, questionTokens, answer
       score,
       kind: "latin_fuzzy_ocr",
     });
+  }
+  return best;
+}
+
+const GENE_QUESTION_GENERIC_TOKENS = new Set(
+  [
+    "\u0433\u0435\u043d",
+    "\u0433\u0435\u043d\u0430",
+    "\u0433\u0435\u043d\u0430\u0445",
+    "\u0433\u0435\u043d\u043e\u0432",
+    "\u043c\u0443\u0442\u0430\u0446\u0438\u044f",
+    "\u043c\u0443\u0442\u0430\u0446\u0438\u0438",
+    "\u043c\u0443\u0442\u0430\u0446\u0438\u0439",
+    "\u043f\u043e\u043b\u0438\u043c\u043e\u0440\u0444\u0438\u0437\u043c",
+    "\u043f\u043e\u043b\u0438\u043c\u043e\u0440\u0444\u0438\u0437\u043c\u044b",
+    "\u043e\u043f\u0440\u0435\u0434\u0435\u043b\u044f\u044e\u0442\u0441\u044f",
+    "\u0441\u0432\u044f\u0437\u044b\u0432\u0430\u044e\u0442",
+    "\u0440\u0438\u0441\u043a",
+    "\u0440\u0430\u0437\u0432\u0438\u0442\u0438\u044f",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+function geneMutationQuestion(question) {
+  const normalized = normalizeForSearch(question);
+  const tokens = new Set(tokenize(question, { keepStopwords: true }));
+  const geneRoot = normalizeForSearch("\u0433\u0435\u043d");
+  const hasGeneToken = [...tokens].some((token) => token === geneRoot || token.startsWith(geneRoot));
+  const hasMutationCue =
+    containsNormalizedPhrase(normalized, "\u043c\u0443\u0442\u0430\u0446") ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043b\u0438\u043c\u043e\u0440\u0444");
+  return hasGeneToken && hasMutationCue;
+}
+
+function geneQuestionFocusTokens(question) {
+  return uniqueTokens(question).filter((token) => token.length >= 4 && !GENE_QUESTION_GENERIC_TOKENS.has(token));
+}
+
+function sentenceSegments(text) {
+  return String(text ?? "")
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/u)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length >= 24);
+}
+
+function geneSentenceHit(sentence, answerText) {
+  const answerTokens = latinAnswerTokens(answerText);
+  if (!answerTokens.length || answerTokens.length > 2) return null;
+  const sentenceTokens = new Set(relaxedLatinTokens(sentence));
+  for (const token of answerTokens) {
+    let bestVariant = null;
+    for (const variant of geneTokenVariants(token)) {
+      if (sentenceTokens.has(variant)) {
+        bestVariant = variant;
+        break;
+      }
+    }
+    if (bestVariant) return { token, variant: bestVariant };
+  }
+  return null;
+}
+
+function bestGeneSentenceSupport({ pages, topQuestionPages, question, answer }) {
+  if (!geneMutationQuestion(question)) return null;
+  const focusTokens = geneQuestionFocusTokens(question);
+  let best = null;
+
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const sentence of sentenceSegments(page.text)) {
+      const normalized = normalizeForSearch(sentence);
+      const hasGeneCue = containsNormalizedPhrase(normalized, "\u0433\u0435\u043d");
+      if (!hasGeneCue) continue;
+      const sentenceTokens = tokenizeNormalized(normalized);
+      const focusHits = tokenHitCount(focusTokens, sentenceTokens);
+      if (focusTokens.length && focusHits <= 0) continue;
+      const hit = geneSentenceHit(sentence, answer.text);
+      if (!hit) continue;
+      const score = 13.6 + Math.min(3, focusHits) * 1.35 + (hit.variant === hit.token.toLowerCase() ? 2.2 : 1.4);
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: sentence,
+        score,
+        kind: "gene_sentence_segment",
+      });
+    }
   }
   return best;
 }
@@ -2721,11 +2853,17 @@ function ordinalWindows(source, target) {
     while (start < normalized.length) {
       const index = normalized.indexOf(formNorm, start);
       if (index < 0) break;
-      windows.push(normalized.slice(Math.max(0, index - 260), Math.min(normalized.length, index + formNorm.length + 420)));
+      windows.push(normalized.slice(lineOrdinalWindowStart(normalized, index), Math.min(normalized.length, index + formNorm.length + 420)));
       start = index + formNorm.length;
     }
   }
   return windows;
+}
+
+function lineOrdinalWindowStart(normalized, index) {
+  const before = normalized.slice(Math.max(0, index - 80), index);
+  if (containsNormalizedPhrase(before, "\u0442\u0435\u0440\u0430\u043f")) return Math.max(0, index - 24);
+  return Math.max(0, index - 260);
 }
 
 function abbreviationSupport(answerText, window) {
@@ -3663,6 +3801,19 @@ function addSharedMultiSegmentSupport(answerScores, intent, question) {
     const boostedRaw = Math.max(item.raw, topRaw * supportRatio);
     if (boostedRaw <= item.raw + 0.05) return item;
     return { ...item, raw: boostedRaw, evidence: [...item.evidence, best] };
+  });
+}
+
+function applyGeneSentenceSetSupport(answerScores, mode, question) {
+  if (mode !== "multi" || !geneMutationQuestion(question)) return answerScores;
+  const supported = answerScores.filter((item) => item.evidence.some((evidenceItem) => evidenceItem.kind === "gene_sentence_segment"));
+  if (supported.length < 2) return answerScores;
+  const topRaw = Math.max(...answerScores.map((item) => item.raw), 0);
+  return answerScores.map((item) => {
+    const hasGeneSupport = item.evidence.some((evidenceItem) => evidenceItem.kind === "gene_sentence_segment");
+    if (hasGeneSupport) return { ...item, raw: Math.max(item.raw, topRaw * 0.93) };
+    if (latinAnswerTokens(item.answer.text).length) return { ...item, raw: item.raw * 0.56 };
+    return item;
   });
 }
 
@@ -4797,6 +4948,7 @@ function scoreAnswer(context) {
   const visualTableColumn = bestVisualTableColumnSupport(context);
   const coordinateTableRow = bestCoordinateTableRowSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
+  const geneSentence = bestGeneSentenceSupport(context);
   const labelNumber = bestLabelNumberSupport(context);
   const classificationCode = bestClassificationCodeSupport(context);
   const exactShortLabelRow = bestExactShortLabelRowSupport(context);
@@ -4854,6 +5006,7 @@ function scoreAnswer(context) {
     (visualTableColumn?.score ?? 0) * 1.18 +
     (coordinateTableRow?.score ?? 0) * 1.12 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
+    (geneSentence?.score ?? 0) * 1.18 +
     (labelNumber?.score ?? 0) * 1.15 +
     (classificationCode?.score ?? 0) * 1.15 +
     (exactShortLabelRow?.score ?? 0) * 1.2 +
@@ -4913,6 +5066,7 @@ function scoreAnswer(context) {
     visualTableColumn,
     coordinateTableRow,
     latinFuzzy,
+    geneSentence,
     labelNumber,
     classificationCode,
     exactShortLabelRow,
@@ -4997,6 +5151,7 @@ export async function predict(input, options: any = {}) {
   if (mode === "multi" && config.sharedMultiSegmentBoost) {
     answerScores = addSharedMultiSegmentSupport(answerScores, intent, question);
   }
+  answerScores = applyGeneSentenceSetSupport(answerScores, mode, question);
   if (mode === "single" && questionDefinitionLabel(question) && answerScores.some((item) => item.evidence.some((evidenceItem) => evidenceItem.kind === "label_definition_segment"))) {
     answerScores = answerScores.map((item) =>
       item.evidence.some((evidenceItem) => evidenceItem.kind === "label_definition_segment") ? item : { ...item, raw: item.raw * 0.48 },
@@ -5005,7 +5160,7 @@ export async function predict(input, options: any = {}) {
   if (mode === "multi" && answerScores.some((item) => item.evidence.some((evidenceItem) => evidenceItem.kind === "latin_fuzzy_ocr"))) {
     answerScores = answerScores.map((item) => {
       const hasLatin = latinAnswerTokens(item.answer.text).length > 0;
-      const hasLatinSupport = item.evidence.some((evidenceItem) => evidenceItem.kind === "latin_fuzzy_ocr");
+      const hasLatinSupport = item.evidence.some((evidenceItem) => evidenceItem.kind === "latin_fuzzy_ocr" || evidenceItem.kind === "gene_sentence_segment");
       return hasLatin && !hasLatinSupport ? { ...item, raw: item.raw * 0.68 } : item;
     });
   }

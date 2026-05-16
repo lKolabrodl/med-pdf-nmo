@@ -47,6 +47,8 @@ The predictor returns machine-readable JSON:
    - `ё/е`;
    - dash, punctuation, decimal, range, and whitespace cleanup;
    - safe Cyrillic/Latin lookalike folding for mixed medical/PDF text;
+   - Greek-letter aliases: `α/β/γ` and Russian `альфа/бета/гамма` are folded to the same `alpha/beta/gamma` search forms;
+   - bracketed numeric reference marks such as `[151].` are removed before search tokenization when they appear before sentence punctuation or end-of-text;
    - light Russian suffix stemming;
    - preservation of numbers, percentages, dosages, and common medical abbreviations.
    - one-character numeric tokens such as `1` and `2` are kept, because they distinguish dosage/frequency patterns like `500 мг x 1` vs `500 мг x 2`.
@@ -73,8 +75,9 @@ The predictor returns machine-readable JSON:
    - `cloze_gap_local` for single-answer blank count questions where the right side of the blank contains `раз/сутки/прием` cues; this uses local line windows, small Russian number aliases, question-number proximity, and contrast penalties to avoid neighboring dose alternatives;
    - `visual_table_column` for multi-answer severity/classification tables: the scorer finds the question's column label in PDF `lineItems` by x-coordinate, then accepts an answer only when its metric token and fully covered numeric/range value appear in that same column;
    - `coordinate_table_row` for single-answer table/classification questions: the scorer groups PDF `lineItems` into x-separated cells, merges nearby row continuations, rejects recommendation/comment metadata rows, and scores the answer only when its cell has enough table context and distinctive question-focus support;
+   - `gene_sentence_segment` for mutation/polymorphism gene questions: short Latin gene-symbol answers are matched inside the single sentence that contains the question focus, including OCR variants such as Cyrillic lookalike genes and spaced digit forms;
    - `bounded_list_segment` for local list evidence tied to syndrome names, age clauses, and `triad` cues;
-   - `ordinal_list_segment` for numbered stages, therapy-line questions, and numeric `N-я ступень` step lists, including page-break continuation;
+   - `ordinal_list_segment` for numbered stages, therapy-line questions, and numeric `N-я ступень` step lists, including page-break continuation; heading-like `терапия N-й линии` windows are narrowed so previous-line drugs do not leak into the current line;
    - `answer_ordinal_row` for answer options that are themselves stage/degree labels (`1/2/3`, `I/II/III`) and must be bound back to the matching classification row;
    - `label_definition_segment` for questions like `считается <label> при ...`;
    - `recommendation_polarity_match` for narrow negative-recommendation questions;
@@ -92,6 +95,7 @@ The predictor returns machine-readable JSON:
    - pairwise single-answer contrast when the top two raw scores are near-tied and one candidate has much stronger structural support;
    - conservative multi-answer cardinality adjustments;
    - an all-options guard for 3- and 4-option multi questions, because selecting every option is almost always an over-selection in this corpus;
+   - a crowded-tail guard for 4-option multi questions where 3 answers were selected but the third and fourth raw scores are nearly tied; this trims the ambiguous tail to top-2 rather than treating a weak 3-of-4 set as reliable;
    - generic structural-cluster pruning for recommendation-like multi questions, gated away from broad list/source/dose-regimen patterns.
 9. Calibrate scores with relative spread and a softmax-like transform.
 10. Select:
@@ -124,6 +128,7 @@ Current selection thresholds:
 - minimum selected answers in `multi` mode: `2`
 - third-answer near-tie inclusion: add the third answer when it is within `0.45` raw score of the second and at least `0.55 * maxRaw`
 - all-options guard: when `multi` selects every option and there are exactly 3 or 4 options, reduce to the top-2 raw candidates; 5+ option all-selected cases are left unchanged
+- crowded-tail guard: when a 4-option multi question selects 3 answers, reduce to top-2 only if the third selected answer is separated from the unselected fourth by less than `0.3` raw score and the top answer is not tied with the second
 - shared segment boost: enabled, with a raw prior ratio floor before any candidate can be lifted.
 - frozen feature ranker, multi-cardinality model, pairwise contrast, and structural-cluster adjustments are enabled; all use fixed local coefficients and evidence kinds only.
 

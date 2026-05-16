@@ -56,17 +56,17 @@ Command: `npm run eval`
 ```json
 {
   "total": 473,
-  "correct": 356,
-  "exactAccuracy": 0.7526,
-  "singleAccuracy": 0.8359,
+  "correct": 355,
+  "exactAccuracy": 0.7505,
+  "singleAccuracy": 0.8328,
   "multiExactAccuracy": 0.5625,
-  "macroAccuracyByPdf": 0.7607,
+  "macroAccuracyByPdf": 0.7578,
   "noEvidence": 0,
   "avgConfidenceCorrect": 0.9159,
-  "avgConfidenceIncorrect": 0.857,
+  "avgConfidenceIncorrect": 0.8588,
   "errorBuckets": {
-    "confused_with_distractor": 68,
-    "multi_cardinality": 49
+    "confused_with_distractor": 75,
+    "multi_cardinality": 43
   },
   "skippedNoExpected": 0
 }
@@ -81,17 +81,17 @@ The command returned exit code `0` because the acceptance target was met.
 ```json
 {
   "total": 550,
-  "correct": 446,
-  "exactAccuracy": 0.8109,
-  "singleAccuracy": 0.846,
-  "multiExactAccuracy": 0.6953,
-  "macroAccuracyByPdf": 0.809,
+  "correct": 449,
+  "exactAccuracy": 0.8164,
+  "singleAccuracy": 0.8507,
+  "multiExactAccuracy": 0.7031,
+  "macroAccuracyByPdf": 0.8137,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9272,
-  "avgConfidenceIncorrect": 0.8668,
+  "avgConfidenceCorrect": 0.9267,
+  "avgConfidenceIncorrect": 0.8673,
   "errorBuckets": {
-    "confused_with_distractor": 73,
-    "multi_cardinality": 31
+    "confused_with_distractor": 71,
+    "multi_cardinality": 30
   },
   "skippedNoExpected": 0
 }
@@ -103,7 +103,7 @@ Holdout by PDF:
 | --- | ---: |
 | `06-co-toksic` | 0.8286 |
 | `11-mening` | 0.8429 |
-| `14-sarkoidoz` | 0.7750 |
+| `14-sarkoidoz` | 0.8125 |
 | `17-gepatit` | 0.8429 |
 | `18-gepatitabc` | 0.8143 |
 | `19-gepatitc` | 0.7400 |
@@ -112,17 +112,17 @@ Holdout by PDF:
 
 ## Current All 42 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1901/2620 = 0.7256` exact accuracy across all answer-keyed groups (`72.56%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1901/2637 = 0.7209`.
+Combining train, dev, and holdout diagnostic runs gives `1906/2620 = 0.7275` exact accuracy across all answer-keyed groups (`72.75%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1906/2637 = 0.7228`.
 
 Latest split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |
-| train | `1099/1597` | `68.82%` |
-| dev | `356/473` | `75.26%` |
-| holdout | `446/550` | `81.09%` |
-| all answer-keyed cases | `1901/2620` | `72.56%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1901/2637` | `72.09%` |
+| train | `1102/1597` | `69.00%` |
+| dev | `355/473` | `75.05%` |
+| holdout | `449/550` | `81.64%` |
+| all answer-keyed cases | `1906/2620` | `72.75%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1906/2637` | `72.28%` |
 
 Per-PDF percentages across all 42 groups:
 
@@ -136,38 +136,38 @@ Per-PDF percentages across all 42 groups:
 | `06-co-toksic` | `58/70` | `82.86%` |
 | `07-hron` | `53/71` | `74.65%` |
 | `08-ask` | `26/30` | `86.67%` |
-| `09-covid` | `58/70` | `82.86%` |
+| `09-covid` | `57/70` | `81.43%` |
 | `10-LPP` | `50/70` | `71.43%` |
 | `11-mening` | `59/70` | `84.29%` |
 | `12-nos` | `18/30` | `60.00%` |
-| `13-pisha` | `46/70` | `65.71%` |
-| `14-sarkoidoz` | `62/80` | `77.50%` |
-| `15-toxic` | `44/70` | `62.86%` |
+| `13-pisha` | `45/70` | `64.29%` |
+| `14-sarkoidoz` | `65/80` | `81.25%` |
+| `15-toxic` | `43/70` | `61.43%` |
 | `16-hb` | `48/70` | `68.57%` |
 | `17-gepatit` | `59/70` | `84.29%` |
 | `18-gepatitabc` | `57/70` | `81.43%` |
 | `19-gepatitc` | `37/50` | `74.00%` |
-| `20-hron` | `53/70` | `75.71%` |
+| `20-hron` | `52/70` | `74.29%` |
 | `21-citovirus` | `52/70` | `74.29%` |
-| `22-eozif` | `21/31` | `67.74%` |
+| `22-eozif` | `23/31` | `74.19%` |
 | `23-nimana` | `59/70` | `84.29%` |
-| `24-kalit` | `40/70` | `57.14%` |
-| `25-shigez` | `49/70` | `70.00%` |
-| `26-blevota` | `36/50` | `72.00%` |
+| `24-kalit` | `42/70` | `60.00%` |
+| `25-shigez` | `50/70` | `71.43%` |
+| `26-blevota` | `37/50` | `74.00%` |
 | `27-cistit` | `21/30` | `70.00%` |
 | `28-tanzilt` | `38/50` | `76.00%` |
-| `29-tpank` | `45/70` | `64.29%` |
-| `30-heart` | `45/70` | `64.29%` |
-| `31-hbs` | `32/43` | `74.42%` |
-| `32-gemor` | `51/70` | `72.86%` |
+| `29-tpank` | `44/70` | `62.86%` |
+| `30-heart` | `43/70` | `61.43%` |
+| `31-hbs` | `31/43` | `72.09%` |
+| `32-gemor` | `53/70` | `75.71%` |
 | `33-aorta` | `55/70` | `78.57%` |
-| `34-covid` | `58/70` | `82.86%` |
-| `35-cron` | `43/72` | `59.72%` |
-| `36-anrid` | `42/70` | `60.00%` |
+| `34-covid` | `57/70` | `81.43%` |
+| `35-cron` | `41/72` | `56.94%` |
+| `36-anrid` | `43/70` | `61.43%` |
 | `37-bazal` | `40/70` | `57.14%` |
-| `38-katarakta` | `20/30` | `66.67%` |
+| `38-katarakta` | `23/30` | `76.67%` |
 | `39-glaurova` | `47/69` | `68.12%` |
-| `40-deficit` | `37/50` | `74.00%` |
+| `40-deficit` | `38/50` | `76.00%` |
 | `41-destonia` | `54/69` | `78.26%` |
 | `42-skvoz` | `32/50` | `64.00%` |
 

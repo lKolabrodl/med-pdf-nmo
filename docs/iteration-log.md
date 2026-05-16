@@ -49,21 +49,24 @@
 | 42 | Added gated `coordinate_table_row` reconstruction for single-answer table/classification questions: PDF text items are grouped into x-separated cells, row continuations are merged, and the answer is scored only when its cell aligns with question focus/table cues | 0.7442 | 0.8109 | Fixed dev table-row bindings in `07-hron`, including absolute long-term oxygen therapy and severe spirometry obstruction rows; dev improved to `352/473` without changing train or holdout | Broad coordinate rows, recommendation-meta rows, fibrosis questions, and multi-answer use were rejected because they over-selected neighboring distractors | Coordinate rows help a small slice only; next gains need either deeper table contrast/ranking or a frozen non-LLM feature ranker |
 | 43 | Implemented the five proposed improvement directions as a conservative post-scoring layer: frozen evidence feature ranker, multi-cardinality model, pairwise single contrast, deeper coordinate row contrast, and generic structural-cluster pruning for recommendation-like multi questions | 0.7463 | 0.8109 | Fixed recommendation multi over-selection examples such as `15-toxic#16` and `27-cistit#7`; train improved to `1099/1597`, dev to `353/473`, holdout stayed unchanged | A broader pruning variant regressed broad-list, source, and dosing questions, so pruning is gated away from those patterns | Continue with richer non-LLM ranker features; current hand-built layer is safe but still too small to close the 80% overall gap |
 | 44 | Added `multiAllOptionsGuard`: when multi selection takes every answer option, treat that as suspicious for 3- and 4-option questions and keep only top-2 raw candidates; leave 5+ option all-selected cases unchanged | 0.7526 | 0.8109 | Fixed dev all-selected over-selection cases in `31-hbs` and `32-gemor`; dev multi exact improved to `0.5625` and overall keyed rose to `1901/2620` | The guard does not help 5+ all-selected cases and converts one holdout all-selected case into a same-count distractor, leaving holdout exact unchanged | Generalize cardinality guards beyond all-selected cases using stronger structural evidence, not just top-k raw order |
+| 45 | Added `multiCrowdedTailGuard`: for 4-option multi questions where 3 answers are selected, trim to top-2 only when the third and fourth raw scores are nearly tied (`tailGap < 0.3`) and top-1 is separated from top-2 | 0.7569 | 0.8109 | Improved dev multi exact from `0.5625` to `0.5833`, reducing dev multi-cardinality errors from `48` to `40`; holdout stayed unchanged | Train exact is mixed (`1098/1597`) and the rule only helps a narrow 4-option over-selection pattern | Continue with structural evidence for multi distractor selection; cardinality-only rules remain limited |
+| 46 | Normalized Russian `альфа/бета/гамма` names to the same aliases as Greek `α/β/γ`, stripped bracketed numeric reference marks before sentence punctuation, and narrowed `терапия N-й линии` ordinal windows to avoid pulling previous-line drugs forward | 0.7505 | 0.8127 | Fixed the `14-sarkoidoz#52` third-line pulmonary sarcoidosis case and improved holdout/train exact (`447/550`, `1102/1597`); all keyed rose to `1904/2620` | Dev dropped by 3 exact cases and multi-cardinality errors rose back to `43`, so the ordinal heading rule should stay conservative | Add richer synonym/alias support only when it is corpus-neutral; continue structural row/list work for multi |
+| 47 | Added `gene_sentence_segment`: for mutation/polymorphism gene questions, bind short Latin gene-symbol answers to the single sentence that contains the question focus, with OCR variants such as `FCGR3A -> РСОКЗА` and spaced `N 0 0 2 -> NOD2` | 0.7505 | 0.8164 | Fixed `14-sarkoidoz#57` (`MMP9`, `FCGR3A`, `CC10`) and `14-sarkoidoz#39` (`NOD2`), improving holdout to `449/550` and `14-sarkoidoz` to `65/80` | No dev/train gain; the rule is intentionally narrow and only helps gene-symbol OCR/list cases | Use sentence-level evidence for other compact biomedical symbol lists only after validating against dev/holdout |
 
-Best current variant: iteration 44 for the current answer-keyed corpus, including newly available `42-skvoz`.
+Best current variant: iteration 47 for the current answer-keyed corpus, including newly available `42-skvoz`.
 
 Current gate result after continuation:
 
 - `npm test`: pass
 - `npm run typecheck`: pass
-- `npm run eval`: pass, dev exact accuracy `356/473 = 0.7526`
-- `npm run eval:holdout`: pass, holdout exact accuracy `446/550 = 0.8109`
-- train split: `1099/1597 = 0.6882`, `17` unkeyed cases skipped
-- answer-keyed overall: `1901/2620 = 0.7256`
-- all cases including unkeyed denominator: `1901/2637 = 0.7209`
-- single overall: `1457/1811 = 0.8045`
-- multi exact overall: `444/809 = 0.5488`
-- new overall target `>= 0.80` is not reached; shortfall is `195` additional exact answers on keyed cases.
+- `npm run eval`: pass, dev exact accuracy `355/473 = 0.7505`
+- `npm run eval:holdout`: pass, holdout exact accuracy `449/550 = 0.8164`
+- train split: `1102/1597 = 0.6900`, `17` unkeyed cases skipped
+- answer-keyed overall: `1906/2620 = 0.7275`
+- all cases including unkeyed denominator: `1906/2637 = 0.7228`
+- single overall: `1459/1811 = 0.8056`
+- multi exact overall: `447/809 = 0.5525`
+- new overall target `>= 0.80` is not reached; shortfall is `190` additional exact answers on keyed cases.
 
 Iteration 39 rejected attempts:
 

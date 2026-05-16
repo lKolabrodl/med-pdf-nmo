@@ -12,6 +12,7 @@ export const DEFAULT_CONFIG = {
   frozenFeatureRanker: true,
   multiCardinalityModel: true,
   multiAllOptionsGuard: true,
+  multiCrowdedTailGuard: true,
   pairwiseContrastRanker: true,
   structuralClusterAdjustments: true,
   singleSpecificityTieBreak: true,

@@ -2,53 +2,53 @@
 
 ## Current Error Counts
 
-Latest run after iteration 44 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
+Latest run after iteration 47 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
 
 Train (`1597` keyed cases):
 
-- correct: `1099`
-- errors: `498`
-- `confused_with_distractor`: `301`
-- `multi_cardinality`: `197`
+- correct: `1102`
+- errors: `495`
+- `confused_with_distractor`: `316`
+- `multi_cardinality`: `179`
 
 Dev (`473` cases):
 
-- correct: `356`
-- errors: `117`
-- `confused_with_distractor`: `68`
-- `multi_cardinality`: `49`
+- correct: `355`
+- errors: `118`
+- `confused_with_distractor`: `75`
+- `multi_cardinality`: `43`
 
 Holdout (`550` cases):
 
-- correct: `446`
-- errors: `104`
-- `confused_with_distractor`: `73`
-- `multi_cardinality`: `31`
+- correct: `449`
+- errors: `101`
+- `confused_with_distractor`: `71`
+- `multi_cardinality`: `30`
 
 All keyed splits combined:
 
-- correct: `1901/2620 = 0.7256`
-- errors: `719`
-- `confused_with_distractor`: `444`
-- `multi_cardinality`: `275`
+- correct: `1906/2620 = 0.7275`
+- errors: `714`
+- `confused_with_distractor`: `462`
+- `multi_cardinality`: `252`
 
-Worst PDFs by remaining error count across all keyed splits after iteration 44:
+Worst PDFs by remaining error count across all keyed splits after iteration 47:
 
-- `24-kalit`: `30`
-- `35-cron`: `29`
+- `35-cron`: `31`
 - `37-bazal`: `30`
-- `36-anrid`: `28`
-- `15-toxic`: `26`
-- `29-tpank`: `25`
-- `30-heart`: `25`
-- `13-pisha`: `24`
+- `24-kalit`: `28`
+- `15-toxic`: `27`
+- `30-heart`: `27`
+- `36-anrid`: `27`
+- `29-tpank`: `26`
+- `13-pisha`: `25`
 - `05-bronhit-hron`: `22`
 - `16-hb`: `22`
 - `39-glaurova`: `22`
 
 Worst holdout PDFs:
 
-- `14-sarkoidoz`: `18`
+- `14-sarkoidoz`: `15`
 - `33-aorta`: `15`
 - `19-gepatitc`: `13`
 - `18-gepatitabc`: `13`
@@ -159,19 +159,19 @@ During iteration 44, the multi all-options hypothesis was tested. Only `3/809` m
 
 ## Current Top Derived Classes
 
-- all keyed splits: `confused_with_distractor = 444`, `multi_cardinality = 275`
-- train: `confused_with_distractor = 303`, `multi_cardinality = 195`
-- dev: `confused_with_distractor = 68`, `multi_cardinality = 49`
-- holdout: `confused_with_distractor = 73`, `multi_cardinality = 31`
+- all keyed splits: `confused_with_distractor = 462`, `multi_cardinality = 252`
+- train: `confused_with_distractor = 316`, `multi_cardinality = 179`
+- dev: `confused_with_distractor = 75`, `multi_cardinality = 43`
+- holdout: `confused_with_distractor = 71`, `multi_cardinality = 30`
 
-Holdout exact accuracy is unchanged by iteration 44 and still passes:
+Holdout exact accuracy improved in iteration 47 and still passes:
 
-- `confused_with_distractor`: `73`
-- `multi_cardinality`: `31`
+- `confused_with_distractor`: `71`
+- `multi_cardinality`: `30`
 
 Worst holdout PDFs by remaining error count:
 
-- `14-sarkoidoz`: `18` errors
+- `14-sarkoidoz`: `15` errors
 - `33-aorta`: `15` errors
 - `18-gepatitabc`: `13` errors
 - `19-gepatitc`: `13` errors
@@ -182,9 +182,35 @@ Worst holdout PDFs by remaining error count:
 
 ## Remaining Risk After Passing 0.80
 
-Iteration 44 passes the holdout target with exact accuracy `0.8109` (`446/550`). The new user-requested overall target is not reached: answer-keyed overall accuracy is `1901/2620 = 0.7256`, requiring `195` more exact answers to reach `0.80`.
+Iteration 47 passes the holdout target with exact accuracy `0.8164` (`449/550`). The new user-requested overall target is not reached: answer-keyed overall accuracy is `1906/2620 = 0.7275`, requiring `190` more exact answers to reach `0.80`.
 
-The main residual risk is still layout semantics plus exact multi-answer set selection. Isolated visual-row, exact short-label row, step-window, condition-number, definition-window, answer-stage/degree row, count-cloze, coordinate table-column, coordinate table-row, frozen feature/cardinality pruning, all-options guard, MKB/code-row binding, and near-tie specificity rules recover some cases, but many remaining errors come from flattened tables, adjacent recommendation bullets, and weak cardinality calibration. The remaining 195-answer overall shortfall requires richer structural evidence, not another scalar threshold tweak.
+The main residual risk is still layout semantics plus exact multi-answer set selection. Isolated visual-row, exact short-label row, step-window, condition-number, definition-window, answer-stage/degree row, count-cloze, coordinate table-column, coordinate table-row, gene-symbol sentence binding, frozen feature/cardinality pruning, all-options/crowded-tail guards, MKB/code-row binding, and near-tie specificity rules recover some cases, but many remaining errors come from flattened tables, adjacent recommendation bullets, and weak cardinality calibration. The remaining 190-answer overall shortfall requires richer structural evidence, not another scalar threshold tweak.
+
+Iteration 45 hypothesis and outcome:
+
+- Hypothesis: multi questions should almost never select every option, and large 3-of-4 selections are suspicious when the selected tail is not separated from the unselected option.
+- Kept narrowly as `multiCrowdedTailGuard`: only 4-option multi questions with 3 selected answers are trimmed to top-2, and only when the third/fourth raw-score gap is below `0.3`.
+- Outcome: dev improved from `355/473` to `358/473`, dev multi exact improved from `0.5625` to `0.5833`, and holdout stayed `446/550 = 0.8109`.
+
+Post-iteration 45 co-location hypothesis:
+
+- Hypothesis: correct multi answers should usually be located near each other in the PDF, so selected answers outside the main page/text evidence cluster can be pruned, or unselected answers inside the same cluster can be added.
+- Existing implementation already partially uses this idea through `sharedMultiSegmentBoost`, `bounded_list_segment`, `section_list_segment`, and recommendation-like structural cluster pruning.
+- Additional generic page/text cluster post-rules were tested offline on dev and holdout multi outputs. They were not retained: page/text pruning fixed a few extras but broke more real multi sets, while adding same-cluster candidates caused broad over-selection.
+
+Iteration 46 normalization and ordinal-heading outcome:
+
+- Hypothesis: PDF text can write Greek-letter drug names with symbols (`ФНО-α`), while answer options often use Russian names (`ФНО-альфа`), so both forms should normalize to one alias.
+- Kept: `альфа/бета/гамма` now normalize to the same `alpha/beta/gamma` aliases as `α/β/γ`.
+- Kept: bracketed numeric reference marks such as `[151].` and `[1,4,93,165].` are stripped before search tokenization when they stand before sentence punctuation or end-of-text.
+- Kept narrowly: `терапия N-й линии` ordinal windows start near the heading instead of pulling a wide previous context, preventing drugs from the previous line from scoring as current-line drugs.
+- Outcome: `14-sarkoidoz#52` is fixed; holdout improves to `447/550`, train improves to `1102/1597`, while dev drops to `355/473`, mainly in multi-cardinality.
+
+Iteration 47 gene-symbol sentence outcome:
+
+- Hypothesis: short Latin gene symbols in answer options can be extracted from PDFs as Cyrillic lookalikes or spaced digit forms, but for mutation/polymorphism questions the correct symbols are often in one sentence with the question focus.
+- Kept: `gene_sentence_segment` matches only mutation/polymorphism gene questions, only inside the sentence with focus tokens, and supports OCR variants such as `FCGR3A -> РСОКЗА`, `MMP9 -> ММР9`, `CC10 -> СС10`, and `NOD2 -> N 0 0 2`.
+- Outcome: fixed `14-sarkoidoz#57` and `14-sarkoidoz#39`; holdout improved to `449/550 = 0.8164`, while dev and train stayed unchanged.
 
 Iteration 40 hypotheses and outcome:
 

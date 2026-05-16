@@ -7,6 +7,7 @@ __test__/*
 !__test__/
 !__test__/_runner.ts
 !__test__/leakage.test.ts
+!__test__/normalize.test.ts
 !__test__/01-toksic-galogen/
 !__test__/01-toksic-galogen/**
 !__test__/02-metanol-glikol/

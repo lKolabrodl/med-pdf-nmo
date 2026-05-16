@@ -10,6 +10,7 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     short_label_visual_row: 1.05,
     answer_ordinal_row: 1.05,
     fibrosis_stage_row: 1.2,
+    gene_sentence_segment: 1.1,
     classification_code_segment: 1.15,
     label_number_proximity: 1.0,
     label_definition_segment: 1.0,
@@ -119,6 +120,9 @@ export function selectAnswers(scored: ReturnType<typeof calibrateScores>, mode: 
   }
   if (config.multiAllOptionsGuard) {
     selected = applyMultiAllOptionsGuard(sorted, selected, scored);
+  }
+  if (config.multiCrowdedTailGuard) {
+    selected = applyMultiCrowdedTailGuard(sorted, selected);
   }
   if (config.multiCardinalityModel) {
     selected = applyMultiCardinalityModel(sorted, selected, scored);
@@ -293,6 +297,16 @@ function applyMultiCardinalityModel(sorted: ReturnType<typeof calibrateScores>, 
 function applyMultiAllOptionsGuard(sorted: ReturnType<typeof calibrateScores>, selectedIds: string[], scored: ReturnType<typeof calibrateScores>) {
   if (selectedIds.length !== scored.length) return selectedIds;
   if (scored.length < 3 || scored.length > 4) return selectedIds;
+  return sorted.slice(0, 2).map((item) => item.answer.id);
+}
+
+function applyMultiCrowdedTailGuard(sorted: ReturnType<typeof calibrateScores>, selectedIds: string[]) {
+  if (sorted.length !== 4 || selectedIds.length !== 3) return selectedIds;
+
+  const topGap = sorted[0].raw - sorted[1].raw;
+  const tailGap = sorted[2].raw - sorted[3].raw;
+  if (topGap <= 0 || tailGap >= 0.3) return selectedIds;
+
   return sorted.slice(0, 2).map((item) => item.answer.id);
 }
 
