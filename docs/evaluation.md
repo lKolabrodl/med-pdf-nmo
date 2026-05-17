@@ -56,16 +56,16 @@ Command: `npm run eval`
 ```json
 {
   "total": 473,
-  "correct": 365,
-  "exactAccuracy": 0.7717,
+  "correct": 366,
+  "exactAccuracy": 0.7738,
   "singleAccuracy": 0.8359,
-  "multiExactAccuracy": 0.625,
-  "macroAccuracyByPdf": 0.7804,
+  "multiExactAccuracy": 0.6319,
+  "macroAccuracyByPdf": 0.7822,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9161,
+  "avgConfidenceCorrect": 0.9159,
   "avgConfidenceIncorrect": 0.8628,
   "errorBuckets": {
-    "confused_with_distractor": 72,
+    "confused_with_distractor": 71,
     "multi_cardinality": 36
   },
   "skippedNoExpected": 0
@@ -112,17 +112,17 @@ Holdout by PDF:
 
 ## Current All 42 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1927/2620 = 0.7355` exact accuracy across all answer-keyed groups (`73.55%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1927/2637 = 0.7308`.
+Combining train, dev, and holdout diagnostic runs gives `1928/2620 = 0.7359` exact accuracy across all answer-keyed groups (`73.59%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1928/2637 = 0.7311`.
 
 Latest split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |
 | train | `1106/1597` | `69.25%` |
-| dev | `365/473` | `77.17%` |
+| dev | `366/473` | `77.38%` |
 | holdout | `456/550` | `82.91%` |
-| all answer-keyed cases | `1927/2620` | `73.55%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1927/2637` | `73.08%` |
+| all answer-keyed cases | `1928/2620` | `73.59%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1928/2637` | `73.11%` |
 
 Per-PDF percentages across all 42 groups:
 
@@ -134,8 +134,8 @@ Per-PDF percentages across all 42 groups:
 | `04-hep-d` | `57/70` | `81.43%` |
 | `05-bronhit-hron` | `48/70` | `68.57%` |
 | `06-co-toksic` | `59/70` | `84.29%` |
-| `07-hron` | `54/71` | `76.06%` |
-| `08-ask` | `26/30` | `86.67%` |
+| `07-hron` | `55/71` | `77.46%` |
+| `08-ask` | `28/30` | `93.33%` |
 | `09-covid` | `57/70` | `81.43%` |
 | `10-LPP` | `50/70` | `71.43%` |
 | `11-mening` | `60/70` | `85.71%` |

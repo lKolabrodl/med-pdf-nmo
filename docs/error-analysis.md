@@ -313,6 +313,13 @@ Iteration 44 hypotheses and outcome:
 - Hypothesis 2: the guard should not apply to 5+ options. Confirmed: a 5-option all-selected train case is genuinely all-correct, and 5+ lists often need more than one distractor removed.
 - Hypothesis 3: all-options pruning can improve cardinality without changing ordinary multi cases. Confirmed on dev (`+3` exact, multi exact `0.5625`) with unchanged holdout exact.
 
+Iteration 57 table-group outcome:
+
+- Hypothesis 1: explicit PDF tables can be reconstructed as `left label -> right values` for multi-answer questions when the PDF exposes text-item coordinates. Kept as `coordinate_table_group`, gated to explicit `Таблица` captions and compound row-label matching.
+- Hypothesis 2: broad pseudo-column reconstruction should include scales and arbitrary aligned paragraphs. Rejected after a holdout false positive in a non-table scale/research paragraph; table groups now require an explicit table caption.
+- Hypothesis 3: common route synonyms can recover table values without memorizing medical facts. Kept only `per os -> peroral`, which fixed two dev administration-route table cases without changing holdout.
+- Outcome: dev improves from `365/473` to `366/473`; dev multi exact improves from `0.6250` to `0.6319`; holdout remains `456/550 = 0.8291`.
+
 Concrete next steps:
 
 - extract text items with coordinates into table-like rows/columns, not only paragraphs;

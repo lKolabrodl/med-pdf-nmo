@@ -88,12 +88,14 @@ The predictor returns machine-readable JSON:
    - `conditioned_number_segment` and `numeric_condition_*` for tightly scoped condition/value rows such as `2-я неделя -> 0,05`, `20-30 кг -> 60 мг`, and phase abbreviations like `ХФ/ФА/БК -> 400/600 мг`;
    - `count_relation_segment` for single-answer count questions whose variants are short numeric answers, binding the number to local count/relation cues and question focus while ignoring long biomedical answers that only contain incidental numeric tokens;
    - `contrast_cue_mismatch` for multi-answer variants whose strongest evidence contains the opposite cue, such as upper vs lower/basal, increased vs decreased, or distal-proximal vs proximal-distal order;
+   - `coordinate_table_group` for multi-answer rows in explicit PDF tables: coordinate-extracted left labels are bound to right-side value cells, row continuations are merged, compound labels such as `X/Y` must match all question-focus parts, and numeric-only matches are rejected unless there is lexical or synonym support;
    - `roman_stage_segment` for table-style roman stage rows under a `Стадия` heading, including questions written as `II стадия`;
    - `temporal_cue_match` / `temporal_cue_mismatch` for single-answer day/night cues;
    - `bm25_question_answer`;
    - `question_chunk_answer`;
    - `answer_chunk_question`.
    Recent retained row-level signals also include `type_ordinal_segment`, `term_definition_segment`, `recommendation_item_segment`, `drug_dose_segment`, and `fibrosis_stage_row` for tightly scoped type/order, definition, recommendation-row, dose-frequency, and fibrosis-stage row binding. `term_definition_segment` now also handles `X называют...` definition-style multi questions and requires exact in-window abbreviation evidence when an answer option contains an uppercase abbreviation. The fibrosis scorer now also handles METAVIR `F0-F4` descriptor rows such as absent fibrosis, septa-based F2/F3 descriptions, and cirrhosis. Phrase generation also includes safe variants for answers split around hyphens in PDFs and for `ингибиторы <ABBR>` options that may appear as compact `и<ABBR>` text in guidelines.
+   A small route synonym dictionary maps `per os` to peroral answer options when table evidence describes administration route.
 7. Combine evidence into raw answer scores.
 8. Apply a frozen non-LLM feature layer over the evidence kinds:
    - small structural evidence bonuses for reliable row/table/code/list scorers;

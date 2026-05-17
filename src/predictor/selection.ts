@@ -5,6 +5,7 @@ import { normalizeForSearch, tokenize } from "../normalize.js";
 const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
   Object.entries({
     coordinate_table_row: 1.25,
+    coordinate_table_group: 1.25,
     visual_table_column: 1.2,
     exact_short_label_visual_row: 1.15,
     short_label_visual_row: 1.05,

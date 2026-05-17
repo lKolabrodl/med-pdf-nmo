@@ -1604,6 +1604,23 @@ function hasCoordinateTableCue(question, focusTokens) {
   return tokens.some((token) => COORDINATE_TABLE_CUE_TOKENS.has(token));
 }
 
+function hasCoordinateTableGroupCue(question, focusTokens, intent) {
+  if (hasCoordinateTableCue(question, focusTokens)) return true;
+  if (intent?.listLike) return true;
+  const normalized = normalizeForSearch(question);
+  const cuePhrases = [
+    "\u0433\u0440\u0443\u043f\u043f",
+    "\u043e\u0442\u043d\u043e\u0441",
+    "\u0432\u043a\u043b\u044e\u0447",
+    "\u0441\u043e\u0441\u0442\u0430\u0432",
+    "\u043f\u0440\u0435\u0434\u0441\u0442\u0430\u0432",
+    "\u043a\u043e\u043c\u0431\u0438\u043d\u0430\u0446",
+  ].map((item) => normalizeForSearch(item));
+  if (cuePhrases.some((cue) => containsNormalizedPhrase(normalized, cue))) return true;
+  const tokens = [...new Set([...(focusTokens ?? []), ...uniqueTokens(question)])];
+  return tokenHitCount([...COORDINATE_TABLE_CUE_TOKENS], tokens) > 0;
+}
+
 function coordinateCellText(cell) {
   return String(cell?.text ?? "").replace(/\s+/g, " ").trim();
 }
@@ -1628,6 +1645,37 @@ function coordinateLineCells(line) {
     const visualGap = x - previous.endX;
     const originGap = x - previous.x;
     if (visualGap > 18 && originGap > 34) {
+      cells.push({ text, x, endX, y: item.y ?? line?.y ?? 0, itemCount: 1 });
+    } else {
+      previous.text = `${previous.text} ${text}`.replace(/\s+/g, " ").trim();
+      previous.endX = Math.max(previous.endX, endX);
+      previous.itemCount += 1;
+    }
+  }
+
+  return cells.filter((cell) => coordinateCellText(cell));
+}
+
+function coordinateGroupLineCells(line) {
+  const items = [...(line?.items ?? [])]
+    .filter((item) => String(item?.text ?? "").trim())
+    .sort((a, b) => (a.x ?? 0) - (b.x ?? 0));
+  const cells = [];
+
+  for (const item of items) {
+    const text = String(item.text ?? "").replace(/\s+/g, " ").trim();
+    const x = item.x ?? 0;
+    const width = item.width ?? Math.max(8, text.length * 4.2);
+    const endX = x + Math.max(width, 4);
+    const previous = cells[cells.length - 1];
+    if (!previous) {
+      cells.push({ text, x, endX, y: item.y ?? line?.y ?? 0, itemCount: 1 });
+      continue;
+    }
+
+    const visualGap = x - previous.endX;
+    const originGap = x - previous.x;
+    if (visualGap > 18 || originGap > 64) {
       cells.push({ text, x, endX, y: item.y ?? line?.y ?? 0, itemCount: 1 });
     } else {
       previous.text = `${previous.text} ${text}`.replace(/\s+/g, " ").trim();
@@ -1672,6 +1720,12 @@ function coordinateTextHasTableCaption(text) {
     containsNormalizedPhrase(normalized, "\u0433\u0440\u0430\u0434\u0430\u0446") ||
     containsNormalizedPhrase(normalized, "\u043a\u043b\u0430\u0441\u0441\u0438\u0444")
   );
+}
+
+function coordinateTextHasExplicitTableCaption(text) {
+  const normalized = normalizeForSearch(text);
+  if (containsNormalizedPhrase(normalized, "\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e \u0442\u0430\u0431\u043b\u0438\u0446")) return false;
+  return containsNormalizedPhrase(normalized, "\u0442\u0430\u0431\u043b\u0438\u0446");
 }
 
 function coordinateTextIsRecommendationMeta(text) {
@@ -1791,6 +1845,22 @@ function coordinateHeaderText(lines, index) {
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
+function coordinateNearbyTableContext(lines, index) {
+  const localHeader = coordinateHeaderText(lines, index);
+  if (coordinateTextHasTableCaption(localHeader)) return localHeader;
+  const parts = [];
+  for (let current = index - 1; current >= 0 && current >= index - 24; current -= 1) {
+    const line = lines[current];
+    const text = String(line?.text ?? "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (coordinateTextHasTableCaption(text)) {
+      parts.unshift(text);
+      break;
+    }
+  }
+  return [...parts, localHeader].join(" ").replace(/\s+/g, " ").trim();
+}
+
 function coordinateTableRows(page) {
   if (page.__coordinateTableRows) return page.__coordinateTableRows;
   const lines = page.lineItems ?? [];
@@ -1857,6 +1927,174 @@ function buildCoordinateTableRowsByPage(pages, topQuestionPages) {
   return byPage;
 }
 
+function coordinateGroupLineLooksLikeStart(cells) {
+  if (cells.length < 2) return false;
+  const spread = coordinateCellsSpread(cells);
+  if (spread < 115) return false;
+  const firstX = cells[0]?.x ?? 0;
+  const lastX = cells[cells.length - 1]?.x ?? firstX;
+  return lastX - firstX >= 85;
+}
+
+function coordinateLooksLikeTableBoundary(line) {
+  const text = String(line?.text ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return true;
+  const normalized = normalizeForSearch(text);
+  if (containsNormalizedPhrase(normalized, "\u0442\u0430\u0431\u043b\u0438\u0446") && !/^\s*\u0442\u0430\u0431\u043b\u0438\u0446/u.test(text.toLowerCase())) return false;
+  if (/^\s*(?:\d+\.){1,3}\s+/u.test(text)) return true;
+  if (text.length <= 90 && /^(?:\u0440\u0438\u0441\u0443\u043d\u043e\u043a|\u0441\u043f\u0438\u0441\u043e\u043a|\u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u0435)\b/iu.test(text)) return true;
+  return false;
+}
+
+function coordinateShortCodeLike(text) {
+  const value = String(text ?? "").replace(/\s+/g, " ").trim();
+  if (!value) return false;
+  if (value.length > 44) return false;
+  if (/[a-z\u0430-\u044f]{3,}/u.test(value)) return false;
+  if (/[()]/u.test(value) && /[A-Z\u0410-\u042f0-9]{2,}/u.test(value)) return true;
+  if (/\*\*/u.test(value)) return true;
+  return /^[A-Z\u0410-\u042f0-9./+-]{2,}(?:\s+[A-Z\u0410-\u042f0-9./+-]{2,}){0,2}$/u.test(value);
+}
+
+function coordinateLabelContinuationLikely(labelText, nextLabelText, nextValueText) {
+  const labelTokens = uniqueTokens(labelText);
+  const nextTokens = uniqueTokens(nextLabelText);
+  if (!labelTokens.length || !nextTokens.length) return false;
+  if (coordinateShortCodeLike(nextValueText)) return true;
+  if (String(labelText ?? "").length <= 48 && /[()/]/u.test(String(nextLabelText ?? ""))) return true;
+  return false;
+}
+
+function coordinateGroupHeaderCells(cells) {
+  const text = cells
+    .map((cell) => cell.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const normalized = normalizeForSearch(text);
+  const columnCueCount = [
+    "\u043a\u043b\u0430\u0441\u0441",
+    "\u0433\u0440\u0443\u043f\u043f",
+    "\u043f\u0440\u0435\u043f\u0430\u0440\u0430\u0442",
+    "\u043f\u043e\u043a\u0430\u0437\u0430\u0442",
+    "\u0437\u043d\u0430\u0447\u0435\u043d",
+    "\u043a\u0440\u0438\u0442\u0435\u0440",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a",
+    "\u043a\u0430\u0442\u0435\u0433\u043e\u0440",
+  ]
+    .map((item) => normalizeForSearch(item))
+    .filter((cue) => containsNormalizedPhrase(normalized, cue)).length;
+  return columnCueCount >= 2 && cells.every((cell) => coordinateCellText(cell).length <= 70);
+}
+
+function coordinateSplitGroupCells(cells, valueX) {
+  const labelCells = [];
+  const valueCells = [];
+  for (const cell of cells) {
+    const x = cell.x ?? 0;
+    const center = (x + (cell.endX ?? x)) / 2;
+    if (center < valueX - 28) labelCells.push(cell);
+    else valueCells.push(cell);
+  }
+  return { labelCells, valueCells };
+}
+
+function coordinateAppendGroupText(parts, cells) {
+  for (const cell of cells) {
+    const text = coordinateCellText(cell);
+    if (text) parts.push(text);
+  }
+}
+
+function coordinateTableGroups(page) {
+  if (page.__coordinateTableGroups) return page.__coordinateTableGroups;
+  const lines = page.lineItems ?? [];
+  const groups = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const cells = coordinateGroupLineCells(line).map((cell) => ({ ...cell }));
+    if (!coordinateGroupLineLooksLikeStart(cells)) continue;
+    if (coordinateGroupHeaderCells(cells)) continue;
+
+    const valueX = cells[cells.length - 1]?.x ?? 0;
+    const labelX = cells[0]?.x ?? 0;
+    const baseSplit = coordinateSplitGroupCells(cells, valueX);
+    if (!baseSplit.labelCells.length || !baseSplit.valueCells.length) continue;
+
+    const labelParts = [];
+    const valueParts = [];
+    const rowLineTexts = [line.text];
+    coordinateAppendGroupText(labelParts, baseSplit.labelCells);
+    coordinateAppendGroupText(valueParts, baseSplit.valueCells);
+
+    let previousY = line?.y ?? 0;
+    for (let nextIndex = index + 1; nextIndex < lines.length && nextIndex <= index + 9; nextIndex += 1) {
+      const nextLine = lines[nextIndex];
+      const y = nextLine?.y ?? previousY;
+      if (Math.abs(y - previousY) > 28) break;
+      if (coordinateLooksLikeTableBoundary(nextLine)) break;
+      const nextCells = coordinateGroupLineCells(nextLine).map((cell) => ({ ...cell }));
+      if (!nextCells.length) break;
+
+      const split = coordinateSplitGroupCells(nextCells, valueX);
+      const nextLabelText = split.labelCells.map((cell) => cell.text).join(" ").replace(/\s+/g, " ").trim();
+      const nextValueText = split.valueCells.map((cell) => cell.text).join(" ").replace(/\s+/g, " ").trim();
+      const hasAlignedLabel = split.labelCells.some((cell) => Math.abs((cell.x ?? 0) - labelX) <= 34);
+      const hasAlignedValue = split.valueCells.some((cell) => Math.abs((cell.x ?? 0) - valueX) <= 58);
+      const looksLikeNewStart = coordinateGroupLineLooksLikeStart(nextCells) && hasAlignedLabel && hasAlignedValue;
+      const shouldMergeStart =
+        looksLikeNewStart &&
+        coordinateLabelContinuationLikely(labelParts.join(" "), nextLabelText, nextValueText);
+
+      if (looksLikeNewStart && !shouldMergeStart) break;
+      if (!hasAlignedValue && !hasAlignedLabel) break;
+      coordinateAppendGroupText(labelParts, split.labelCells);
+      coordinateAppendGroupText(valueParts, split.valueCells);
+      rowLineTexts.push(nextLine.text);
+      previousY = y;
+    }
+
+    const labelText = labelParts.join(" ").replace(/\s+/g, " ").trim();
+    const valueText = valueParts.join(" ").replace(/\s+/g, " ").trim();
+    const text = `${labelText} ${valueText}`.replace(/\s+/g, " ").trim();
+    if (labelText.length < 3 || valueText.length < 3 || text.length < 12) continue;
+
+    groups.push({
+      page: page.page,
+      index,
+      y: line?.y ?? 0,
+      headerText: coordinateNearbyTableContext(lines, index),
+      labelText,
+      valueText,
+      text,
+      sourceText: rowLineTexts.join(" ").replace(/\s+/g, " ").trim(),
+      valueX,
+      labelX,
+      labelTokens: uniqueTokens(labelText),
+      valueTokens: uniqueTokens(valueText),
+    });
+  }
+
+  Object.defineProperty(page, "__coordinateTableGroups", {
+    value: groups,
+    enumerable: false,
+  });
+  return groups;
+}
+
+function buildCoordinateTableGroupsByPage(pages, topQuestionPages) {
+  const byPage = new Map();
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    const groups = coordinateTableGroups(page).filter((group) => coordinateTextHasExplicitTableCaption(group.headerText));
+    if (groups.length) byPage.set(page.page, groups);
+  }
+  return byPage;
+}
+
 function coordinateTableFocusTokens(question, focusTokens, answerTokens) {
   const answerSet = new Set(answerTokens ?? []);
   const out = [];
@@ -1867,6 +2105,30 @@ function coordinateTableFocusTokens(question, focusTokens, answerTokens) {
     if (!out.includes(token)) out.push(token);
   }
   return out.slice(0, 12);
+}
+
+function coordinateCompoundFocusMatches(tableFocus, labelTokens) {
+  const compound = tableFocus.filter((token) => /[+/]/u.test(token));
+  if (!compound.length) return true;
+  const labelSet = new Set(labelTokens ?? []);
+  for (const token of compound) {
+    if (labelSet.has(token)) return true;
+    const parts = token
+      .split(/[+/]+/u)
+      .map((part) => part.trim())
+      .filter((part) => part.length >= 2);
+    if (parts.length >= 2 && parts.every((part) => labelSet.has(part))) return true;
+  }
+  return false;
+}
+
+function coordinateRouteSynonymSupport(answerText, cellText) {
+  const answer = normalizeForSearch(answerText);
+  const cell = normalizeForSearch(cellText);
+  const peroralCues = ["\u043f\u0435\u0440\u043e\u0440\u0430\u043b", "per os", "peros", "p o"];
+  const answerPeroral = peroralCues.some((cue) => containsNormalizedPhrase(answer, cue));
+  const cellPeroral = peroralCues.some((cue) => containsNormalizedPhrase(cell, cue));
+  return answerPeroral && cellPeroral ? 0.96 : 0;
 }
 
 function severityCue(text) {
@@ -2000,6 +2262,68 @@ function bestCoordinateTableRowSupport({
         text: `${row.headerText} ${row.sourceText || row.text}`.replace(/\s+/g, " ").trim(),
         score,
         kind: "coordinate_table_row",
+      });
+    }
+  }
+
+  return best;
+}
+
+function bestCoordinateTableGroupSupport({
+  mode,
+  question,
+  answer,
+  answerTokens,
+  focusTokens,
+  coordinateTableGroupsByPage,
+}) {
+  if (mode !== "multi") return null;
+  if (!coordinateTableGroupsByPage) return null;
+  const answerNumbers = extractNumbers(answer.text);
+  const answerPhrases = answerSearchPhrases(answer.text).slice(0, 12);
+  const tableFocus = coordinateTableFocusTokens(question, focusTokens, answerTokens);
+  if (tableFocus.length < 2 && !answerNumbers.length) return null;
+  let best = null;
+
+  for (const groups of coordinateTableGroupsByPage.values()) {
+    for (const group of groups) {
+      const answerSupport = coordinateCellAnswerSupport(
+        { text: group.valueText, index: 1 },
+        answer,
+        answerTokens,
+        answerPhrases,
+        answerNumbers,
+      );
+      const synonymSupport = coordinateRouteSynonymSupport(answer.text, `${group.valueText} ${group.headerText}`);
+      const effectiveAnswerSupport = Math.max(answerSupport.support, synonymSupport);
+      const minAnswerSupport = answerNumbers.length ? 0.5 : 0.58;
+      if (effectiveAnswerSupport < minAnswerSupport) continue;
+      const lexicalAnswerSupport = answerTokens.length ? strictSoftCoverage(answerTokens, answerSupport.tokens) : 0;
+      if (!answerSupport.phraseHit && synonymSupport <= 0 && lexicalAnswerSupport < 0.42) continue;
+
+      const labelCoverage = tableFocus.length ? coverage(tableFocus, group.labelTokens) : 0;
+      const labelHits = tokenHitCount(tableFocus, group.labelTokens);
+      const headerCoverage = tableFocus.length ? coverage(tableFocus, uniqueTokens(group.headerText)) : 0;
+      const hasSpecificLabel = labelCoverage >= 0.22 || labelHits >= Math.min(3, Math.max(2, Math.ceil(tableFocus.length * 0.25)));
+      if (!hasSpecificLabel && headerCoverage < 0.42) continue;
+      if (!coordinateCompoundFocusMatches(tableFocus, group.labelTokens)) continue;
+
+      const score =
+        14.6 +
+        Math.min(1, effectiveAnswerSupport) * 8.6 +
+        Math.min(0.78, labelCoverage) * 8.2 +
+        Math.min(4, labelHits) * 1.45 +
+        Math.min(0.5, headerCoverage) * 2.0 +
+        (answerSupport.phraseHit ? 1.4 : 0) +
+        synonymSupport * 1.4 +
+        lexicalAnswerSupport * 2.0 +
+        answerSupport.numericCoverage * 2.2;
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: group.page,
+        text: `${group.headerText} | ${group.labelText} -> ${group.valueText}`.replace(/\s+/g, " ").trim(),
+        score,
+        kind: "coordinate_table_group",
       });
     }
   }
@@ -5378,6 +5702,7 @@ function scoreAnswer(context) {
   const clozeGap = bestClozeGapSupport(context);
   const visualTableColumn = bestVisualTableColumnSupport(context);
   const coordinateTableRow = bestCoordinateTableRowSupport(context);
+  const coordinateTableGroup = bestCoordinateTableGroupSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
   const clinicalFeature = clinicalFeatureAdjustment(context);
@@ -5440,6 +5765,7 @@ function scoreAnswer(context) {
     (clozeGap?.score ?? 0) * 1.12 +
     (visualTableColumn?.score ?? 0) * 1.18 +
     (coordinateTableRow?.score ?? 0) * 1.12 +
+    (coordinateTableGroup?.score ?? 0) * 1.16 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
     (clinicalFeature.support?.score ?? 0) * 1.12 +
@@ -5506,6 +5832,7 @@ function scoreAnswer(context) {
     clozeGap,
     visualTableColumn,
     coordinateTableRow,
+    coordinateTableGroup,
     latinFuzzy,
     geneSentence,
     clinicalFeature.support,
@@ -5566,6 +5893,10 @@ export async function predict(input, options: any = {}) {
   const coordinateTableRowsByPage = hasCoordinateTableCue(question, focusTokens)
     ? buildCoordinateTableRowsByPage(runtime.pdfText.pages, topQuestionPages)
     : null;
+  const coordinateTableGroupsByPage =
+    mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
+      ? buildCoordinateTableGroupsByPage(runtime.pdfText.pages, topQuestionPages)
+      : null;
 
   let answerScores = answers.map((answer) => {
     const answerTokens = uniqueTokens(answer.text);
@@ -5589,6 +5920,7 @@ export async function predict(input, options: any = {}) {
       boundedListSegments,
       visualTableColumnTargetsByPage,
       coordinateTableRowsByPage,
+      coordinateTableGroupsByPage,
     });
     return {
       answer,
