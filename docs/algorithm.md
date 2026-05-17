@@ -80,7 +80,7 @@ The predictor returns machine-readable JSON:
    - `clinical_feature_segment` for narrow `has following clinical signs` multi questions: positive feature sentences near the form/disease focus are boosted, while same-sentence `not typical/not characteristic/absent` cues become `clinical_feature_negated` penalties;
    - `bounded_list_segment` for local list evidence tied to syndrome names, age clauses, and `triad` cues;
    - `ordinal_list_segment` for numbered stages, therapy-line questions, and numeric `N-я ступень` step lists, including page-break continuation; heading-like `терапия N-й линии` windows are narrowed so previous-line drugs do not leak into the current line;
-   - `answer_ordinal_row` for answer options that are themselves stage/degree labels (`1/2/3`, `I/II/III`) and must be bound back to the matching classification row;
+   - `answer_ordinal_row` for answer options that are themselves stage/degree labels (`1/2/3`, `I/II/III`) and must be bound back to the matching classification row; Roman labels require token boundaries so `I` does not match the start of `II`/`III`;
    - `label_definition_segment` for questions like `считается <label> при ...`;
    - `recommendation_polarity_match` for narrow negative-recommendation questions;
    - `explicit_recommendation_target_segment` / `explicit_recommendation_target_mismatch` for multi questions about `назначение`, `проведение`, `проводить`, or `выполнение` a specific target; the answer must be supported by the recommendation block for that target, and confident hits in neighboring recommendation blocks get a mild penalty;

@@ -56,17 +56,17 @@ Command: `npm run eval`
 ```json
 {
   "total": 473,
-  "correct": 363,
-  "exactAccuracy": 0.7674,
-  "singleAccuracy": 0.8328,
-  "multiExactAccuracy": 0.6181,
-  "macroAccuracyByPdf": 0.7721,
+  "correct": 365,
+  "exactAccuracy": 0.7717,
+  "singleAccuracy": 0.8359,
+  "multiExactAccuracy": 0.625,
+  "macroAccuracyByPdf": 0.7804,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9143,
+  "avgConfidenceCorrect": 0.9161,
   "avgConfidenceIncorrect": 0.8628,
   "errorBuckets": {
-    "confused_with_distractor": 73,
-    "multi_cardinality": 37
+    "confused_with_distractor": 72,
+    "multi_cardinality": 36
   },
   "skippedNoExpected": 0
 }
@@ -112,17 +112,17 @@ Holdout by PDF:
 
 ## Current All 42 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1925/2620 = 0.7347` exact accuracy across all answer-keyed groups (`73.47%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1925/2637 = 0.7300`.
+Combining train, dev, and holdout diagnostic runs gives `1927/2620 = 0.7355` exact accuracy across all answer-keyed groups (`73.55%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1927/2637 = 0.7308`.
 
 Latest split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |
 | train | `1106/1597` | `69.25%` |
-| dev | `363/473` | `76.74%` |
+| dev | `365/473` | `77.17%` |
 | holdout | `456/550` | `82.91%` |
-| all answer-keyed cases | `1925/2620` | `73.47%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1925/2637` | `73.00%` |
+| all answer-keyed cases | `1927/2620` | `73.55%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1927/2637` | `73.08%` |
 
 Per-PDF percentages across all 42 groups:
 

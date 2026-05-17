@@ -2,7 +2,7 @@
 
 ## Current Error Counts
 
-Latest run after iteration 55 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
+Latest run after iteration 56 on the current 42-PDF corpus. Metrics below exclude `17` unkeyed `22-eozif` cases with `expected: []`.
 
 Train (`1597` keyed cases):
 
@@ -13,10 +13,10 @@ Train (`1597` keyed cases):
 
 Dev (`473` cases):
 
-- correct: `363`
-- errors: `110`
-- `confused_with_distractor`: `73`
-- `multi_cardinality`: `37`
+- correct: `365`
+- errors: `108`
+- `confused_with_distractor`: `72`
+- `multi_cardinality`: `36`
 
 Holdout (`550` cases):
 
@@ -27,12 +27,12 @@ Holdout (`550` cases):
 
 All keyed splits combined:
 
-- correct: `1925/2620 = 0.7347`
-- errors: `695`
-- `confused_with_distractor`: `456`
-- `multi_cardinality`: `239`
+- correct: `1927/2620 = 0.7355`
+- errors: `693`
+- `confused_with_distractor`: `455`
+- `multi_cardinality`: `238`
 
-Worst PDFs by remaining error count across all keyed splits after iteration 55:
+Worst PDFs by remaining error count across all keyed splits after iteration 56:
 
 - `35-cron`: `31`
 - `24-kalit`: `28`
@@ -49,10 +49,10 @@ Worst holdout PDFs:
 
 - `33-aorta`: `15`
 - `18-gepatitabc`: `13`
-- `19-gepatitc`: `13`
 - `14-sarkoidoz`: `12`
 - `06-co-toksic`: `11`
 - `17-gepatit`: `11`
+- `19-gepatitc`: `11`
 - `23-nimana`: `11`
 - `11-mening`: `10`
 
@@ -235,6 +235,14 @@ Iteration 55 contrast-cue outcome:
 - Hypothesis: some wrong multi variants are near the right evidence but encode the opposite cue: upper vs lower/basal, increased vs decreased, or distal-proximal vs proximal-distal order.
 - Kept narrowly: only short, explicit contrast cue groups are used, and only when the candidate's strongest evidence text contains the opposite cue but not the answer's own cue.
 - Outcome: dev improves to `363/473`, holdout improves to `456/550`, and multi exact overall reaches `462/809 = 0.5711`.
+
+Iteration 56 ordinal parser outcome:
+
+- Hypothesis: answer options like `I/II/III стадии` can be misbound when the Roman `I` regex matches the start of `II` or `III` inside an ordinal row.
+- Kept: answer-option ordinal row matching now requires a boundary after the Roman/numeric label, and skips Roman `I` matches that are actually the conjunction between two neighboring Roman ordinals.
+- Kept: a final multi-selection guard collapses duplicate selected answer texts after normal selection, so identical variants are not returned twice as separate semantic answers.
+- Outcome: dev improves from `363/473` to `365/473`; holdout remains `456/550`; answer-keyed overall becomes `1927/2620 = 0.7355`.
+- Rejected in the same continuation: stricter short-Latin fuzzy matching, therapy-structure mono/combination matching, row-start ordinal visual boosting, definition-length boosting, and re-enabling `condition_number_segment`. These were neutral or regressive on dev/holdout and were not retained.
 
 Iteration 45 hypothesis and outcome:
 

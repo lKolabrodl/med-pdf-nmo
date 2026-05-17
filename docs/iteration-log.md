@@ -60,21 +60,22 @@
 | 53 | Tightened answer ordinal cue detection so labels like `1 степень` still bind to row windows, while unrelated words such as `постепенное` no longer count as `степень` evidence | 0.7526 | 0.8218 | Recovered one dev single case without changing holdout; the rule is token-boundary based and not tied to a PDF/question id | Only a small slice of errors are ordinal-cue false positives | Continue with multi-specific structural evidence |
 | 54 | Added explicit recommendation target blocks for questions like `рекомендовано назначение/проведение X`: answer support must come from the recommendation block for target `X`, while confident hits in a neighboring recommendation block get a mild mismatch penalty | 0.7653 | 0.8255 | Fixed several dev multi recommendation rows and one holdout recommendation row; generic `all patients` answers are penalized only when a more specific same-population alternative exists | Follow-up frequency answers needed a guard so monitoring intervals are not wrongly treated as neighboring-target mismatches | Add contrast-aware pruning for answer options that encode opposite directions/locations |
 | 55 | Added multi-answer `contrast_cue_mismatch` for opposite option cues such as upper vs lower/basal, increased vs decreased, and distal-proximal vs proximal-distal order | 0.7674 | 0.8291 | Fixed additional multi distractors on dev and holdout; all net gain since iteration 52 is in multi exact sets | The cue list is intentionally short; broad synonym expansion was avoided to prevent fitting to current PDFs | Next work should expose richer layout/list features before trying another calibrator |
+| 56 | Fixed answer-option ordinal row matching so Roman `I` no longer matches the start of `II`/`III` rows; added a final duplicate-text guard for multi selections | 0.7717 | 0.8291 | Fixed two dev ordinal/stage cases without changing train or holdout; duplicate selected variants are collapsed by normalized answer text | Broader short-Latin fuzzy tightening, therapy-structure matching, row-start ordinal boosting, definition-length boosting, and re-enabling `condition_number_segment` were rejected after neutral or regressive evals | Continue with structural table/list reconstruction; keep parser fixes, reject neutral scorers |
 
-Best current variant: iteration 55 for the current answer-keyed corpus, including newly available `42-skvoz`.
+Best current variant: iteration 56 for the current answer-keyed corpus, including newly available `42-skvoz`.
 
 Current gate result after continuation:
 
 - `npm test`: pass
 - `npm run typecheck`: pass
-- `npm run eval`: pass, dev exact accuracy `363/473 = 0.7674`
+- `npm run eval`: pass, dev exact accuracy `365/473 = 0.7717`
 - `npm run eval:holdout`: pass, holdout exact accuracy `456/550 = 0.8291`
 - train split: `1106/1597 = 0.6925`, `17` unkeyed cases skipped
-- answer-keyed overall: `1925/2620 = 0.7347`
-- all cases including unkeyed denominator: `1925/2637 = 0.7300`
-- single overall: `1463/1811 = 0.8078`
-- multi exact overall: `462/809 = 0.5711`
-- new overall target `>= 0.80` is not reached; shortfall is `171` additional exact answers on keyed cases.
+- answer-keyed overall: `1927/2620 = 0.7355`
+- all cases including unkeyed denominator: `1927/2637 = 0.7308`
+- single overall: `1464/1811 = 0.8084`
+- multi exact overall: `463/809 = 0.5723`
+- new overall target `>= 0.80` is not reached; shortfall is `169` additional exact answers on keyed cases.
 
 Iteration 39 rejected attempts:
 

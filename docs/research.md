@@ -46,7 +46,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - explicit recommendation target binding for multi questions about `назначение/проведение/выполнение X`, so an answer must be supported by the recommendation block for target `X`;
 - conservative multi contrast-cue pruning for opposite option cues such as upper/lower, increased/decreased, and distal-proximal/proximal-distal.
 
-The best current algorithm reaches dev exact accuracy `0.7674` and holdout exact accuracy `0.8291`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1925/2620 = 0.7347`, so future work is focused on multi-answer set selection and layout-aware evidence.
+The best current algorithm reaches dev exact accuracy `0.7717` and holdout exact accuracy `0.8291`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1927/2620 = 0.7355`, so future work is focused on multi-answer set selection and layout-aware evidence.
 
 ## Feature Calibrator Research Guardrails
 

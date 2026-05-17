@@ -5089,6 +5089,7 @@ function nextAnswerOrdinalIndex(normalized, start, label) {
       const match = normalized.slice(start).match(pattern);
       if (!match?.index && match?.index !== 0) continue;
       const index = start + match.index;
+      if (isRomanOneConjunctionMatch(normalized, index, variant)) continue;
       const before = normalized.slice(Math.max(0, index - 180), index);
       const after = normalized.slice(index, Math.min(normalized.length, index + 90));
       if (!hasOrdinalKindCue(before, label.kind) && !hasOrdinalKindCue(after, label.kind)) continue;
@@ -5098,6 +5099,23 @@ function nextAnswerOrdinalIndex(normalized, start, label) {
   return best;
 }
 
+function nearestTokenBefore(normalized, index) {
+  const tokens = normalized.slice(0, index).trim().match(/\S+/gu) ?? [];
+  return tokens[tokens.length - 1] ?? "";
+}
+
+function nearestTokenAfter(normalized, index, length) {
+  const tokens = normalized.slice(index + length).trim().match(/\S+/gu) ?? [];
+  return tokens[0] ?? "";
+}
+
+function isRomanOneConjunctionMatch(normalized, index, variant) {
+  if (variant !== "i") return false;
+  const before = ordinalValueToNumber(nearestTokenBefore(normalized, index));
+  const after = ordinalValueToNumber(nearestTokenAfter(normalized, index, variant.length));
+  return Boolean(before && after);
+}
+
 function answerOrdinalRowWindows(source, label) {
   const normalized = source.normalized;
   const cue = ordinalKindCue(label.kind);
@@ -5105,12 +5123,13 @@ function answerOrdinalRowWindows(source, label) {
   for (const variant of romanStageVariants(String(label.number))) {
     if (hasOrdinalKindCue(normalized, label.kind)) {
       const directPatterns = [
-        new RegExp(`(?:^|\\s)${escapeRegExp(variant)}(?:\\s*-?\\s*\\S{0,3})?\\s+${escapeRegExp(cue)}`, "giu"),
+        new RegExp(`(?:^|\\s)${escapeRegExp(variant)}(?:\\s|$)(?:-?\\s*\\S{0,3}\\s+)?${escapeRegExp(cue)}`, "giu"),
         new RegExp(`${escapeRegExp(cue)}\\s+(?:\\S+\\s+){0,2}${escapeRegExp(variant)}(?:\\s|$)`, "giu"),
       ];
       for (const pattern of directPatterns) {
         for (const match of normalized.matchAll(pattern)) {
           const index = match.index ?? 0;
+          if (isRomanOneConjunctionMatch(normalized, index, variant)) continue;
           const afterStart = index + match[0].length;
           const next = nextAnswerOrdinalIndex(normalized, afterStart + 8, label);
           const end = next > 0 ? next : Math.min(normalized.length, afterStart + 520);
@@ -5123,6 +5142,10 @@ function answerOrdinalRowWindows(source, label) {
         const index = normalized.indexOf(variant, start);
         if (index < 0) break;
         if (!hasSearchBoundaries(normalized, index, variant.length)) {
+          start = index + Math.max(1, variant.length);
+          continue;
+        }
+        if (isRomanOneConjunctionMatch(normalized, index, variant)) {
           start = index + Math.max(1, variant.length);
           continue;
         }

@@ -130,6 +130,7 @@ export function selectAnswers(scored: ReturnType<typeof calibrateScores>, mode: 
   if (config.multiCardinalityModel) {
     selected = applyMultiCardinalityModel(sorted, selected, scored);
   }
+  selected = dedupeSelectedByAnswerText(selected, sorted);
   if (!selected.length && sorted.length) selected = [sorted[0].answer.id];
   return selected.sort((a, b) => scored.findIndex((item) => item.answer.id === a) - scored.findIndex((item) => item.answer.id === b));
 }
@@ -311,6 +312,21 @@ function applyMultiCrowdedTailGuard(sorted: ReturnType<typeof calibrateScores>, 
   if (topGap <= 0 || tailGap >= 0.3) return selectedIds;
 
   return sorted.slice(0, 2).map((item) => item.answer.id);
+}
+
+function dedupeSelectedByAnswerText(selectedIds: string[], sorted: ReturnType<typeof calibrateScores>) {
+  if (selectedIds.length < 2) return selectedIds;
+  const selected = new Set(selectedIds);
+  const seenText = new Set<string>();
+  const kept = [];
+  for (const item of sorted) {
+    if (!selected.has(item.answer.id)) continue;
+    const key = normalizeForSearch(item.answer.text);
+    if (key && seenText.has(key)) continue;
+    if (key) seenText.add(key);
+    kept.push(item.answer.id);
+  }
+  return kept.length ? kept : selectedIds;
 }
 
 /**
