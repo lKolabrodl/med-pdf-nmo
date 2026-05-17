@@ -6,7 +6,21 @@
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "browser": "./dist/nmo-pdf-easy.browser.mjs",
+  "browser": {
+    "./dist/index.js": "./dist/nmo-pdf-easy.browser.mjs",
+    "buffer": "./dist/browser-shims/buffer.js",
+    "crypto": "./dist/browser-shims/crypto.js",
+    "fs": "./dist/browser-shims/fs.js",
+    "fs/promises": "./dist/browser-shims/fs-promises.js",
+    "node:buffer": "./dist/browser-shims/buffer.js",
+    "node:crypto": "./dist/browser-shims/crypto.js",
+    "node:fs": "./dist/browser-shims/fs.js",
+    "node:fs/promises": "./dist/browser-shims/fs-promises.js",
+    "node:path": "./dist/browser-shims/path.js",
+    "node:process": "./dist/browser-shims/process.js",
+    "path": "./dist/browser-shims/path.js",
+    "process": "./dist/browser-shims/process.js"
+  },
   "unpkg": "./dist/nmo-pdf-easy.browser.js",
   "jsdelivr": "./dist/nmo-pdf-easy.browser.js",
   "license": "MIT",
@@ -30,6 +44,11 @@
       "import": "./dist/nmo-pdf-easy.browser.mjs",
       "default": "./dist/nmo-pdf-easy.browser.mjs"
     },
+    "./browser-shims/*": {
+      "types": "./dist/browser-shims/*.d.ts",
+      "import": "./dist/browser-shims/*.js",
+      "default": "./dist/browser-shims/*.js"
+    },
     "./dist/nmo-pdf-easy.browser.js": "./dist/nmo-pdf-easy.browser.js",
     "./package.json": "./package.json"
   },
@@ -37,8 +56,8 @@
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && npm run build:esm && npm run build:browser && npm run build:browser:esm",
     "build:esm": "tsc -p tsconfig.package.json",
-    "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=NmoPdfEasy --outfile=dist/nmo-pdf-easy.browser.js --platform=browser --target=es2020 --external:pdfjs-dist/legacy/build/pdf.mjs --legal-comments=none",
-    "build:browser:esm": "esbuild src/browser.ts --bundle --format=esm --outfile=dist/nmo-pdf-easy.browser.mjs --platform=browser --target=es2020 --external:pdfjs-dist/legacy/build/pdf.mjs --legal-comments=none",
+    "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=NmoPdfEasy --outfile=dist/nmo-pdf-easy.browser.js --platform=browser --target=es2020 --legal-comments=none",
+    "build:browser:esm": "esbuild src/browser.ts --bundle --format=esm --outfile=dist/nmo-pdf-easy.browser.mjs --platform=browser --target=es2020 --legal-comments=none",
     "prepare": "npm run build",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
