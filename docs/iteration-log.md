@@ -115,3 +115,13 @@ Fresh rerun on 2026-05-11 after user-requested continuation:
 - initial metrics were `train 1020/1564`, `dev 336/473`, `holdout 440/550`, overall `1796/2587 = 0.6942`.
 - final metrics after iterations 32-35 are `train 1023/1547`, `dev 341/473`, `holdout 441/550`, answer-keyed overall `1805/2570 = 0.7023`.
 - Tried a single-answer cloze-tail scorer; it was neutral on train/dev/holdout and was removed.
+
+Fresh refactor iteration on 2026-05-18:
+
+- Iteration 61 moved focused/line support, biomedical symbol OCR/gene support, and coordinate table reconstruction from `src/predictor.ts` into focused scorer modules.
+- Added Russian JSDoc to the newly extracted functions and `docs/adr-001-predictor-architecture.md` describing why predictor stays modular, non-LLM, evidence-based, and structure-first.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `367/473 = 0.7759`, single `0.8359`, multi `0.6389`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `457/550 = 0.8309`, single `0.8602`, multi `0.7344`.
+- Score delta from previous runtime: dev `+0.0000`, holdout `+0.0000`; this was a behavior-preserving architecture iteration.

@@ -124,6 +124,9 @@ The predictor returns machine-readable JSON:
 - `src/predictor/runtime.ts`: PDF extraction cache and input answer normalization.
 - `src/predictor/text-utils.ts`: shared phrase, token, evidence, proximity, and number helpers.
 - `src/predictor/scorers/search.ts`: anchor, section, phrase, and row-label retrieval scorers.
+- `src/predictor/scorers/focused.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
+- `src/predictor/scorers/biomedical-symbols.ts`: Latin biomedical token, gene-symbol, and OCR-lookalike normalization scorers.
+- `src/predictor/scorers/coordinate-table.ts`: coordinate-based table row, group, inverse-binding, and multi-cell reconstruction scorers.
 - `src/predictor/scorers/drug-dose.ts`: drug/dose/frequency row scorer.
 - `src/predictor/scorers/exact-answer.ts`: narrow exact full-answer scorer for oral dose prompts.
 - `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
