@@ -95,7 +95,7 @@ The predictor returns machine-readable JSON:
    - `question_chunk_answer`;
    - `answer_chunk_question`.
    Recent retained row-level signals also include `type_ordinal_segment`, `term_definition_segment`, `recommendation_item_segment`, `drug_dose_segment`, and `fibrosis_stage_row` for tightly scoped type/order, definition, recommendation-row, dose-frequency, and fibrosis-stage row binding. `term_definition_segment` now also handles `X называют...` definition-style multi questions and requires exact in-window abbreviation evidence when an answer option contains an uppercase abbreviation. The fibrosis scorer now also handles METAVIR `F0-F4` descriptor rows such as absent fibrosis, septa-based F2/F3 descriptions, and cirrhosis. Phrase generation also includes safe variants for answers split around hyphens in PDFs and for `ингибиторы <ABBR>` options that may appear as compact `и<ABBR>` text in guidelines.
-   A small route synonym dictionary maps `per os` to peroral answer options when table evidence describes administration route.
+   A small route synonym dictionary maps high-confidence administration-route forms inside table evidence: `per os`/`внутрь` to peroral, `в/в` to intravenous, `в/м` to intramuscular, and `п/к` to subcutaneous.
 7. Combine evidence into raw answer scores.
 8. Apply a frozen non-LLM feature layer over the evidence kinds:
    - small structural evidence bonuses for reliable row/table/code/list scorers;

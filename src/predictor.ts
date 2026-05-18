@@ -2125,10 +2125,19 @@ function coordinateCompoundFocusMatches(tableFocus, labelTokens) {
 function coordinateRouteSynonymSupport(answerText, cellText) {
   const answer = normalizeForSearch(answerText);
   const cell = normalizeForSearch(cellText);
-  const peroralCues = ["\u043f\u0435\u0440\u043e\u0440\u0430\u043b", "per os", "peros", "p o"];
-  const answerPeroral = peroralCues.some((cue) => containsNormalizedPhrase(answer, cue));
-  const cellPeroral = peroralCues.some((cue) => containsNormalizedPhrase(cell, cue));
-  return answerPeroral && cellPeroral ? 0.96 : 0;
+  const routeGroups = [
+    ["\u043f\u0435\u0440\u043e\u0440\u0430\u043b", "\u0432\u043d\u0443\u0442\u0440\u044c", "per os", "peros", "p o"],
+    ["\u0432\u043d\u0443\u0442\u0440\u0438\u0432", "\u0432/\u0432"],
+    ["\u0432\u043d\u0443\u0442\u0440\u0438\u043c\u044b\u0448", "\u0432/\u043c"],
+    ["\u043f\u043e\u0434\u043a\u043e\u0436", "\u043f/\u043a"],
+  ];
+  for (const cues of routeGroups) {
+    const answerHit = cues.some((cue) => containsNormalizedPhrase(answer, cue));
+    if (!answerHit) continue;
+    const cellHit = cues.some((cue) => containsNormalizedPhrase(cell, cue));
+    if (cellHit) return 0.96;
+  }
+  return 0;
 }
 
 function severityCue(text) {

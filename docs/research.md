@@ -45,7 +45,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - narrow line-level binding for dose frequency, conditional-only recommendations, first-line therapy rows, biological/mechanical valve prosthesis recommendation rows, and fibrosis stage rows extracted from the PDF.
 - explicit recommendation target binding for multi questions about `назначение/проведение/выполнение X`, so an answer must be supported by the recommendation block for target `X`;
 - conservative multi contrast-cue pruning for opposite option cues such as upper/lower, increased/decreased, and distal-proximal/proximal-distal.
-- conservative coordinate table-group reconstruction for explicit `Таблица` layouts, binding left row labels to right-side values in multi questions and using a small route synonym (`per os` -> peroral) for administration-route rows.
+- conservative coordinate table-group reconstruction for explicit `Таблица` layouts, binding left row labels to right-side values in multi questions and using a small high-confidence RU route dictionary (`per os`/`внутрь`, `в/в`, `в/м`, `п/к`) for administration-route rows.
 
 The best current algorithm reaches dev exact accuracy `0.7738` and holdout exact accuracy `0.8291`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1928/2620 = 0.7359`, so future work is focused on multi-answer set selection and layout-aware evidence.
 

@@ -320,6 +320,13 @@ Iteration 57 table-group outcome:
 - Hypothesis 3: common route synonyms can recover table values without memorizing medical facts. Kept only `per os -> peroral`, which fixed two dev administration-route table cases without changing holdout.
 - Outcome: dev improves from `365/473` to `366/473`; dev multi exact improves from `0.6250` to `0.6319`; holdout remains `456/550 = 0.8291`.
 
+Iteration 58 route-abbreviation dictionary outcome:
+
+- Hypothesis: a very small RU route dictionary is useful for future PDFs even if the current corpus already contains mostly full route names.
+- Kept inside table evidence only: `в/в -> внутривенный`, `в/м -> внутримышечный`, `п/к -> подкожный`, and `внутрь/per os -> пероральный`.
+- Rejected: a broader English route dictionary (`IV/IM/SC/SQ/PO/oral`) because it added no exact gain on train/dev/holdout and increases ambiguity surface.
+- Outcome: dev remains `366/473 = 0.7738`; holdout remains `456/550 = 0.8291`; no regression.
+
 Concrete next steps:
 
 - extract text items with coordinates into table-like rows/columns, not only paragraphs;
