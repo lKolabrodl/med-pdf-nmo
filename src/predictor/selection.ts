@@ -8,6 +8,7 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     coordinate_table_group: 1.25,
     coordinate_table_group_inverse: 1.25,
     coordinate_table_multicell_row: 1.25,
+    coordinate_table_membership: 1.15,
     visual_table_column: 1.2,
     exact_short_label_visual_row: 1.15,
     short_label_visual_row: 1.05,
@@ -304,11 +305,12 @@ function applyMultiCardinalityModel(sorted: ReturnType<typeof calibrateScores>, 
   return selected.sort((a, b) => scored.findIndex((item) => item.answer.id === a) - scored.findIndex((item) => item.answer.id === b));
 }
 
-const STRUCTURAL_GROUP_COMPLETION_KINDS = new Set(["coordinate_table_multicell_row"]);
+const STRUCTURAL_GROUP_COMPLETION_KINDS = new Set(["coordinate_table_multicell_row", "coordinate_table_membership"]);
 
 function structuralGroupEvidenceKey(evidence: AnswerScore["evidence"][number]) {
   if (!STRUCTURAL_GROUP_COMPLETION_KINDS.has(evidence.kind)) return "";
-  if ((evidence.score ?? 0) < 24 || (evidence.text?.length ?? 0) < 80) return "";
+  const minScore = evidence.kind === "coordinate_table_membership" ? 18 : 24;
+  if ((evidence.score ?? 0) < minScore || (evidence.text?.length ?? 0) < 80) return "";
   return `${evidence.kind}:${evidence.page}:${normalizeForSearch(evidence.text).slice(0, 520)}`;
 }
 
@@ -334,9 +336,10 @@ function applyStructuralEvidenceGroupCompletion(
   const additions = [];
   for (const item of sorted) {
     if (selected.has(item.answer.id)) continue;
-    if (item.raw < Math.max(12, topRaw * 0.42)) continue;
     const evidence = (item.evidence ?? []).find((entry) => strongGroups.has(structuralGroupEvidenceKey(entry)));
     if (!evidence) continue;
+    const minRawRatio = evidence.kind === "coordinate_table_membership" ? 0.35 : 0.42;
+    if (item.raw < Math.max(12, topRaw * minRawRatio)) continue;
     additions.push(item.answer.id);
     if (additions.length >= 2) break;
   }

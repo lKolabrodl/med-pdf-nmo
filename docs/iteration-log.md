@@ -125,3 +125,14 @@ Fresh refactor iteration on 2026-05-18:
 - `npm run eval`: pass, dev exact accuracy `367/473 = 0.7759`, single `0.8359`, multi `0.6389`.
 - `npm run eval:holdout`: pass, holdout exact accuracy `457/550 = 0.8309`, single `0.8602`, multi `0.7344`.
 - Score delta from previous runtime: dev `+0.0000`, holdout `+0.0000`; this was a behavior-preserving architecture iteration.
+
+Iteration 62:
+
+- Added conservative `coordinate_table_membership` support for multi questions where a relevant explicit table caption/header answers the question and correct options are spread across multiple table rows.
+- The scorer is gated away from negative/exception questions, opposing short-/long-acting option families, and local route/form questions such as `местно, в виде мазей/суппозиториев`.
+- Structural group completion now allows high-confidence table-membership candidates from the same table block, but still requires selected evidence from that same block first.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `368/473 = 0.7780`, single `0.8359`, multi `0.6458`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `457/550 = 0.8309`, single `0.8602`, multi `0.7344`.
+- Score delta from iteration 61: dev `+1` exact (`+0.0021`), dev multi `+0.0069`; holdout `+0`.

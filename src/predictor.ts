@@ -19,9 +19,11 @@ import { bestFrequencyRecommendationSupport, frequencyAnswer, frequencySearchPhr
 import { bestGeneSentenceSupport, bestLatinFuzzySupport, geneMutationQuestion, latinAnswerTokens, sentenceSegments } from "./predictor/scorers/biomedical-symbols.js";
 import {
   bestCoordinateMultiCellRowSupport,
+  bestCoordinateTableMembershipSupport,
   bestCoordinateTableGroupSupport,
   bestCoordinateTableRowSupport,
   buildCoordinateMultiCellRowsByPage,
+  buildCoordinateTableMembershipsByPage,
   buildCoordinateTableGroupsByPage,
   buildCoordinateTableRowsByPage,
   hasCoordinateTableCue,
@@ -4357,6 +4359,7 @@ function scoreAnswer(context) {
   const coordinateTableRow = bestCoordinateTableRowSupport(context);
   const coordinateTableGroup = bestCoordinateTableGroupSupport(context);
   const coordinateMultiCellRow = bestCoordinateMultiCellRowSupport(context);
+  const coordinateTableMembership = bestCoordinateTableMembershipSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
   const clinicalFeature = clinicalFeatureAdjustment(context);
@@ -4422,6 +4425,7 @@ function scoreAnswer(context) {
     (coordinateTableRow?.score ?? 0) * 1.12 +
     (coordinateTableGroup?.score ?? 0) * 1.16 +
     (coordinateMultiCellRow?.score ?? 0) * 1.16 +
+    (coordinateTableMembership?.score ?? 0) * 1.1 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
     (clinicalFeature.support?.score ?? 0) * 1.12 +
@@ -4491,6 +4495,7 @@ function scoreAnswer(context) {
     coordinateTableRow,
     coordinateTableGroup,
     coordinateMultiCellRow,
+    coordinateTableMembership,
     latinFuzzy,
     geneSentence,
     clinicalFeature.support,
@@ -4559,6 +4564,10 @@ export async function predict(input, options: any = {}) {
     mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
       ? buildCoordinateMultiCellRowsByPage(runtime.pdfText.pages, topQuestionPages)
       : null;
+  const coordinateTableMembershipsByPage =
+    mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
+      ? buildCoordinateTableMembershipsByPage(runtime.pdfText.pages, topQuestionPages)
+      : null;
 
   let answerScores = answers.map((answer) => {
     const answerTokens = uniqueTokens(answer.text);
@@ -4584,6 +4593,7 @@ export async function predict(input, options: any = {}) {
       coordinateTableRowsByPage,
       coordinateTableGroupsByPage,
       coordinateMultiCellRowsByPage,
+      coordinateTableMembershipsByPage,
     });
     return {
       answer,
