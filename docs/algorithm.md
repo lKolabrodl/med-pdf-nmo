@@ -65,6 +65,7 @@ The predictor returns machine-readable JSON:
    - `question_anchor_segment`;
    - `question_prefix_continuation`;
    - `preceding_question_label` for long description questions where the PDF writes the answer label before the quoted question text, for example `label: description...`;
+   - `question_continuation_list` for multi questions continued in the PDF as `основано/основаны на данных...`, using a longer local line window so the whole list can be seen;
    - `focused_answer_window` for answer hits inside narrow windows that also contain distinctive question-condition tokens;
    - `section_list_segment` for `по <section>` list questions, binding answers to the matching section until the next `По ...` heading;
    - `row_label_segment` for explicit row/list labels in the question, including `МКБ-10 ... кодируется`, stage labels, localized/generalized/rare forms, and age-form labels;
@@ -84,6 +85,7 @@ The predictor returns machine-readable JSON:
    - `answer_ordinal_row` for answer options that are themselves stage/degree labels (`1/2/3`, `I/II/III`) and must be bound back to the matching classification row; Roman labels require token boundaries so `I` does not match the start of `II`/`III`;
    - `label_definition_segment` for questions like `считается <label> при ...`;
    - `recommendation_polarity_match` for narrow negative-recommendation questions;
+   - `exact_numeric_option_segment` for single-answer recommendation/dose/frequency prompts where a full numeric option phrase appears in a relevant local line;
    - `explicit_recommendation_target_segment` / `explicit_recommendation_target_mismatch` for multi questions about `назначение`, `проведение`, `проводить`, or `выполнение` a specific target; the answer must be supported by the recommendation block for that target, and confident hits in neighboring recommendation blocks get a mild penalty;
    - `frequency_recommendation_line` with stricter unit matching for `дни` vs `сутки`;
    - `conditioned_number_segment` and `numeric_condition_*` for tightly scoped condition/value rows such as `2-я неделя -> 0,05`, `20-30 кг -> 60 мг`, and phase abbreviations like `ХФ/ФА/БК -> 400/600 мг`;

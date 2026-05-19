@@ -2961,6 +2961,110 @@ function recommendationPolarityAdjustment({ mode, pages, question, answer, answe
   return bestMismatch ? { support: null, adjustment: -7.5, evidence: bestMismatch } : { support: null, adjustment: 0, evidence: null };
 }
 
+const NUMERIC_OPTION_UNIT_TOKENS = new Set(
+  [
+    "\u043c\u0433",
+    "\u043c\u043a\u0433",
+    "\u043c\u043b",
+    "\u043c\u0435",
+    "\u043a\u0433",
+    "\u0434\u0435\u043d\u044c",
+    "\u0434\u043d\u044f",
+    "\u0434\u043d\u0435\u0439",
+    "\u0441\u0443\u0442\u043a\u0438",
+    "\u0441\u0443\u0442\u043e\u043a",
+    "\u043d\u0435\u0434\u0435\u043b\u044e",
+    "\u043d\u0435\u0434\u0435\u043b\u0438",
+    "\u043c\u0435\u0441\u044f\u0446",
+    "\u043c\u0435\u0441\u044f\u0446\u0430",
+    "\u043c\u0435\u0441\u044f\u0446\u0435\u0432",
+    "\u0433\u043e\u0434",
+    "\u0433\u043e\u0434\u0430",
+    "\u043b\u0435\u0442",
+    "\u0440\u0430\u0437",
+    "\u0447\u0430\u0441",
+    "\u0447",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+function numericOptionAnswer(answerText) {
+  if (!extractNumbers(answerText).length) return false;
+  const normalized = normalizeForSearch(answerText);
+  return normalized.includes("%") || tokenHitCount([...NUMERIC_OPTION_UNIT_TOKENS], tokenize(answerText)) > 0;
+}
+
+function denseNumericSingleQuestion(mode, answers) {
+  return mode === "single" && answers.filter((answer) => numericOptionAnswer(answer.text)).length >= 2;
+}
+
+function exactNumericOptionQuestion(question) {
+  const normalized = normalizeForSearch(question);
+  return (
+    containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") ||
+    containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u043d\u0430\u0447") ||
+    containsNormalizedPhrase(normalized, "\u0434\u043e\u0437") ||
+    containsNormalizedPhrase(normalized, "\u0432 \u0442\u0435\u0447\u0435\u043d") ||
+    containsNormalizedPhrase(normalized, "\u0440\u0430\u0437 \u0432") ||
+    containsNormalizedPhrase(normalized, "\u043a\u0430\u0436\u0434") ||
+    containsNormalizedPhrase(normalized, "\u043f\u0440\u043e\u0432\u043e\u0434")
+  );
+}
+
+function numericExactPhrases(answerText) {
+  const normalized = normalizeForSearch(answerText);
+  const withoutParentheses = normalizeForSearch(normalized.replace(/\([^)]*\)/g, " "));
+  const hyphenSplit = normalizeForSearch(String(answerText ?? "").replace(/\s*[-\u2010-\u2015]\s*/g, " "));
+  const phrases = new Set([normalized, withoutParentheses, hyphenSplit]);
+  return [...phrases].filter((phrase) => phrase.length >= 5 && extractNumbers(phrase).length);
+}
+
+/**
+ * Поддерживает single-вопросы с плотной числовой семьей вариантов.
+ *
+ * Если несколько вариантов отличаются дозой, сроком, частотой или процентом,
+ * полный числовой режим в релевантной строке должен весить сильнее, чем общий
+ * chunk, где рядом могут встречаться несколько альтернативных значений.
+ */
+function bestExactNumericOptionSupport({ mode, pages, topQuestionPages, question, answer, answers, answerTokens, questionTokens, focusTokens }) {
+  if (!denseNumericSingleQuestion(mode, answers) || !numericOptionAnswer(answer.text)) return null;
+  if (!exactNumericOptionQuestion(question)) return null;
+  const phrases = numericExactPhrases(answer.text).slice(0, 12);
+  if (!phrases.length) return null;
+  const usefulFocus = (focusTokens?.length ? focusTokens : questionTokens).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token));
+  let best = null;
+
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const segment of cachedLineWindowSegments(page)) {
+      const phraseHit = phrases.some((phrase) => containsNormalizedPhrase(segment.normalized, phrase));
+      if (!phraseHit) continue;
+      const numericCoverage = numberCoverage(answer.text, segment.normalized);
+      const focusHits = tokenHitCount(usefulFocus, segment.tokens);
+      const questionCoverage = coverage(questionTokens, segment.tokens);
+      if (questionCoverage < 0.14 && focusHits < Math.min(2, usefulFocus.length)) continue;
+      const answerCoverage = strictSoftCoverage(answerTokens, segment.tokens);
+      const score =
+        12.8 +
+        4.2 +
+        numericCoverage * 3.0 +
+        answerCoverage * 2.8 +
+        Math.min(0.52, questionCoverage) * 5.6 +
+        Math.min(2, focusHits) * 0.8;
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: segment.text,
+        score,
+        kind: "exact_numeric_option_segment",
+      });
+    }
+  }
+
+  return best;
+}
+
 const SHARED_MULTI_SOURCE_KINDS = new Set([
   "question_anchor_segment",
   "question_chunk_answer",
@@ -3118,6 +3222,94 @@ function bestParentheticalGroupSupport({ mode, pages, question, answer, answerTo
         text: `${beforeText}(${groupText})`.replace(/\s+/g, " ").trim(),
         score,
         kind: "parenthetical_group_segment",
+      });
+    }
+  }
+
+  return best;
+}
+
+const CONTINUATION_LIST_QUESTION_CUES = [
+  "\u043e\u0441\u043d\u043e\u0432\u0430\u043d",
+].map((item) => normalizeForSearch(item));
+
+const CONTINUATION_LIST_SEGMENT_CUES = [
+  "\u043e\u0441\u043d\u043e\u0432\u0430\u043d",
+  "\u0434\u0430\u043d\u043d",
+].map((item) => normalizeForSearch(item));
+
+function continuationListQuestion(question, intent) {
+  if (intent?.exception) return false;
+  const normalized = normalizeForSearch(question);
+  if (containsNormalizedPhrase(normalized, "\u043d\u0435 \u0432\u043a\u043b\u044e\u0447")) return false;
+  return CONTINUATION_LIST_QUESTION_CUES.some((cue) => normalized.includes(cue)) && containsNormalizedPhrase(normalized, "\u043d\u0430");
+}
+
+function answerContinuationListHit(segment, answer, answerTokens) {
+  const normalized = segment.normalized;
+  const phraseHit = answerSearchPhrases(answer.text)
+    .map((phrase) => normalizeForSearch(phrase))
+    .filter((phrase) => phrase.length >= 5)
+    .some((phrase) => containsNormalizedPhrase(normalized, phrase));
+  const answerCoverage = strictSoftCoverage(answerTokens, segment.tokens);
+  const numbers = extractNumbers(answer.text);
+  if (numbers.length && numberCoverage(answer.text, normalized) < 1) return { phraseHit: false, answerCoverage, hit: false };
+  const hit = phraseHit || answerCoverage >= (answerTokens.length <= 2 ? 0.86 : 0.68);
+  return { phraseHit, answerCoverage, hit };
+}
+
+function continuationLineSegments(page) {
+  const lines = page.lines ?? [];
+  const segments = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const text = lines.slice(index, Math.min(lines.length, index + 7)).join(" ").replace(/\s+/g, " ").trim();
+    if (text.length >= 40 && text.length <= 1500) {
+      segments.push({
+        text,
+        normalized: normalizeForSearch(text),
+        tokens: tokenize(text),
+      });
+    }
+  }
+  return segments;
+}
+
+/**
+ * Ищет варианты в строке-продолжении вопроса вида `критерии основаны на...`.
+ *
+ * В отличие от общего BM25 этот scorer требует, чтобы сама строка содержала
+ * формулировку вопроса и структурный list-cue, поэтому соседние обсуждения
+ * вариантов не получают такой же вес.
+ */
+function bestQuestionContinuationListSupport({ mode, pages, topQuestionPages, question, answer, answerTokens, questionTokens, focusTokens, intent }) {
+  if (mode !== "multi" || !continuationListQuestion(question, intent)) return null;
+  const usefulFocus = (focusTokens?.length ? focusTokens : questionTokens).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token));
+  let best = null;
+
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const segment of continuationLineSegments(page)) {
+      if (!CONTINUATION_LIST_SEGMENT_CUES.some((cue) => segment.normalized.includes(cue))) continue;
+      const questionCoverage = coverage(questionTokens, segment.tokens);
+      const focusHits = tokenHitCount(usefulFocus, segment.tokens);
+      if (questionCoverage < 0.5) continue;
+      if (usefulFocus.length >= 2 && focusHits < 2) continue;
+      const answerHit = answerContinuationListHit(segment, answer, answerTokens);
+      if (!answerHit.hit) continue;
+      const score =
+        11.6 +
+        Math.min(0.72, questionCoverage) * 5.4 +
+        Math.min(3, focusHits) * 0.8 +
+        answerHit.answerCoverage * 2.6 +
+        (answerHit.phraseHit ? 1.6 : 0);
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: segment.text,
+        score,
+        kind: "question_continuation_list",
       });
     }
   }
@@ -4532,6 +4724,7 @@ function scoreAnswer(context) {
   const indicationLabel = bestIndicationSegmentSupport(context);
   const labelDefinition = bestLabelDefinitionSupport(context);
   const recommendationPolarity = recommendationPolarityAdjustment(context);
+  const exactNumericOption = bestExactNumericOptionSupport(context);
   const ageEligibility = ageEligibilityAdjustment(context);
   const drugDose = bestDrugDoseSupport(context);
   const termDefinition = bestTermDefinitionSupport(context);
@@ -4555,6 +4748,7 @@ function scoreAnswer(context) {
   const coordinateMultiCellRow = bestCoordinateMultiCellRowSupport(context);
   const coordinateTableMembership = bestCoordinateTableMembershipSupport(context);
   const parentheticalGroup = bestParentheticalGroupSupport(context);
+  const questionContinuationList = bestQuestionContinuationListSupport(context);
   const shortMedicalAlias = bestShortMedicalAliasSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
@@ -4600,6 +4794,7 @@ function scoreAnswer(context) {
     (labelDefinition?.score ?? 0) * 1.15 +
     (recommendationPolarity.support?.score ?? 0) * 1.05 +
     recommendationPolarity.adjustment +
+    (exactNumericOption?.score ?? 0) * 1.04 +
     ageEligibility.adjustment +
     (drugDose?.score ?? 0) * 1.15 +
     (termDefinition?.score ?? 0) * 1.15 +
@@ -4624,6 +4819,7 @@ function scoreAnswer(context) {
     (coordinateMultiCellRow?.score ?? 0) * 1.16 +
     (coordinateTableMembership?.score ?? 0) * 1.1 +
     (parentheticalGroup?.score ?? 0) * 1.16 +
+    (questionContinuationList?.score ?? 0) * 1.1 +
     (shortMedicalAlias?.score ?? 0) * 0.35 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
@@ -4673,6 +4869,7 @@ function scoreAnswer(context) {
     labelDefinition,
     recommendationPolarity.support,
     recommendationPolarity.evidence,
+    exactNumericOption,
     ageEligibility.evidence,
     drugDose,
     termDefinition,
@@ -4697,6 +4894,7 @@ function scoreAnswer(context) {
     coordinateMultiCellRow,
     coordinateTableMembership,
     parentheticalGroup,
+    questionContinuationList,
     shortMedicalAlias,
     latinFuzzy,
     geneSentence,

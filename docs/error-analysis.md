@@ -424,3 +424,20 @@ Outcome on the current split:
 - holdout: `480/580 = 0.8276`, single `0.8670`, multi `0.7083`;
 - holdout delta from iteration 65: `+5` exact, single `+0.0046`, multi `+0.0208`;
 - residual holdout diagnostics: `recommendation_block_parser 42`, `option_family_resolver 23`, `multi_set_selection 20`.
+
+## Iteration 67 Hypothesis Notes
+
+Two higher-level ideas were tested after the diagnostics pointed again at `recommendation_block_parser`, `option_family_resolver`, and `multi_set_selection`.
+
+The first idea was list continuation: if a question is literally continued in the PDF, the scorer should read the continuation as a structured answer set. The broad version was too optimistic. Cues such as `включают`, `относятся`, and `определение` occur in many classification paragraphs and comments, so they boosted plausible neighboring items and dropped dev by 5 exact answers. The retained rule is much narrower: only `основано/основаны на данных...` style prompts, with a longer local line window to avoid truncating the final list item.
+
+The second idea was numeric option-family resolution. A broad numeric scorer also regressed dev because partial fragments like `%`, `300 мг`, or `2 раза` occur in dense tables and can match several answer variants at once. The retained version requires a full normalized numeric option phrase and only runs for recommendation, dose, frequency, or duration-style single questions.
+
+Outcome:
+
+- dev stayed `386/503 = 0.7674`;
+- holdout improved from `480/580 = 0.8276` to `482/580 = 0.8310`;
+- holdout multi improved from `0.7083` to `0.7222`;
+- train stayed `1101/1597 = 0.6894`.
+
+Conclusion: both hypotheses are valid only in narrow structural forms. The broad versions are useful as rejected evidence: future improvement should parse explicit recommendation/list structure more deeply instead of matching general cue words.

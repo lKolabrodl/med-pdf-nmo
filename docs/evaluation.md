@@ -81,17 +81,17 @@ The command returned exit code `0` because the acceptance target was met.
 ```json
 {
   "total": 580,
-  "correct": 480,
-  "exactAccuracy": 0.8276,
+  "correct": 482,
+  "exactAccuracy": 0.831,
   "singleAccuracy": 0.867,
-  "multiExactAccuracy": 0.7083,
-  "macroAccuracyByPdf": 0.8217,
+  "multiExactAccuracy": 0.7222,
+  "macroAccuracyByPdf": 0.8269,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9247,
-  "avgConfidenceIncorrect": 0.8648,
+  "avgConfidenceCorrect": 0.9242,
+  "avgConfidenceIncorrect": 0.8657,
   "errorBuckets": {
     "confused_with_distractor": 67,
-    "multi_cardinality": 33
+    "multi_cardinality": 31
   },
   "skippedNoExpected": 0
 }
@@ -101,7 +101,7 @@ Holdout by PDF:
 
 | PDF group | accuracy |
 | --- | ---: |
-| `06-co-toksic` | 0.8429 |
+| `06-co-toksic` | 0.8571 |
 | `11-mening` | 0.8571 |
 | `14-sarkoidoz` | 0.8625 |
 | `17-gepatit` | 0.8571 |
@@ -109,11 +109,11 @@ Holdout by PDF:
 | `19-gepatitc` | 0.7800 |
 | `23-nimana` | 0.8429 |
 | `33-aorta` | 0.7714 |
-| `43-anomali` | 0.7667 |
+| `43-anomali` | 0.8000 |
 
 ## Current All 44 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1967/2680 = 0.7340` exact accuracy across all answer-keyed cases (`73.40%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1967/2697 = 0.7293`.
+Combining train, dev, and holdout diagnostic runs gives `1969/2680 = 0.7347` exact accuracy across all answer-keyed cases (`73.47%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1969/2697 = 0.7301`.
 
 Latest split percentages:
 
@@ -121,9 +121,9 @@ Latest split percentages:
 | --- | ---: | ---: |
 | train | `1101/1597` answer-keyed, `1101/1614` including unkeyed | `68.94%` answer-keyed, `68.22%` including unkeyed |
 | dev | `386/503` | `76.74%` |
-| holdout | `480/580` | `82.76%` |
-| all answer-keyed cases | `1967/2680` | `73.40%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1967/2697` | `72.93%` |
+| holdout | `482/580` | `83.10%` |
+| all answer-keyed cases | `1969/2680` | `73.47%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1969/2697` | `73.01%` |
 
 Per-PDF percentages across all 44 groups:
 
@@ -134,7 +134,7 @@ Per-PDF percentages across all 44 groups:
 | `03-chadlv` | `47/67` | `70.15%` |
 | `04-hep-d` | `57/70` | `81.43%` |
 | `05-bronhit-hron` | `48/70` | `68.57%` |
-| `06-co-toksic` | `59/70` | `84.29%` |
+| `06-co-toksic` | `60/70` | `85.71%` |
 | `07-hron` | `55/71` | `77.46%` |
 | `08-ask` | `28/30` | `93.33%` |
 | `09-covid` | `57/70` | `81.43%` |
@@ -171,7 +171,7 @@ Per-PDF percentages across all 44 groups:
 | `40-deficit` | `38/50` | `76.00%` |
 | `41-destonia` | `54/69` | `78.26%` |
 | `42-skvoz` | `32/50` | `64.00%` |
-| `43-anomali` | `23/30` | `76.67%` |
+| `43-anomali` | `24/30` | `80.00%` |
 | `44-girshprunga` | `21/30` | `70.00%` |
 
 ## Leakage Checks

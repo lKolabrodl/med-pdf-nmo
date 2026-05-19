@@ -196,3 +196,15 @@ Iteration 66 structured gynecology evidence:
 - `npx tsx scripts/eval.ts --split train`: pass, train exact accuracy `1101/1597 = 0.6894`, single `0.7802`, multi `0.5102`, with `17` unkeyed cases skipped.
 - Score delta from iteration 65 on holdout: `+5` exact (`+0.0086`), single `+0.0046`, multi `+0.0208`. The main lift is from the new `43-anomali` group behavior: `17/30` to `23/30`, while `33-aorta` is `54/70` after the conservative parenthetical narrowing.
 - Latest diagnostics after rerun: dev errors `117`; holdout errors `100`; holdout likely next work is `recommendation_block_parser 42`, `option_family_resolver 23`, `multi_set_selection 20`.
+
+Iteration 67 continuation-list and numeric-family hypotheses:
+
+- Hypothesis 1: multi questions whose wording is continued directly in the PDF list can recover missed answers if the parser reads a longer line continuation, not only a short 3-line window. A broad version for `включают/относятся/определение/проводится` was rejected because it over-selected classification and comment paragraphs on dev. The retained form is limited to `основано/основаны на данных...` style prompts and uses a 7-line continuation window so the full answer list is visible.
+- Hypothesis 2: single questions with dense numeric answer families should prefer a full numeric option phrase in a relevant recommendation/dose line over partial numeric chunks. The broad version was rejected because partial `%`/dose fragments in unrelated tables caused dev regressions. The retained form is limited to recommendation/dose/frequency questions and requires a full normalized numeric option phrase, not just a shared number or unit.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `386/503 = 0.7674`, single `0.8281`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `482/580 = 0.8310`, single `0.8670`, multi `0.7222`.
+- `npx tsx scripts/eval.ts --split train`: pass, train exact accuracy `1101/1597 = 0.6894`, single `0.7802`, multi `0.5102`, with `17` unkeyed cases skipped.
+- Score delta from iteration 66: dev `+0`; holdout `+2` exact (`+0.0034`), single `+0.0000`, multi `+0.0139`. The gain comes from multi set completion without changing train/dev totals.
+- Latest diagnostics after rerun: dev errors `117`; holdout errors `98`; holdout likely next work is `recommendation_block_parser 41`, `option_family_resolver 23`, `multi_set_selection 19`.
