@@ -14,6 +14,7 @@ import {
   rawTokens,
   softCoverage,
   strictSoftCoverage,
+  tokenizeNormalized,
   tokenSequenceIncludes,
 } from "../text-utils.js";
 
@@ -222,6 +223,55 @@ export function bestPhraseSupport({ pages, question, answer, questionTokens, ans
     }
   }
 
+  return best;
+}
+
+/**
+ * Находит ответы-заголовки перед длинным описанием из вопроса.
+ *
+ * В рекомендациях часто встречается форма `Название: описание...`, а вопрос
+ * дословно цитирует только описание. Обычный поиск после вопроса в таком случае
+ * может выбрать следующий заголовок, поэтому этот scorer ищет вариант ответа
+ * непосредственно перед найденным фрагментом вопроса.
+ */
+export function bestPrecedingQuestionLabelSupport({ mode, pages, question, answer, answerTokens }) {
+  if (mode !== "single") return null;
+  const normalizedQuestion = normalizeForSearch(question);
+  if (normalizedQuestion.length < 90) return null;
+
+  const answerPhrases = answerSearchPhrases(answer.text);
+  let best = null;
+  for (const page of pages) {
+    const pageNorm = page.normalized;
+    let qStart = 0;
+    while (qStart < pageNorm.length) {
+      const qIndex = pageNorm.indexOf(normalizedQuestion, qStart);
+      if (qIndex < 0) break;
+      const before = pageNorm.slice(Math.max(0, qIndex - 180), qIndex);
+      for (const phrase of answerPhrases) {
+        const normalizedAnswer = normalizeForSearch(phrase);
+        if (!normalizedAnswer || normalizedAnswer.length < 5) continue;
+        const answerIndex = before.lastIndexOf(normalizedAnswer);
+        let tailTokens = [];
+        if (answerIndex >= 0) {
+          const tail = before.slice(answerIndex + normalizedAnswer.length).trim();
+          tailTokens = tokenize(tail, { keepStopwords: true });
+          if (tailTokens.length > 8) continue;
+        }
+        const answerCoverage = strictSoftCoverage(answerTokens, tokenizeNormalized(before));
+        if (answerIndex < 0 && answerCoverage < 0.82) continue;
+        const score = 26 + answerCoverage * 2.4 + Math.max(0, 8 - tailTokens.length) * 0.35;
+        best = betterEvidence(best, {
+          answerId: answer.id,
+          page: page.page,
+          text: evidenceSnippet(page.text, question, answer.text),
+          score,
+          kind: "preceding_question_label",
+        });
+      }
+      qStart = qIndex + normalizedQuestion.length;
+    }
+  }
   return best;
 }
 

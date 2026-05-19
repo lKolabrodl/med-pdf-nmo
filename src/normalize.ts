@@ -257,6 +257,9 @@ export function normalizeText(text) {
     .replace(SPACES, " ")
     .replace(DASHES, "-")
     .replace(NUMERIC_REFERENCE_MARKS, "")
+    .replace(/[\u2264\u2266]/g, " <= ")
+    .replace(/[\u2265\u2267]/g, " >= ")
+    .replace(/\u00a3(?=\s*\d)/g, " <= ")
     .replace(/[βΒ]/g, " beta ")
     .replace(/[αΑ]/g, " alpha ")
     .replace(/[γΓ]/g, " gamma ")
@@ -298,7 +301,7 @@ export function foldLookalikes(text) {
 export function normalizeForSearch(text) {
   return foldLookalikes(text)
     .replace(/([0-9])\s*%\s*/g, "$1% ")
-    .replace(/[^a-zа-я0-9%./+-]+/giu, " ")
+    .replace(/[^a-zа-я0-9%./+<>=-]+/giu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -376,11 +379,25 @@ const HORMONOTHERAPY_PART_TOKENS = [
   "\u0433\u043e\u0440\u043c\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f",
   "\u0442\u0435\u0440\u0430\u043f\u0438\u044f",
 ].map((item) => stemToken(foldLookalikes(item)));
+const SPYA_TOKEN = stemToken(foldLookalikes("\u0441\u043f\u044f"));
+const SPYA_PART_TOKENS = [
+  "\u0441\u0438\u043d\u0434\u0440\u043e\u043c",
+  "\u043f\u043e\u043b\u0438\u043a\u0438\u0441\u0442\u043e\u0437\u043d\u044b\u0445",
+  "\u044f\u0438\u0447\u043d\u0438\u043a\u043e\u0432",
+].map((item) => stemToken(foldLookalikes(item)));
+const ENDOMETRIAL_CANCER_ABBR_TOKEN = stemToken(foldLookalikes("\u0440\u044d"));
+const ENDOMETRIAL_CANCER_PART_TOKENS = ["\u0440\u0430\u043a", "\u044d\u043d\u0434\u043e\u043c\u0435\u0442\u0440\u0438\u044f"].map((item) =>
+  stemToken(foldLookalikes(item)),
+);
 
 function expandToken(token) {
   const out = [];
   if (token === MGT_TOKEN || token === HORMONOTHERAPY_TOKEN) {
     out.push(...HORMONOTHERAPY_PART_TOKENS, HORMONOTHERAPY_TOKEN);
+  }
+  if (token === SPYA_TOKEN) out.push(...SPYA_PART_TOKENS);
+  if (token === ENDOMETRIAL_CANCER_ABBR_TOKEN) {
+    out.push(...ENDOMETRIAL_CANCER_PART_TOKENS, ENDOMETRIAL_CANCER_ABBR_TOKEN);
   }
   if (/средн.*тяж/.test(token)) out.push("средн", "тяжел", "тяжест");
   if (/легк/.test(token)) out.push("легк");

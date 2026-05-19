@@ -6,13 +6,13 @@ Runtime inference is JavaScript/Node.js only. It does not use LLMs, transformer 
 
 ## Data found
 
-The current corpus has 42 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
+The current corpus has 44 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
 
-Current parsed cases: 2637, including 17 unkeyed cases that are skipped by exact eval.
+Current parsed cases: 2697, including 17 unkeyed cases that are skipped by exact eval.
 
-- answer-keyed cases: 2620
-- single-answer answer-keyed cases: 1811
-- multi-answer answer-keyed cases: 809
+- answer-keyed cases: 2680
+- single-answer answer-keyed cases: 1845
+- multi-answer answer-keyed cases: 835
 
 ## Approaches considered
 
@@ -28,6 +28,9 @@ Current parsed cases: 2637, including 17 unkeyed cases that are skipped by exact
 | Russian number-word aliases | Helps digits vs words like "six" | Folded Cyrillic/Latin extraction produced false numeric matches in nearby context | Tried and reverted |
 | OCR fallback | Needed for scanned PDFs | JS OCR is heavy and not needed for current text-extractable corpus | Not implemented; low-text PDFs are flagged |
 | Small non-LLM feature calibrator | Could improve near-ties and multi pruning without medical text memorization | Dangerous if trained on question/answer text, PDF ids, or labels leaking into features | Exporter and experiment script exist; learned weights are still rejected because dev/holdout stability is worse than fixed structural rules |
+| Parenthetical category binding | Separates adjacent answer groups flattened into one paragraph | Unsafe if applied to incidental parentheses or factor-risk example lists | Kept narrowly for explicit category headings |
+| Stable medical abbreviation aliases | Recovers common RU abbreviations such as `СПЯ` and `РЭ` | Broad aliases can leak semantics into unrelated endometrium/cancer contexts | Kept as a small guarded dictionary and low-weight evidence |
+| PDF comparator artifact normalization | Distinguishes `<=4` from unrelated numeric thresholds | `£` can mean currency in general text | Kept only when `£` appears before a number |
 
 ## Selected best architecture
 
@@ -48,8 +51,11 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - conservative coordinate table-group reconstruction for explicit `Таблица` layouts, binding left row labels to right-side values in multi questions and using a small high-confidence RU route dictionary (`per os`/`внутрь`, `в/в`, `в/м`, `п/к`) for administration-route rows.
 - inverse coordinate table binding when the question matches the right-side value and answer options are left-side labels, plus multi-cell row reconstruction with numeric direction checks and structural completion for answers from the same table row.
 - narrow full-answer exact matching for single oral-dose questions where the answer is a multi-number phrase and the PDF contains it near the question focus.
+- preceding-label binding for long single-answer description prompts that quote text after a label.
+- explicit parenthetical category binding and guarded short medical abbreviations for stable Russian forms such as `СПЯ` and `РЭ`.
+- comparator normalization for `≤`/`≥` and numeric `£` extraction artifacts.
 
-The best current algorithm reaches dev exact accuracy `0.7759` and holdout exact accuracy `0.8309`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1930/2620 = 0.7366`, so future work is focused on multi-answer set selection and layout-aware evidence.
+The best current algorithm reaches dev exact accuracy `0.7674` and holdout exact accuracy `0.8276`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1967/2680 = 0.7340`, so future work is focused on multi-answer set selection, option-family resolution, and recommendation-block parsing.
 
 ## Feature Calibrator Research Guardrails
 

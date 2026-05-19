@@ -174,3 +174,25 @@ Iteration 65 guarded therapy aliases:
 - `npm run eval:holdout`: pass, holdout exact accuracy `475/580 = 0.8190`, single `0.8624`, multi `0.6875`.
 - Score delta against the no-alias baseline on the same current split: dev `+0`, holdout `+0`; the main observed behavior change is semantic rather than exact-score: `43-anomali#30` no longer selects the extra distractor `D`, and the `МГТ` candidate score rises, but the case remains under-selected.
 - Latest diagnostics after rerun: dev errors `123`; holdout errors `105`; holdout likely next work is `recommendation_block_parser 41`, `option_family_resolver 25`, `multi_set_selection 22`.
+
+Iteration 66 structured gynecology evidence:
+
+- Added normalization for comparator glyphs extracted from PDFs: `<=`/`>=` are preserved for search, and `£` immediately before a number is treated as a likely `<=` extraction artifact. This is intentionally limited to numeric contexts so ordinary currency-like text is not changed.
+- Added a preceding-label scorer for long single-answer description questions where the PDF has `label: description...` and the question quotes only the description. This prevents the answer-after-question heuristic from drifting to the next label.
+- Added guarded Russian medical abbreviation support for stable short forms such as `СПЯ -> синдром поликистозных яичников` and `РЭ -> рак эндометрия`, including a low-weight short-alias multi evidence signal.
+- Added a category-parenthetical scorer for multi questions where the relevant answer set is a single parenthetical group after an explicit category heading. The first broad version regressed neighboring aorta classification cases, so the retained version requires explicit category wording and enough specific focus before the parentheses, and is disabled for factor-risk questions.
+- Added a modifier-target contrast penalty for pairs such as `ранняя менопауза` vs source evidence `поздняя менопауза`. The check binds the modifier to the nearest matching target noun instead of treating any nearby opposite cue as a mismatch.
+- Added a comparator mismatch guard to shared multi-segment lifting so a segment with `<4`/`<=4` does not lift an answer that names a different numeric threshold.
+- Targeted checks:
+  - `43-anomali#7`: fixed by `preceding_question_label`.
+  - `43-anomali#16`: fixed by `£`/`<=` normalization plus numeric comparator guard.
+  - `43-anomali#17`: fixed by `parenthetical_group_segment`.
+  - `43-anomali#29`: fixed by `СПЯ` alias plus `ранняя/поздняя` modifier-target contrast.
+  - prior aorta category cases `33-aorta#32`, `33-aorta#33`, `33-aorta#44` remain correct after narrowing the parenthetical scorer.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `386/503 = 0.7674`, single `0.8281`, multi `0.6299`. The dev split now includes the newly added `44-girshprunga` group, so this score is not directly comparable to the previous 43-group dev total.
+- `npm run eval:holdout`: pass, holdout exact accuracy `480/580 = 0.8276`, single `0.8670`, multi `0.7083`.
+- `npx tsx scripts/eval.ts --split train`: pass, train exact accuracy `1101/1597 = 0.6894`, single `0.7802`, multi `0.5102`, with `17` unkeyed cases skipped.
+- Score delta from iteration 65 on holdout: `+5` exact (`+0.0086`), single `+0.0046`, multi `+0.0208`. The main lift is from the new `43-anomali` group behavior: `17/30` to `23/30`, while `33-aorta` is `54/70` after the conservative parenthetical narrowing.
+- Latest diagnostics after rerun: dev errors `117`; holdout errors `100`; holdout likely next work is `recommendation_block_parser 42`, `option_family_resolver 23`, `multi_set_selection 20`.

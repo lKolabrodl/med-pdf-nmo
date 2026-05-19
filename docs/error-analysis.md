@@ -403,3 +403,24 @@ Retained outcome on the current split:
 - observed qualitative improvement: in the `МГТ`/`гормональная терапия` anomaly case, the wrong extra option is no longer selected and the missing `МГТ` candidate receives stronger evidence, but exact multi selection is still short by one answer.
 
 Conclusion: this is useful guarded coverage for future PDFs, but not yet a measurable accuracy lift. Further gains likely require better multi set selection after evidence has been lifted, not a broader synonym dictionary.
+
+## Iteration 66 Structured Gynecology Notes
+
+The newly inspected anomaly cases exposed four general failure classes rather than PDF-specific facts.
+
+First, long description questions can quote text that appears after the answer label in the PDF. The older `answer_after_question` and anchor-window signals found the right paragraph, but then preferred the next heading-like option after the quoted description. The retained `preceding_question_label` scorer is single-answer only, requires a long exact question quote in the PDF, and looks for the answer label immediately before that quote.
+
+Second, multi questions with adjacent parenthetical groups can be over-selected when the extractor flattens both groups into one line. The retained `parenthetical_group_segment` scorer binds answers to a single parenthetical group only when the text before the group contains explicit category wording and enough specific focus from the question. A broader version was rejected because it regressed aorta type/cause questions by treating incidental parentheses as answer groups.
+
+Third, short domain abbreviations help only when they are stable and conservative. `СПЯ` and `РЭ` were added as guarded phrase/token aliases, but the alias signal is low-weight and does not turn every mention of `эндометрий` into `рак эндометрия`. This avoids making benign endometrium-function questions look like cancer-risk questions.
+
+Fourth, opposite modifiers need to be tied to the same noun. A plain token overlap saw `менопауза` and could select `ранняя менопауза` even when the PDF said `поздняя менопауза`. The new modifier-target contrast penalty looks for the nearest early/late-style modifier before the same target token, so unrelated nearby cues do not create a false mismatch.
+
+The `£4 мм` fragment is treated as a PDF extraction artifact for `≤4 мм`, not as a manually typed pound sign. Normalization maps only `£` before a number to `<=`, and shared multi lifting now rejects answers whose numeric threshold conflicts with a comparator in the shared segment.
+
+Outcome on the current split:
+
+- dev: `386/503 = 0.7674`, single `0.8281`, multi `0.6299`;
+- holdout: `480/580 = 0.8276`, single `0.8670`, multi `0.7083`;
+- holdout delta from iteration 65: `+5` exact, single `+0.0046`, multi `+0.0208`;
+- residual holdout diagnostics: `recommendation_block_parser 42`, `option_family_resolver 23`, `multi_set_selection 20`.

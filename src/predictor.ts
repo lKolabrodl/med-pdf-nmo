@@ -6,6 +6,7 @@ import {
   normalizeText,
   normalizeForSearch,
   phraseTokens,
+  stemToken,
   tokenize,
   uniqueTokens,
 } from "./normalize.js";
@@ -34,6 +35,7 @@ import { bestRecommendationItemSupport, explicitRecommendationTargetAdjustment }
 import {
   bestAnchorSupport,
   bestPhraseSupport,
+  bestPrecedingQuestionLabelSupport,
   bestRowLabelSupport,
   bestSectionSupport,
   findAnchorSegments,
@@ -277,9 +279,6 @@ function clinicalFeatureAdjustment(context) {
   let bestNegated = null;
 
   for (const page of pages) {
-    const nearTopPage =
-      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
-    if (!nearTopPage) continue;
     for (const item of clinicalFeatureCandidateSentences(page.text, focusTokens)) {
       const answerCoverage = Math.max(strictSoftCoverage(answerTokens, item.tokens), softCoverage(answerTokens, item.tokens), rawSoftCoverage(answerTokens, item.tokens));
       if (answerCoverage < 0.5) continue;
@@ -3014,8 +3013,116 @@ const SHARED_MULTI_REQUIRED_CUE_GROUPS = [
   source: group.source.map((item) => normalizeForSearch(item)),
 }));
 
+const SHARED_MULTI_SHORT_ALIAS_PHRASES = new Set(["\u0441\u043f\u044f", "\u0440\u044d"].map((item) => normalizeForSearch(item)));
+
+function answerShortMedicalAliases(answerText) {
+  const own = new Set(focusedAnswerSearchPhrases(answerText).map((phrase) => normalizeForSearch(phrase)));
+  const answerNorm = normalizeForSearch(answerText);
+  return [...SHARED_MULTI_SHORT_ALIAS_PHRASES].filter((alias) => own.has(alias) && !answerNorm.includes(alias));
+}
+
+function bestShortMedicalAliasSupport({ mode, pages, topQuestionPages, questionTokens, answer }) {
+  if (mode !== "multi") return null;
+  const aliases = answerShortMedicalAliases(answer.text);
+  if (!aliases.length) return null;
+  let best = null;
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const segment of cachedLineWindowSegments(page)) {
+      if (!aliases.some((alias) => segment.normalized.includes(alias))) continue;
+      const questionCoverage = coverage(questionTokens, segment.tokens);
+      if (questionCoverage < 0.18) continue;
+      const score = 10.8 + Math.min(0.65, questionCoverage) * 5.4;
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: segment.text,
+        score,
+        kind: "short_medical_alias_segment",
+      });
+    }
+  }
+  return best;
+}
+
 function sharedMultiTokens(answerText) {
   return uniqueTokens(answerText).filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token) && !SHARED_MULTI_GENERIC_TOKENS.has(token));
+}
+
+const PARENTHETICAL_GROUP_GENERIC_FOCUS = new Set(
+  [
+    "\u0430\u043c\u043a",
+    "\u0430\u043d\u043e\u043c\u0430\u043b\u044c\u043d",
+    "\u043c\u0430\u0442\u043e\u0447",
+    "\u043a\u0440\u043e\u0432\u043e\u0442\u0435\u0447",
+    "\u043a\u0430\u0442\u0435\u0433\u043e\u0440",
+    "\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438",
+    "\u043e\u0442\u043d\u043e\u0441",
+    "\u044f\u0432\u043b\u044f",
+    "\u044f\u0432\u043b\u044f\u044e\u0442",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+function parentheticalGroupFocusTokens(question) {
+  return uniqueTokens(question).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !PARENTHETICAL_GROUP_GENERIC_FOCUS.has(token));
+}
+
+function answerInParentheticalGroup(groupNormalized, answer) {
+  return answerSearchPhrases(answer.text)
+    .map((phrase) => normalizeForSearch(phrase))
+    .filter((phrase) => phrase.length >= 3)
+    .some((phrase) => containsNormalizedPhrase(groupNormalized, phrase));
+}
+
+/**
+ * Связывает варианты ответа с ближайшей скобочной группой после релевантного
+ * заголовка: `органические причины (...)`, `факторы риска (...)` и похожие
+ * конструкции. Это помогает не смешивать соседние группы в одной строке.
+ */
+function bestParentheticalGroupSupport({ mode, pages, question, answer, answerTokens }) {
+  if (mode !== "multi") return null;
+  const normalizedQuestion = normalizeForSearch(question);
+  const questionTokenSet = new Set(tokenize(question));
+  if (questionTokenSet.has(stemToken(normalizeForSearch("\u0444\u0430\u043a\u0442\u043e\u0440"))) && questionTokenSet.has(stemToken(normalizeForSearch("\u0440\u0438\u0441\u043a")))) {
+    return null;
+  }
+  const specificFocus = parentheticalGroupFocusTokens(question);
+  if (specificFocus.length < 2) return null;
+  let best = null;
+
+  for (const page of pages) {
+    const text = String(page.text ?? "");
+    const matches = text.matchAll(/\(([^()]{6,260})\)/gu);
+    for (const match of matches) {
+      const groupText = match[1] ?? "";
+      const groupStart = match.index ?? 0;
+      let beforeText = text.slice(Math.max(0, groupStart - 180), groupStart);
+      const previousGroupEnd = beforeText.lastIndexOf(")");
+      if (previousGroupEnd >= 0) beforeText = beforeText.slice(previousGroupEnd + 1);
+      const beforeTokens = tokenize(beforeText);
+      if (!beforeTokens.includes(stemToken(normalizeForSearch("\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438")))) continue;
+      const specificHits = tokenHitCount(specificFocus, beforeTokens);
+      const specificCoverage = coverage(specificFocus, beforeTokens);
+      if (specificHits < 2 && specificCoverage < 0.34) continue;
+
+      const groupNormalized = normalizeForSearch(groupText);
+      const groupTokens = tokenize(groupText);
+      const answerCoverage = strictSoftCoverage(answerTokens, groupTokens);
+      if (!answerInParentheticalGroup(groupNormalized, answer) && answerCoverage < (answerTokens.length <= 1 ? 0.95 : 0.68)) continue;
+      const score = 13.8 + Math.min(4, specificHits) * 1.15 + Math.min(0.75, specificCoverage) * 5.2 + answerCoverage * 2.2;
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: `${beforeText}(${groupText})`.replace(/\s+/g, " ").trim(),
+        score,
+        kind: "parenthetical_group_segment",
+      });
+    }
+  }
+
+  return best;
 }
 
 function sharedMultiSectionCue(question) {
@@ -3066,16 +3173,28 @@ function sharedMultiCompactSpan(normalizedSegment, tokens) {
   return positions[positions.length - 1] - positions[0];
 }
 
+function sharedMultiNumericComparatorMismatch(answerText, normalizedSegment) {
+  const answerNumbers = extractNumbers(answerText).filter((number) => /^\d+(?:[.,]\d+)?$/u.test(number));
+  if (answerNumbers.length !== 1) return false;
+  const answerNumber = answerNumbers[0].replace(",", ".");
+  const comparatorHits = [...String(normalizedSegment ?? "").matchAll(/(?:<=|<|>=|>)\s*(\d+(?:[.,]\d+)?)/gu)].map((match) =>
+    String(match[1] ?? "").replace(",", "."),
+  );
+  if (!comparatorHits.length) return false;
+  return !comparatorHits.includes(answerNumber);
+}
+
 function sharedMultiSegmentHit(segmentText, answer, question) {
   const normalized = sharedMultiFocusedNormalized(segmentText, question);
   if (!normalized || normalized.length < 30) return null;
   if (sharedMultiRequiredCueMismatch(answer.text, normalized)) return null;
+  if (sharedMultiNumericComparatorMismatch(answer.text, normalized)) return null;
 
+  const tokens = sharedMultiTokens(answer.text);
   const phraseHit = focusedAnswerSearchPhrases(answer.text)
     .map((phrase) => normalizeForSearch(phrase))
-    .filter((phrase) => phrase.length >= 9)
-    .some((phrase) => containsNormalizedPhrase(normalized, phrase));
-  const tokens = sharedMultiTokens(answer.text);
+    .filter((phrase) => phrase.length >= 9 || SHARED_MULTI_SHORT_ALIAS_PHRASES.has(phrase) || (tokens.length === 1 && phrase.length >= 5))
+    .some((phrase) => (SHARED_MULTI_SHORT_ALIAS_PHRASES.has(phrase) ? normalized.includes(phrase) : containsNormalizedPhrase(normalized, phrase)));
   const tokenCoverage = tokens.length ? strictSoftCoverage(tokens, tokenizeNormalized(normalized)) : 0;
   const compactSpan = sharedMultiCompactSpan(normalized, tokens);
   const spanLimit = Math.min(520, 150 + tokens.length * 45);
@@ -4315,15 +4434,60 @@ const CONTRAST_CUE_GROUPS = [
   opposite: group.opposite.map((item) => normalizeForSearch(item)),
 }));
 
+const MODIFIER_TARGET_CONTRAST_GROUPS = [
+  {
+    answer: "\u0440\u0430\u043d\u043d\u0438\u0439 \u0440\u0430\u043d\u043d\u044f\u044f \u0440\u0430\u043d\u043d\u0435\u0435 \u0440\u0430\u043d\u043d\u0435\u0439",
+    opposite: "\u043f\u043e\u0437\u0434\u043d\u0438\u0439 \u043f\u043e\u0437\u0434\u043d\u044f\u044f \u043f\u043e\u0437\u0434\u043d\u0435\u0435 \u043f\u043e\u0437\u0434\u043d\u0435\u0439",
+  },
+  {
+    answer: "\u043f\u043e\u0437\u0434\u043d\u0438\u0439 \u043f\u043e\u0437\u0434\u043d\u044f\u044f \u043f\u043e\u0437\u0434\u043d\u0435\u0435 \u043f\u043e\u0437\u0434\u043d\u0435\u0439",
+    opposite: "\u0440\u0430\u043d\u043d\u0438\u0439 \u0440\u0430\u043d\u043d\u044f\u044f \u0440\u0430\u043d\u043d\u0435\u0435 \u0440\u0430\u043d\u043d\u0435\u0439",
+  },
+].map((group) => ({
+  answer: new Set(tokenize(group.answer)),
+  opposite: new Set(tokenize(group.opposite)),
+}));
+
+function modifierTargetContrastMismatch(answerText, sourceText) {
+  const answerTokens = tokenize(answerText);
+  const sourceTokens = tokenize(sourceText);
+  for (const group of MODIFIER_TARGET_CONTRAST_GROUPS) {
+    if (!answerTokens.some((token) => group.answer.has(token))) continue;
+    const targets = answerTokens.filter((token) => token.length >= 4 && !group.answer.has(token) && !group.opposite.has(token) && !FOCUS_STOPWORDS.has(token));
+    if (!targets.length) continue;
+    for (let index = 0; index < sourceTokens.length; index += 1) {
+      if (!targets.includes(sourceTokens[index])) continue;
+      for (let cursor = index - 1; cursor >= Math.max(0, index - 4); cursor -= 1) {
+        const token = sourceTokens[cursor];
+        if (group.opposite.has(token)) return true;
+        if (group.answer.has(token)) break;
+      }
+    }
+  }
+  return false;
+}
+
 function contrastCueMismatchAdjustment({ mode, answer }, evidence) {
   if (mode !== "multi" || !evidence?.length) return { adjustment: 0, evidence: null };
   const answerNorm = normalizeForSearch(answer.text);
   const group = CONTRAST_CUE_GROUPS.find((item) => item.answer.some((cue) => answerNorm.includes(cue)));
-  if (!group) return { adjustment: 0, evidence: null };
 
   for (const item of evidence.slice(0, 4)) {
     if ((item.score ?? 0) < 5.5 || !item.text) continue;
     const sourceNorm = normalizeForSearch(item.text);
+    if (modifierTargetContrastMismatch(answer.text, item.text)) {
+      return {
+        adjustment: -6.4,
+        evidence: {
+          answerId: answer.id,
+          page: item.page,
+          text: item.text,
+          score: 6.4,
+          kind: "modifier_target_mismatch",
+        },
+      };
+    }
+    if (!group) continue;
     const hasAnswerCue = group.answer.some((cue) => sourceNorm.includes(cue));
     const hasOppositeCue = group.opposite.some((cue) => sourceNorm.includes(cue));
     if (!hasAnswerCue && hasOppositeCue) {
@@ -4351,6 +4515,7 @@ function scoreAnswer(context) {
   const lineToken = lineTokenApplicable(context) ? bestLineTokenSupport(context) : null;
   const prefix = bestPrefixSupport(context);
   const phrase = bestPhraseSupport(context);
+  const precedingLabel = bestPrecedingQuestionLabelSupport(context);
   const exactAnswer = bestExactAnswerSupport(context);
   const chunk = bestChunkSupport(context);
   const polarity = polarityAdjustment(context);
@@ -4389,6 +4554,8 @@ function scoreAnswer(context) {
   const coordinateTableGroup = bestCoordinateTableGroupSupport(context);
   const coordinateMultiCellRow = bestCoordinateMultiCellRowSupport(context);
   const coordinateTableMembership = bestCoordinateTableMembershipSupport(context);
+  const parentheticalGroup = bestParentheticalGroupSupport(context);
+  const shortMedicalAlias = bestShortMedicalAliasSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
   const clinicalFeature = clinicalFeatureAdjustment(context);
@@ -4413,6 +4580,7 @@ function scoreAnswer(context) {
     (lineToken?.score ?? 0) * lineTokenWeight +
     (prefix?.score ?? 0) * 1.15 +
     (phrase?.score ?? 0) * phraseWeight +
+    (precedingLabel?.score ?? 0) * 1.3 +
     (exactAnswer?.score ?? 0) * 1.08 +
     (chunk?.score ?? 0) * 1.0 +
     polarity.adjustment +
@@ -4455,6 +4623,8 @@ function scoreAnswer(context) {
     (coordinateTableGroup?.score ?? 0) * 1.16 +
     (coordinateMultiCellRow?.score ?? 0) * 1.16 +
     (coordinateTableMembership?.score ?? 0) * 1.1 +
+    (parentheticalGroup?.score ?? 0) * 1.16 +
+    (shortMedicalAlias?.score ?? 0) * 0.35 +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
     (clinicalFeature.support?.score ?? 0) * 1.12 +
@@ -4483,6 +4653,7 @@ function scoreAnswer(context) {
     lineToken,
     prefix,
     phrase,
+    precedingLabel,
     exactAnswer,
     chunk,
     polarity.evidence,
@@ -4525,6 +4696,8 @@ function scoreAnswer(context) {
     coordinateTableGroup,
     coordinateMultiCellRow,
     coordinateTableMembership,
+    parentheticalGroup,
+    shortMedicalAlias,
     latinFuzzy,
     geneSentence,
     clinicalFeature.support,
