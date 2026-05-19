@@ -2164,7 +2164,7 @@ function ordinalWindows(source, target) {
 function lineOrdinalWindowStart(normalized, index) {
   const before = normalized.slice(Math.max(0, index - 80), index);
   if (containsNormalizedPhrase(before, "\u0442\u0435\u0440\u0430\u043f")) return Math.max(0, index - 24);
-  return Math.max(0, index - 260);
+  return Math.max(0, index - 110);
 }
 
 function abbreviationSupport(answerText, window) {
@@ -2207,6 +2207,28 @@ function specificOrdinalFocusTokens(focusTokens) {
   return (focusTokens ?? []).filter((token) => token.length >= 4 && !/^\d/.test(token) && !ORDINAL_GENERIC_FOCUS.has(token));
 }
 
+function ordinalWindowNegatesSpecificFocus(window, specificTokens) {
+  for (const token of specificTokens ?? []) {
+    if (token.length < 6) continue;
+    const stem = token.slice(0, Math.min(8, token.length));
+    let start = 0;
+    while (start < window.length) {
+      const index = window.indexOf(stem, start);
+      if (index < 0) break;
+      const before = window.slice(Math.max(0, index - 58), index);
+      if (
+        containsNormalizedPhrase(before, "\u0431\u0435\u0437") ||
+        containsNormalizedPhrase(before, "\u043e\u0442\u0441\u0443\u0442") ||
+        containsNormalizedPhrase(before, "\u043d\u0435\u0442")
+      ) {
+        return true;
+      }
+      start = index + stem.length;
+    }
+  }
+  return false;
+}
+
 function bestOrdinalListSupport({ mode, pages, question, answer, answerTokens, focusTokens }) {
   const target = ordinalTarget(question);
   if (!target) return null;
@@ -2226,12 +2248,19 @@ function bestOrdinalListSupport({ mode, pages, question, answer, answerTokens, f
       for (const window of ordinalWindows(source, target)) {
         const tokens = tokenizeNormalized(window);
         const focusHits = tokenHitCount(specificTokens, tokens);
-        if (target.kind !== "step" && specificTokens.length && focusHits <= 0) continue;
+        const focusCoverage = strictSoftCoverage(specificTokens, tokens);
+        if (target.kind !== "step" && specificTokens.length && focusHits <= 0 && focusCoverage < 0.72) continue;
+        if (target.kind === "line" && ordinalWindowNegatesSpecificFocus(window, specificTokens)) continue;
         const answerCoverage = strictSoftCoverage(answerTokens, tokens);
         const phraseHit = answerPhrases.some((phrase) => containsNormalizedPhrase(window, phrase));
         const abbreviation = abbreviationSupport(answer.text, window);
         if (!phraseHit && answerCoverage < 0.58 && abbreviation <= 0) continue;
-        const score = 12.2 + (phraseHit ? 2.4 : 0) + Math.max(answerCoverage, abbreviation) * 4.4 + Math.min(2, focusHits) * 1.1;
+        const score =
+          12.2 +
+          (phraseHit ? 2.4 : 0) +
+          Math.max(answerCoverage, abbreviation) * 4.4 +
+          Math.min(2, focusHits) * 1.1 +
+          Math.min(1, focusCoverage) * 0.8;
         best = betterEvidence(best, {
           answerId: answer.id,
           page: page.page,

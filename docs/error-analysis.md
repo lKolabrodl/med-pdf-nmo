@@ -371,8 +371,20 @@ Current diagnostics from the latest eval artifacts:
 - Dev errors: `105`; single `54`, multi `51`.
 - Dev likely next work: `option_family_resolver 28`, `recommendation_block_parser 26`, `multi_set_selection 20`, `table_or_layout_parser 18`.
 - Dev multi likely next work: `multi_set_selection 20`, `recommendation_block_parser 17`, `option_family_resolver 8`, `table_or_layout_parser 6`.
-- Holdout errors: `93`; single `59`, multi `34`.
-- Holdout likely next work: `recommendation_block_parser 39`, `option_family_resolver 22`, `multi_set_selection 17`.
+- Holdout errors: `92`; single `58`, multi `34`.
+- Holdout likely next work: `recommendation_block_parser 38`, `option_family_resolver 22`, `multi_set_selection 17`.
 - Holdout multi likely next work: `multi_set_selection 17`, `recommendation_block_parser 10`, `option_family_resolver 7`.
 
 Interpretation: the next algorithmic work should prioritize multi set selection and recommendation block parsing. Table/layout parsing remains useful, but the latest holdout residuals are less table-heavy than dev.
+
+## Iteration 64 Recommendation Notes
+
+Broad statement-level recommendation support was rejected. Treating the text from `Рекомендовано...` to the next evidence/comment line as direct answer support looked promising on dev, but holdout dropped by 9 exact answers (`457/550` to `448/550`). The failures were spread across several PDFs and showed the same general problem: adjacent clinical recommendations often contain plausible distractors, so a raw answer boost from a whole statement block is too coarse.
+
+The retained change is narrower. Ordinal-line windows (`первая линия`, `третья линия`, and similar) now:
+
+- use soft focus-token coverage so Russian inflection differences can still bind the right block;
+- carry less text from the previous recommendation before the ordinal phrase;
+- reject a candidate window when the specific focus token appears only under local negative context such as `без`, `отсутствие`, or `нет`.
+
+Outcome: dev stayed `368/473 = 0.7780`; holdout improved to `458/550 = 0.8327`; holdout single improved to `0.8626`; holdout multi stayed `0.7344`.

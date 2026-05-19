@@ -149,3 +149,15 @@ Iteration 63 diagnostics:
   - holdout errors `93`: `recommendation_block_parser 39`, `option_family_resolver 22`, `multi_set_selection 17`;
   - holdout multi errors `34`: `multi_set_selection 17`, `recommendation_block_parser 10`, `option_family_resolver 7`.
 - Runtime score delta: none; predictor logic was not changed.
+
+Iteration 64 recommendation/ordinal-line focus:
+
+- Rejected a broad `Рекомендовано...` statement scorer: it improved one dev single case but regressed holdout to `448/550 = 0.8145`, mostly by over-boosting neighboring recommendation blocks in single-answer questions.
+- Kept a narrower ordinal-line refinement for questions such as `препаратом первой линии`: ordinal windows now allow soft focus-token coverage for Russian inflection differences, shrink the pre-ordinal context, and reject windows where a specific focus token is under `без/отсутствие/нет`.
+- This is not tied to a concrete PDF or drug: the rule only handles morphology and local negated context inside line/stage recommendation windows.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `368/473 = 0.7780`, single `0.8359`, multi `0.6458`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `458/550 = 0.8327`, single `0.8626`, multi `0.7344`.
+- Score delta from iteration 62/63 runtime: dev `+0`, holdout `+1` exact (`+0.0018`), holdout single `+0.0024`; multi unchanged.
+- Latest diagnostics after rerun: dev errors `105`; holdout errors `92`; holdout likely next work is `recommendation_block_parser 38`, `option_family_resolver 22`, `multi_set_selection 17`.
