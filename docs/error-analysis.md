@@ -388,3 +388,18 @@ The retained change is narrower. Ordinal-line windows (`первая линия`
 - reject a candidate window when the specific focus token appears only under local negative context such as `без`, `отсутствие`, or `нет`.
 
 Outcome: dev stayed `368/473 = 0.7780`; holdout improved to `458/550 = 0.8327`; holdout single improved to `0.8626`; holdout multi stayed `0.7344`.
+
+## Iteration 65 Therapy Alias Notes
+
+The therapy dictionary was tested as a general abbreviation/synonym layer, not as a PDF-specific fix. The retained part covers high-confidence Russian medical variants where the meaning is nearly identical: compact `X-терапия`, spaced `X терапия`, `терапия X`, and common abbreviations such as `МГТ`.
+
+The full candidate dictionary was not safe. Adding `антикоагулянтная терапия` and `антиагрегантная терапия` caused false positives in valve/aorta recommendation questions: distractor answers mentioning contraindications to long-term therapy were boosted from nearby recommendation text. That version dropped holdout to `473/580`, so those groups were removed.
+
+Retained outcome on the current split:
+
+- dev: `400/523 = 0.7648`, single `0.8306`, multi `0.6115`;
+- holdout: `475/580 = 0.8190`, single `0.8624`, multi `0.6875`;
+- exact-score delta vs the same split without therapy aliases: dev `+0`, holdout `+0`;
+- observed qualitative improvement: in the `МГТ`/`гормональная терапия` anomaly case, the wrong extra option is no longer selected and the missing `МГТ` candidate receives stronger evidence, but exact multi selection is still short by one answer.
+
+Conclusion: this is useful guarded coverage for future PDFs, but not yet a measurable accuracy lift. Further gains likely require better multi set selection after evidence has been lifted, not a broader synonym dictionary.

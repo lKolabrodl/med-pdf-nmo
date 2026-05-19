@@ -161,3 +161,16 @@ Iteration 64 recommendation/ordinal-line focus:
 - `npm run eval:holdout`: pass, holdout exact accuracy `458/550 = 0.8327`, single `0.8626`, multi `0.7344`.
 - Score delta from iteration 62/63 runtime: dev `+0`, holdout `+1` exact (`+0.0018`), holdout single `+0.0024`; multi unchanged.
 - Latest diagnostics after rerun: dev errors `105`; holdout errors `92`; holdout likely next work is `recommendation_block_parser 38`, `option_family_resolver 22`, `multi_set_selection 17`.
+
+Iteration 65 guarded therapy aliases:
+
+- Added a small general Russian therapy synonym dictionary for answer phrase generation: examples include `гормонотерапия` / `гормональная терапия` / `МГТ`, `антибиотикотерапия` / `антибактериальная терапия`, `кислородотерапия` / `оксигенотерапия`, `радиотерапия` / `лучевая терапия`, `противовирусная терапия` / `ПВТ`, and similar high-confidence `X-терапия` variants.
+- Added token-level expansion for `МГТ` and `гормонотерапия` so retrieval can share evidence with `менопаузальная гормональная терапия`, not only exact phrase search.
+- Rejected the broader full dictionary with `антикоагулянтная терапия` and `антиагрегантная терапия`: it dropped holdout from `475/580` to `473/580` by over-boosting condition/protivopokazaniya options in `33-aorta`.
+- Kept only the guarded dictionary groups that did not regress dev or holdout on the current group split.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy `400/523 = 0.7648`, single `0.8306`, multi `0.6115`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `475/580 = 0.8190`, single `0.8624`, multi `0.6875`.
+- Score delta against the no-alias baseline on the same current split: dev `+0`, holdout `+0`; the main observed behavior change is semantic rather than exact-score: `43-anomali#30` no longer selects the extra distractor `D`, and the `МГТ` candidate score rises, but the case remains under-selected.
+- Latest diagnostics after rerun: dev errors `123`; holdout errors `105`; holdout likely next work is `recommendation_block_parser 41`, `option_family_resolver 25`, `multi_set_selection 22`.

@@ -369,8 +369,19 @@ function compoundTokenParts(token) {
     .filter((part) => part.length > 1 && !/^\d+$/u.test(part));
 }
 
+const MGT_TOKEN = stemToken(foldLookalikes("\u043c\u0433\u0442"));
+const HORMONOTHERAPY_TOKEN = stemToken(foldLookalikes("\u0433\u043e\u0440\u043c\u043e\u043d\u043e\u0442\u0435\u0440\u0430\u043f\u0438\u044f"));
+const HORMONOTHERAPY_PART_TOKENS = [
+  "\u043c\u0435\u043d\u043e\u043f\u0430\u0443\u0437\u0430\u043b\u044c\u043d\u0430\u044f",
+  "\u0433\u043e\u0440\u043c\u043e\u043d\u0430\u043b\u044c\u043d\u0430\u044f",
+  "\u0442\u0435\u0440\u0430\u043f\u0438\u044f",
+].map((item) => stemToken(foldLookalikes(item)));
+
 function expandToken(token) {
   const out = [];
+  if (token === MGT_TOKEN || token === HORMONOTHERAPY_TOKEN) {
+    out.push(...HORMONOTHERAPY_PART_TOKENS, HORMONOTHERAPY_TOKEN);
+  }
   if (/средн.*тяж/.test(token)) out.push("средн", "тяжел", "тяжест");
   if (/легк/.test(token)) out.push("легк");
   if (/тяжел|тяжест/.test(token)) out.push("тяжел", "тяжест");

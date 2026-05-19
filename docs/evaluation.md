@@ -2,7 +2,7 @@
 
 ## Dataset Layout
 
-As of the latest run, the repository contains 42 PDF groups under `__test__/NN-name/`.
+As of the latest run, the repository contains 43 PDF groups under `__test__/NN-name/`.
 
 Each group has:
 
@@ -22,8 +22,8 @@ The split is group-wise by PDF, so questions from one PDF cannot appear in more 
 
 Groups:
 
-- dev: `07-hron`, `08-ask`, `15-toxic`, `28-tanzilt`, `31-hbs`, `32-gemor`, `34-covid`, `41-destonia`
-- holdout: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `18-gepatitabc`, `19-gepatitc`, `23-nimana`, `33-aorta`
+- dev: `07-hron`, `08-ask`, `15-toxic`, `28-tanzilt`, `31-hbs`, `32-gemor`, `34-covid`, `41-destonia`, `42-skvoz`
+- holdout: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `18-gepatitabc`, `19-gepatitc`, `23-nimana`, `33-aorta`, `43-anomali`
 
 ## Commands
 
@@ -55,18 +55,18 @@ Command: `npm run eval`
 
 ```json
 {
-  "total": 473,
-  "correct": 367,
-  "exactAccuracy": 0.7759,
-  "singleAccuracy": 0.8359,
-  "multiExactAccuracy": 0.6389,
-  "macroAccuracyByPdf": 0.7839,
+  "total": 523,
+  "correct": 400,
+  "exactAccuracy": 0.7648,
+  "singleAccuracy": 0.8306,
+  "multiExactAccuracy": 0.6115,
+  "macroAccuracyByPdf": 0.7695,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9157,
-  "avgConfidenceIncorrect": 0.8621,
+  "avgConfidenceCorrect": 0.915,
+  "avgConfidenceIncorrect": 0.8655,
   "errorBuckets": {
-    "confused_with_distractor": 70,
-    "multi_cardinality": 36
+    "confused_with_distractor": 83,
+    "multi_cardinality": 40
   },
   "skippedNoExpected": 0
 }
@@ -80,18 +80,18 @@ The command returned exit code `0` because the acceptance target was met.
 
 ```json
 {
-  "total": 550,
-  "correct": 457,
-  "exactAccuracy": 0.8309,
-  "singleAccuracy": 0.8602,
-  "multiExactAccuracy": 0.7344,
-  "macroAccuracyByPdf": 0.8288,
+  "total": 580,
+  "correct": 475,
+  "exactAccuracy": 0.819,
+  "singleAccuracy": 0.8624,
+  "multiExactAccuracy": 0.6875,
+  "macroAccuracyByPdf": 0.801,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9256,
-  "avgConfidenceIncorrect": 0.8688,
+  "avgConfidenceCorrect": 0.9254,
+  "avgConfidenceIncorrect": 0.8668,
   "errorBuckets": {
-    "confused_with_distractor": 66,
-    "multi_cardinality": 27
+    "confused_with_distractor": 72,
+    "multi_cardinality": 33
   },
   "skippedNoExpected": 0
 }
@@ -103,28 +103,29 @@ Holdout by PDF:
 | --- | ---: |
 | `06-co-toksic` | 0.8429 |
 | `11-mening` | 0.8571 |
-| `14-sarkoidoz` | 0.8500 |
+| `14-sarkoidoz` | 0.8625 |
 | `17-gepatit` | 0.8571 |
 | `18-gepatitabc` | 0.8143 |
 | `19-gepatitc` | 0.7800 |
 | `23-nimana` | 0.8429 |
 | `33-aorta` | 0.7857 |
+| `43-anomali` | 0.5667 |
 
-## Current All 42 PDF Groups
+## Current All 43 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1930/2620 = 0.7366` exact accuracy across all answer-keyed groups (`73.66%`). This is the user-requested overall metric for the current continuation. Including the `17` unkeyed `22-eozif` cases as denominator gives `1930/2637 = 0.7319`.
+Combining train, dev, and holdout diagnostic runs gives `1945/2633 = 0.7387` exact accuracy across all answer-keyed cases (`73.87%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1945/2650 = 0.7340`.
 
 Latest split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |
-| train | `1106/1597` | `69.25%` |
-| dev | `367/473` | `77.59%` |
-| holdout | `457/550` | `83.09%` |
-| all answer-keyed cases | `1930/2620` | `73.66%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1930/2637` | `73.19%` |
+| train | `1070/1530` answer-keyed, `1070/1547` including unkeyed | `69.93%` answer-keyed, `69.17%` including unkeyed |
+| dev | `400/523` | `76.48%` |
+| holdout | `475/580` | `81.90%` |
+| all answer-keyed cases | `1945/2633` | `73.87%` |
+| all cases including 17 unkeyed `22-eozif` cases | `1945/2650` | `73.40%` |
 
-Per-PDF percentages across all 42 groups:
+Per-PDF percentages across all 43 groups:
 
 | PDF group | correct / total | exact accuracy |
 | --- | ---: | ---: |
@@ -141,8 +142,8 @@ Per-PDF percentages across all 42 groups:
 | `11-mening` | `60/70` | `85.71%` |
 | `12-nos` | `21/30` | `70.00%` |
 | `13-pisha` | `45/70` | `64.29%` |
-| `14-sarkoidoz` | `68/80` | `85.00%` |
-| `15-toxic` | `50/70` | `71.43%` |
+| `14-sarkoidoz` | `69/80` | `86.25%` |
+| `15-toxic` | `51/70` | `72.86%` |
 | `16-hb` | `48/70` | `68.57%` |
 | `17-gepatit` | `60/70` | `85.71%` |
 | `18-gepatitabc` | `57/70` | `81.43%` |
@@ -156,8 +157,8 @@ Per-PDF percentages across all 42 groups:
 | `26-blevota` | `38/50` | `76.00%` |
 | `27-cistit` | `21/30` | `70.00%` |
 | `28-tanzilt` | `38/50` | `76.00%` |
-| `29-tpank` | `44/70` | `62.86%` |
-| `30-heart` | `42/70` | `60.00%` |
+| `29-tpank` | `45/70` | `64.29%` |
+| `30-heart` | `39/70` | `55.71%` |
 | `31-hbs` | `31/43` | `72.09%` |
 | `32-gemor` | `54/70` | `77.14%` |
 | `33-aorta` | `55/70` | `78.57%` |
@@ -170,6 +171,7 @@ Per-PDF percentages across all 42 groups:
 | `40-deficit` | `38/50` | `76.00%` |
 | `41-destonia` | `54/69` | `78.26%` |
 | `42-skvoz` | `32/50` | `64.00%` |
+| `43-anomali` | `17/30` | `56.67%` |
 
 ## Leakage Checks
 
