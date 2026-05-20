@@ -521,3 +521,24 @@ Outcome:
 - dev stayed `386/503 = 0.7674`;
 - holdout stayed `484/580 = 0.8345`;
 - single stayed `0.8716`, multi stayed `0.7222`.
+
+## Iteration 73 Inline Parenthetical Group Notes
+
+The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:
+
+`ферментов (уреаза, протеазы, фосфолипазы), повреждающих...`
+
+The failure was multi-answer selection. `уреаза` had strong evidence, `фосфолипаза` and `протеаза` were both found in the same broad chunk, but `протеаза` was just below the third-answer inclusion threshold. The wrong option `энтерокиназа` stayed low, so the problem was under-selection of a same-group item.
+
+The retained fix extends `parenthetical_group_segment` to inline lists, but only under tight guards:
+
+- list cue before parentheses (`ряд` or `группа`);
+- question-focus token before the group and after the group;
+- at least two answer options found inside the same parentheses.
+
+Outcome:
+
+- targeted Helicobacter enzyme case fixed;
+- dev stayed `386/503 = 0.7674`;
+- holdout stayed `484/580 = 0.8345`;
+- single stayed `0.8716`, multi stayed `0.7222`.

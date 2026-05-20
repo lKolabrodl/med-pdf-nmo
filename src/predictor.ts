@@ -3249,12 +3249,26 @@ function answerInParentheticalGroup(groupNormalized, answer) {
     .some((phrase) => containsNormalizedPhrase(groupNormalized, phrase));
 }
 
+function parentheticalGroupAnswerHit(groupNormalized, groupTokens, answer) {
+  const answerTokens = uniqueTokens(answer.text);
+  return answerInParentheticalGroup(groupNormalized, answer) || strictSoftCoverage(answerTokens, groupTokens) >= (answerTokens.length <= 1 ? 0.95 : 0.68);
+}
+
+function inlineParentheticalGroupContext({ beforeText, afterText, specificFocus }) {
+  const beforeTokens = tokenize(beforeText);
+  const afterTokens = tokenize(afterText);
+  const headHits = tokenHitCount(specificFocus, beforeTokens);
+  const tailHits = tokenHitCount(specificFocus, afterTokens);
+  const hasListCue = beforeTokens.includes(stemToken(normalizeForSearch("\u0440\u044f\u0434"))) || beforeTokens.includes(stemToken(normalizeForSearch("\u0433\u0440\u0443\u043f\u043f")));
+  return hasListCue && headHits >= 1 && tailHits >= 1;
+}
+
 /**
  * Связывает варианты ответа с ближайшей скобочной группой после релевантного
  * заголовка: `органические причины (...)`, `факторы риска (...)` и похожие
  * конструкции. Это помогает не смешивать соседние группы в одной строке.
  */
-function bestParentheticalGroupSupport({ mode, pages, question, answer, answerTokens }) {
+function bestParentheticalGroupSupport({ mode, pages, question, answer, answers, answerTokens }) {
   if (mode !== "multi") return null;
   const normalizedQuestion = normalizeForSearch(question);
   const questionTokenSet = new Set(tokenize(question));
@@ -3274,17 +3288,27 @@ function bestParentheticalGroupSupport({ mode, pages, question, answer, answerTo
       let beforeText = text.slice(Math.max(0, groupStart - 180), groupStart);
       const previousGroupEnd = beforeText.lastIndexOf(")");
       if (previousGroupEnd >= 0) beforeText = beforeText.slice(previousGroupEnd + 1);
+      const afterText = text.slice(groupStart + match[0].length, groupStart + match[0].length + 180);
       const beforeTokens = tokenize(beforeText);
-      if (!beforeTokens.includes(stemToken(normalizeForSearch("\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438")))) continue;
+      const categoryContext = beforeTokens.includes(stemToken(normalizeForSearch("\u043a\u0430\u0442\u0435\u0433\u043e\u0440\u0438\u0438")));
+      const inlineContext = inlineParentheticalGroupContext({ beforeText, afterText, specificFocus });
+      if (!categoryContext && !inlineContext) continue;
       const specificHits = tokenHitCount(specificFocus, beforeTokens);
       const specificCoverage = coverage(specificFocus, beforeTokens);
-      if (specificHits < 2 && specificCoverage < 0.34) continue;
+      if (categoryContext && specificHits < 2 && specificCoverage < 0.34) continue;
 
       const groupNormalized = normalizeForSearch(groupText);
       const groupTokens = tokenize(groupText);
+      const groupAnswerHits = (answers ?? []).filter((candidate) => parentheticalGroupAnswerHit(groupNormalized, groupTokens, candidate)).length;
+      if (inlineContext && groupAnswerHits < 2) continue;
       const answerCoverage = strictSoftCoverage(answerTokens, groupTokens);
       if (!answerInParentheticalGroup(groupNormalized, answer) && answerCoverage < (answerTokens.length <= 1 ? 0.95 : 0.68)) continue;
-      const score = 13.8 + Math.min(4, specificHits) * 1.15 + Math.min(0.75, specificCoverage) * 5.2 + answerCoverage * 2.2;
+      const score =
+        (inlineContext ? 14.6 : 13.8) +
+        Math.min(4, specificHits) * 1.15 +
+        Math.min(0.75, specificCoverage) * 5.2 +
+        answerCoverage * 2.2 +
+        Math.min(3, groupAnswerHits) * 0.8;
       best = betterEvidence(best, {
         answerId: answer.id,
         page: page.page,

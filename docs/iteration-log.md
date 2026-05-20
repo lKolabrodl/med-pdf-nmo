@@ -275,3 +275,17 @@ Iteration 72 spaced reference cleanup and serotype count binding:
 - `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
 - `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
 - Score delta from iteration 71: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The targeted train-group regression is fixed without held-out regression.
+
+Iteration 73 inline parenthetical group binding:
+
+- Added a guarded inline parenthetical-group mode for sentences like `вырабатывают целый ряд ферментов (уреаза, протеазы, фосфолипазы), повреждающих...`.
+- The rule is deliberately narrower than the rejected broad parenthetical parser: it requires a list cue before the parentheses (`ряд` or `группа`), at least one question-focus token before the group, at least one after the group, and at least two answer options matching inside the same parentheses.
+- This fixes a multi under-selection pattern where all correct answers are in the same parenthetical group but the selector keeps only the two strongest broad-search candidates.
+- Targeted check: `46-yazva` Helicobacter enzyme question now selects `протеаза`, `уреаза`, and `фосфолипаза`, while excluding `энтерокиназа`.
+- `npm run typecheck`: pass.
+- targeted `NMO_RUN_CASE_TESTS=1 npx vitest run __test__/46-yazva/cases.test.ts -t "Ферментами Helicobacter"`: pass.
+- `NMO_RUN_CASE_TESTS=0 npm test`: pass.
+- `npm run eval`: pass, dev exact accuracy unchanged at `386/503 = 0.7674`, single `0.8281`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
+- `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
+- Score delta from iteration 72: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The newly added train-group regression is fixed without held-out regression.
