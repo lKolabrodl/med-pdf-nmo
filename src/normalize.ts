@@ -31,6 +31,7 @@ const LATIN_LOOKALIKES = new Map([
 const DASHES = /[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g;
 const SPACES = /[\u00a0\u1680\u2000-\u200b\u202f\u205f\u3000]/g;
 const NUMERIC_REFERENCE_MARKS = /\s*\[\s*\d+(?:\s*(?:[,;]|\u2010|\u2011|\u2012|\u2013|\u2014|\u2015|-)\s*\d+)*\s*\](?=\s*(?:[.,;:]|$))/g;
+const SPACED_NUMERIC_REFERENCE_BEFORE_DOT = /\s*\[\s*\d+(?:\s+\d+)+\s*\](?=\s*\.)/g;
 
 /**
  * Стоп-слова, которые удаляются из большинства поисковых token-запросов.
@@ -256,6 +257,7 @@ export function normalizeText(text) {
     .normalize("NFKC")
     .replace(SPACES, " ")
     .replace(DASHES, "-")
+    .replace(SPACED_NUMERIC_REFERENCE_BEFORE_DOT, "")
     .replace(NUMERIC_REFERENCE_MARKS, "")
     .replace(/[\u2264\u2266]/g, " <= ")
     .replace(/[\u2265\u2267]/g, " >= ")

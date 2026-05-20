@@ -504,3 +504,20 @@ Outcome:
 - holdout stayed `484/580 = 0.8345`;
 - single stayed `0.8716`, multi stayed `0.7222`;
 - residual holdout diagnostics remain `recommendation_block_parser 39`, `option_family_resolver 23`, `multi_set_selection 19`.
+
+## Iteration 72 Count Relation Notes
+
+The botulism serotype-count case failed for two independent but related reasons. First, `pdfjs-dist` extracted a reference as `[ 8 10 ].`; the existing numeric reference cleaner handled `[6]`, `[6, 7]`, and similar forms, but not whitespace-only split references. Second, even after that cleanup, the broad search scorers could still give a nearby `10` from another sentence enough evidence.
+
+The retained fix is general and narrow:
+
+- remove `[ number number ].` only when it is followed by a dot;
+- let the count-relation scorer recognize `различают N ...`;
+- for serotype count questions, require the number to be locally bound before `серотип`.
+
+Outcome:
+
+- targeted botulism count case fixed;
+- dev stayed `386/503 = 0.7674`;
+- holdout stayed `484/580 = 0.8345`;
+- single stayed `0.8716`, multi stayed `0.7222`.

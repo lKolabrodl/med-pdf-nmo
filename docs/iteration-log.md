@@ -262,3 +262,16 @@ Iteration 71 recommendation-block parser rejection and hour alias binding:
 - `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
 - `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
 - Score delta from iteration 70 on the fixed split: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The gain is on the newly added train-group regression case without sacrificing held-out quality.
+
+Iteration 72 spaced reference cleanup and serotype count binding:
+
+- Added a narrow PDF-reference cleanup for bracketed spaced numeric references such as `[ 8 10 ].`. The rule only fires before a sentence-ending dot, so ordinary bracketed numeric groups inside a sentence are preserved.
+- Strengthened the existing count-relation scorer for `различают N ...` forms and added a target binding for `серотип`: a candidate count must appear before the target word in the local segment. This prevents a later reference or nearby duration such as `10 минут` from beating the actual `8 серотипов` count.
+- Targeted check: `45-botulizm` count question now selects `8` for `различают 8 серотипов`.
+- `npm run typecheck`: pass.
+- targeted `NMO_RUN_CASE_TESTS=1 npx vitest run __test__/45-botulizm/cases.test.ts -t "В зависимости от антигенной структуры"`: pass.
+- `npm test`: pass.
+- `npm run eval`: pass, dev exact accuracy unchanged at `386/503 = 0.7674`, single `0.8281`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
+- `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
+- Score delta from iteration 71: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The targeted train-group regression is fixed without held-out regression.
