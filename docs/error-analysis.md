@@ -441,3 +441,22 @@ Outcome:
 - train stayed `1101/1597 = 0.6894`.
 
 Conclusion: both hypotheses are valid only in narrow structural forms. The broad versions are useful as rejected evidence: future improvement should parse explicit recommendation/list structure more deeply instead of matching general cue words.
+
+## Iteration 68 Confidence Notes
+
+The confidence layer is now separate from answer selection. Exact accuracy is intentionally unchanged, but the reported confidence is less over-optimistic when evidence is broad, flat, or ambiguous.
+
+The retained penalties are structural rather than dataset-specific:
+
+- selected answers supported only by broad search evidence are discounted;
+- close single-answer top-1/top-2 raw gaps are discounted;
+- close multi selected/unselected boundaries are discounted;
+- multi sets with no structural evidence and many broad shared chunks are discounted.
+
+Outcome:
+
+- dev exact stayed `386/503 = 0.7674`; confidence correct/incorrect moved to `0.7952/0.6704`;
+- holdout exact stayed `482/580 = 0.8310`; confidence correct/incorrect moved to `0.8154/0.6919`;
+- diagnostics error counts stayed dev `117`, holdout `98`.
+
+This does not make the predictor more accurate by itself, but it gives consumers a much better signal for when to review or route a prediction through a slower/manual process.

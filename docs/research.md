@@ -55,6 +55,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - explicit parenthetical category binding and guarded short medical abbreviations for stable Russian forms such as `СПЯ` and `РЭ`.
 - comparator normalization for `≤`/`≥` and numeric `£` extraction artifacts.
 - narrow continuation-list binding for `основано/основаны на данных...` multi prompts and full-phrase numeric option binding for recommendation/dose/frequency single prompts.
+- diagnostics-driven confidence calibration that lowers confidence for flat evidence, close raw-score boundaries, and broad shared chunks without changing answer selection.
 
 The best current algorithm reaches dev exact accuracy `0.7674` and holdout exact accuracy `0.8310`, passing the required holdout `0.80` acceptance target. The answer-keyed overall score is still `1969/2680 = 0.7347`, so future work is focused on multi-answer set selection, option-family resolution, and recommendation-block parsing.
 

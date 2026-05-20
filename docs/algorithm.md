@@ -120,6 +120,7 @@ The predictor returns machine-readable JSON:
    - `single`: highest raw score, except for a conservative near-tie specificity tie-break when top-1/top-2 raw scores are almost equal;
    - `multi`: answers passing absolute, relative, or score-gap thresholds.
 11. In `multi` mode, apply a filtered shared-segment boost: if strong selected candidates point to the same high-quality segment, another candidate can be lifted only when it also matches that segment and already has enough prior raw support. This reduces under-selection while avoiding the broad extra-answer regression seen in earlier experiments.
+12. Compute output `confidence` separately from selection. This confidence layer does not change selected answers; it discounts predictions supported only by flat search evidence, close selected/unselected raw boundaries, or broad shared chunks without structural evidence.
 
 ## Code Layout
 

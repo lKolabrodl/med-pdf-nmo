@@ -208,3 +208,14 @@ Iteration 67 continuation-list and numeric-family hypotheses:
 - `npx tsx scripts/eval.ts --split train`: pass, train exact accuracy `1101/1597 = 0.6894`, single `0.7802`, multi `0.5102`, with `17` unkeyed cases skipped.
 - Score delta from iteration 66: dev `+0`; holdout `+2` exact (`+0.0034`), single `+0.0000`, multi `+0.0139`. The gain comes from multi set completion without changing train/dev totals.
 - Latest diagnostics after rerun: dev errors `117`; holdout errors `98`; holdout likely next work is `recommendation_block_parser 41`, `option_family_resolver 23`, `multi_set_selection 19`.
+
+Iteration 68 diagnostics-driven confidence:
+
+- Added a separate output-confidence layer after selection. It does not change raw scores, calibrated answer scores, or selected ids.
+- The layer discounts predictions when the selected answer/set is supported only by flat search evidence, when the selected/unselected raw boundary is close, or when a multi set relies on broad shared chunks without structural evidence.
+- This is a general reliability signal for downstream callers and future triage. It uses only evidence kinds, raw-score gaps, and selected-set shape; it does not read labels or PDF/case identifiers.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy unchanged at `386/503 = 0.7674`, single `0.8281`, multi `0.6299`. Confidence separation improved from roughly `0.9120/0.8641` correct/incorrect to `0.7952/0.6704`.
+- `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `482/580 = 0.8310`, single `0.8670`, multi `0.7222`. Confidence separation improved from `0.9242/0.8657` correct/incorrect to `0.8154/0.6919`.
+- `npm run diagnostics`: pass. Error counts are unchanged: dev `117`, holdout `98`.

@@ -62,8 +62,8 @@ Command: `npm run eval`
   "multiExactAccuracy": 0.6299,
   "macroAccuracyByPdf": 0.7715,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9127,
-  "avgConfidenceIncorrect": 0.8641,
+  "avgConfidenceCorrect": 0.7952,
+  "avgConfidenceIncorrect": 0.6704,
   "errorBuckets": {
     "confused_with_distractor": 77,
     "multi_cardinality": 40
@@ -87,8 +87,8 @@ The command returned exit code `0` because the acceptance target was met.
   "multiExactAccuracy": 0.7222,
   "macroAccuracyByPdf": 0.8269,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.9242,
-  "avgConfidenceIncorrect": 0.8657,
+  "avgConfidenceCorrect": 0.8154,
+  "avgConfidenceIncorrect": 0.6919,
   "errorBuckets": {
     "confused_with_distractor": 67,
     "multi_cardinality": 31
