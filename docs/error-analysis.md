@@ -476,3 +476,17 @@ Outcome:
 - holdout single improved from `0.8670` to `0.8693`;
 - holdout multi stayed `0.7222`;
 - residual holdout diagnostics: `recommendation_block_parser 40`, `option_family_resolver 23`, `multi_set_selection 19`.
+
+## Iteration 70 Dose Range Notes
+
+The option-family resolver still had a narrow but important blind spot: dose ranges were reduced to isolated numbers. That made a source statement like `до 25 мг` look compatible with an answer range `20-25 мг`, even when the general recommended dose appeared elsewhere as `10-15 мг`.
+
+The retained change parses range answers and range source facts explicitly. A range answer must be supported by a range in the source window; a standalone maximum dose is no longer enough. This keeps the rule abstract: it applies to dose-family variants across PDFs and does not depend on the drug name or a known correct answer.
+
+Outcome:
+
+- dev stayed `386/503 = 0.7674`;
+- holdout improved from `483/580 = 0.8328` to `484/580 = 0.8345`;
+- holdout single improved from `0.8693` to `0.8716`;
+- holdout multi stayed `0.7222`;
+- residual holdout diagnostics: `recommendation_block_parser 39`, `option_family_resolver 23`, `multi_set_selection 19`.

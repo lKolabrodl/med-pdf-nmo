@@ -235,3 +235,15 @@ Iteration 69 recommendation condition and numeric OCR guards:
 - `npm run eval:holdout`: pass, holdout exact accuracy `483/580 = 0.8328`, single `0.8693`, multi `0.7222`.
 - `npm run diagnostics`: pass. Error counts are dev `117`, holdout `97`.
 - Score delta from iteration 68: dev `+0`; holdout `+1` exact (`+0.0018`), holdout single `+0.0023`, multi unchanged.
+
+Iteration 70 dose-range option-family resolver:
+
+- Added explicit dose-range parsing to `drug_dose_segment`. Answers and source lines now represent `10-15 мг` as a range, not only as the nearest single `15 мг`/`10 мг` number.
+- A range answer now requires a range source fact; it is no longer treated as supported by a separate maximum-dose statement such as `до 25 мг`. This is a general option-family guard for dense dose variants, not a drug-specific rule.
+- Targeted check: `14-sarkoidoz#64` switches from the distractor `20-25 мг 1 раз в неделю` to `10-15 мг 1 раз в неделю` because `до 25 мг` no longer supports a range answer.
+- `npm test`: pass.
+- `npm run typecheck`: pass.
+- `npm run eval`: pass, dev exact accuracy unchanged at `386/503 = 0.7674`, single `0.8281`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
+- `npm run diagnostics`: pass. Error counts are dev `117`, holdout `96`.
+- Score delta from iteration 69: dev `+0`; holdout `+1` exact (`+0.0017`), holdout single `+0.0023`, multi unchanged.

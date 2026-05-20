@@ -128,9 +128,11 @@ function normalizeDoseNumber(value) {
 
 function answerDoseFact(answerText) {
   const normalized = normalizeForSearch(answerText);
+  const doseRangeMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/iu);
   const doseMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/iu);
   const frequencyMatch = normalized.match(/(?:[\u0078\u0445]\s*|(?:\u0440\u0430\u0437|\u0440)\s*)(\d+(?:[.,]\d+)?)(?:\s*[\u0070\u0440]\s*\/\s*\u0434|\s*\u0440|\s*\u0440\u0430\u0437)?/iu);
   return {
+    doseRange: doseRangeMatch?.[1] && doseRangeMatch?.[2] ? [normalizeDoseNumber(doseRangeMatch[1]), normalizeDoseNumber(doseRangeMatch[2])] : null,
     dose: doseMatch?.[1] ? normalizeDoseNumber(doseMatch[1]) : null,
     frequency: frequencyMatch?.[1] ? normalizeDoseNumber(frequencyMatch[1]) : null,
   };
@@ -142,23 +144,28 @@ function sourceDoseFacts(sourceText, drugTokens) {
   if (drugIndex < 0) return [];
   const local = normalized.slice(drugIndex, Math.min(normalized.length, drugIndex + 125));
   const facts = [];
-  const dosePattern = /(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433(?:\s*[\u0078\u0445]\s*(\d+(?:[.,]\d+)?))?/giu;
+  const dosePattern = /(\d+(?:[.,]\d+)?)(?:\s*-\s*(\d+(?:[.,]\d+)?))?\s*[\u006d\u043c]\u0433(?:\s*[\u0078\u0445]\s*(\d+(?:[.,]\d+)?))?/giu;
   for (const match of local.matchAll(dosePattern)) {
     const index = match.index ?? 0;
     if (index > 80) continue;
     facts.push({
-      dose: normalizeDoseNumber(match[1]),
-      frequency: match[2] ? normalizeDoseNumber(match[2]) : null,
+      dose: normalizeDoseNumber(match[2] ?? match[1]),
+      doseRange: match[2] ? [normalizeDoseNumber(match[1]), normalizeDoseNumber(match[2])] : null,
+      frequency: match[3] ? normalizeDoseNumber(match[3]) : null,
     });
     break;
   }
   for (const number of [...doseSlashNumbers(sourceText, drugTokens), ...doseNearDrugNumbers(sourceText, drugTokens)]) {
-    facts.push({ dose: normalizeDoseNumber(number), frequency: null });
+    facts.push({ dose: normalizeDoseNumber(number), doseRange: null, frequency: null });
   }
   return facts;
 }
 
 function doseFactMatchesAnswer(fact, answerFact, answerNumbers, hasFrequencyFacts = false) {
+  if (answerFact.doseRange) {
+    if (!fact.doseRange) return false;
+    if (fact.doseRange[0] !== answerFact.doseRange[0] || fact.doseRange[1] !== answerFact.doseRange[1]) return false;
+  }
   if (answerFact.dose && fact.dose !== answerFact.dose) return false;
   if (!answerFact.dose && !answerNumbers.has(fact.dose)) return false;
   if (answerFact.frequency && hasFrequencyFacts && !fact.frequency) return false;
