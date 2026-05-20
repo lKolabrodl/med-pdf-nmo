@@ -110,10 +110,30 @@ function addMedicalAliasPhrases(phrases, answerText) {
   }
 }
 
+/**
+ * Добавляет устойчивые варианты единиц времени, которые в клинических текстах
+ * часто пишутся то полностью, то сокращенно: `6 часов` / `6 ч`.
+ */
+function addTimeUnitAliasPhrases(phrases, answerText) {
+  const raw = normalizeText(answerText);
+  const numbers = extractNumbers(answerText);
+  if (!numbers.length) return;
+  if (/(?:^|\s)(?:\u0447|\u0447\.|\u0447\u0430\u0441|\u0447\u0430\u0441\u0430|\u0447\u0430\u0441\u043e\u0432)(?:\s|$)/u.test(raw)) {
+    for (const number of numbers) {
+      phrases.add(`${number} \u0447`);
+      phrases.add(`${number} \u0447.`);
+      phrases.add(`${number} \u0447\u0430\u0441`);
+      phrases.add(`${number} \u0447\u0430\u0441\u0430`);
+      phrases.add(`${number} \u0447\u0430\u0441\u043e\u0432`);
+    }
+  }
+}
+
 export function answerSearchPhrases(answerText) {
   const normalized = normalizeForSearch(answerText);
   const phrases = new Set([answerText, normalized]);
   addMedicalAliasPhrases(phrases, answerText);
+  addTimeUnitAliasPhrases(phrases, answerText);
   const withoutParentheses = normalized.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
   if (withoutParentheses) phrases.add(withoutParentheses);
   const rawAnswerText = String(answerText ?? "");

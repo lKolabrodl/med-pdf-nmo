@@ -247,3 +247,18 @@ Iteration 70 dose-range option-family resolver:
 - `npm run eval:holdout`: pass, holdout exact accuracy `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
 - `npm run diagnostics`: pass. Error counts are dev `117`, holdout `96`.
 - Score delta from iteration 69: dev `+0`; holdout `+1` exact (`+0.0017`), holdout single `+0.0023`, multi unchanged.
+
+Iteration 71 recommendation-block parser rejection and hour alias binding:
+
+- Tested a broad recommendation-block parser that grouped nearby recommendation/comment paragraphs and tried to bind candidate answers inside the block. The idea looked promising on dev (`388/503 = 0.7714`, `+2` exact), but it regressed holdout to `475/580 = 0.8190` (`-9` exact), mostly by turning broad recommendation paragraphs into over-strong evidence for distractors. The parser was rejected and removed from runtime.
+- Added a narrow time-unit alias dictionary for stable Russian hour variants: `6 часов`, `6 часа`, `6 час`, `6 ч`, and `6 ч.`. This is phrase-level normalization, not a medical-fact rule.
+- Added `exact_hour_alias_segment`, a guarded single-answer scorer for cases where the answer option spells out hours but the PDF uses the short form. It only searches bounded hour aliases, stays near top question pages, requires local question/focus support, and if the question contains another numeric condition (for example temperature), that condition must be present in the same local segment.
+- Rejected a broader attempt to feed all answer aliases into the existing `exact_numeric_option_segment`: it fixed the new hour case, but holdout fell to `475/580` by over-boosting dense month/dose families. The retained implementation keeps the old numeric scorer unchanged and isolates the hour abbreviation case.
+- Targeted check: the new botulism case with `6 часов` vs source `6 ч при температуре 100°C` now passes.
+- `npm run typecheck`: pass.
+- targeted `NMO_RUN_CASE_TESTS=1 npx vitest run __test__/45-botulizm/cases.test.ts -t "Уничтожение спор"`: pass.
+- `npm test`: pass.
+- `npm run eval`: pass, dev exact accuracy unchanged at `386/503 = 0.7674`, single `0.8281`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
+- `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
+- Score delta from iteration 70 on the fixed split: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The gain is on the newly added train-group regression case without sacrificing held-out quality.

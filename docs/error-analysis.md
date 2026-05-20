@@ -490,3 +490,17 @@ Outcome:
 - holdout single improved from `0.8693` to `0.8716`;
 - holdout multi stayed `0.7222`;
 - residual holdout diagnostics: `recommendation_block_parser 39`, `option_family_resolver 23`, `multi_set_selection 19`.
+
+## Iteration 71 Recommendation Block and Hour Alias Notes
+
+The broad recommendation-block parser remains the most tempting next area, but the latest experiment showed why it needs more structure before runtime use. Grouping recommendation/comment paragraphs by nearby cues improved dev by `+2` exact answers, but regressed holdout by `-9`: flat recommendation blocks often contain several plausible numeric values or nearby distractor facts. This confirms that future work should parse recommendation rows/items with stronger target binding, not just widen the local paragraph window.
+
+The retained improvement is deliberately smaller. Russian clinical PDFs often abbreviate hours as `ч` while tests or user input spell out `часов`. A general alias expansion inside the existing numeric scorer also regressed holdout, so the final version uses a separate `exact_hour_alias_segment` scorer that only binds bounded hour aliases and requires local question/focus support.
+
+Outcome:
+
+- targeted botulism regression case fixed (`6 часов` matches `6 ч при температуре 100°C`);
+- dev stayed `386/503 = 0.7674`;
+- holdout stayed `484/580 = 0.8345`;
+- single stayed `0.8716`, multi stayed `0.7222`;
+- residual holdout diagnostics remain `recommendation_block_parser 39`, `option_family_resolver 23`, `multi_set_selection 19`.

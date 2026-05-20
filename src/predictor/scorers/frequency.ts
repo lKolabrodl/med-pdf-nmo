@@ -3,14 +3,14 @@ import { betterEvidence, containsNormalizedPhrase, numberCoverage, tokenHitCount
 
 export function frequencyAnswer(answerText) {
   const raw = normalizeText(answerText);
-  return /\d|один|два|три|четыре|пять|шесть|семь|восемь|девять/u.test(raw) && /(год|месяц|недел|дн|сут|раз)/u.test(raw);
+  return /\d|один|два|три|четыре|пять|шесть|семь|восемь|девять/u.test(raw) && /(год|месяц|недел|дн|сут|час|(?:^|\s)ч\.?(?:\s|$)|раз)/u.test(raw);
 }
 
 export function frequencySearchPhrases(answerText) {
   const raw = normalizeText(answerText);
   const numbers = extractNumbers(answerText);
   const phrases = new Set();
-  if (answerText && /(год|месяц|недел|дн|сут|раз|\d)/u.test(raw)) phrases.add(answerText);
+  if (answerText && /(год|месяц|недел|дн|сут|час|(?:^|\s)ч\.?(?:\s|$)|раз|\d)/u.test(raw)) phrases.add(answerText);
   for (const number of numbers) {
     if (/год/u.test(raw)) {
       phrases.add(`${number} год`);
@@ -33,11 +33,20 @@ export function frequencySearchPhrases(answerText) {
       phrases.add(`${number} сутки`);
       phrases.add(`${number} суток`);
     }
+    if (/час|(?:^|\s)ч\.?(?:\s|$)/u.test(raw)) {
+      phrases.add(`${number} ч`);
+      phrases.add(`${number} ч.`);
+      phrases.add(`${number} час`);
+      phrases.add(`${number} часа`);
+      phrases.add(`${number} часов`);
+    }
   }
   return [...phrases].filter((phrase) => {
     const phraseNorm = normalizeForSearch(phrase);
     if (!/\u0441\u0443\u0442/u.test(raw) && containsNormalizedPhrase(phraseNorm, "\u0441\u0443\u0442")) return false;
     if (!/\u0434\u043d/u.test(raw) && (containsNormalizedPhrase(phraseNorm, "\u0434\u0435\u043d\u044c") || containsNormalizedPhrase(phraseNorm, "\u0434\u043d\u044f") || containsNormalizedPhrase(phraseNorm, "\u0434\u043d\u0435\u0439"))) return false;
+    if (!/\u0447\u0430\u0441|(?:^|\s)\u0447\.?(?:\s|$)/u.test(raw) && (containsNormalizedPhrase(phraseNorm, "\u0447\u0430\u0441") || containsNormalizedPhrase(phraseNorm, "\u0447."))) return false;
+    if (/^\d+\s+\u0447$/u.test(phraseNorm)) return true;
     return phraseNorm.length >= 4;
   });
 }

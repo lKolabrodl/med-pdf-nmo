@@ -13,6 +13,7 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     preceding_question_label: 1.05,
     question_continuation_list: 1.05,
     exact_numeric_option_segment: 1.05,
+    exact_hour_alias_segment: 1.05,
     short_medical_alias_segment: 0.9,
     visual_table_column: 1.2,
     exact_short_label_visual_row: 1.15,

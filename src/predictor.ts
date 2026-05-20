@@ -3018,6 +3018,27 @@ function numericExactPhrases(answerText) {
   return [...phrases].filter((phrase) => phrase.length >= 5 && extractNumbers(phrase).length);
 }
 
+function hourAliasPhrases(answerText) {
+  const raw = normalizeText(answerText);
+  const numbers = extractNumbers(answerText);
+  if (!numbers.length || !/(?:^|\s)(?:\u0447|\u0447\.|\u0447\u0430\u0441|\u0447\u0430\u0441\u0430|\u0447\u0430\u0441\u043e\u0432)(?:\s|$)/u.test(raw)) return [];
+  const phrases = new Set();
+  for (const number of numbers) {
+    phrases.add(`${number} \u0447`);
+    phrases.add(`${number} \u0447.`);
+  }
+  const answerNorm = normalizeForSearch(answerText);
+  return [...phrases].filter((phrase) => normalizeForSearch(phrase) !== answerNorm);
+}
+
+function segmentContainsBoundedPhrase(normalizedSegment, phrase) {
+  const normalizedPhrase = normalizeForSearch(phrase);
+  if (!normalizedPhrase) return false;
+  return findPhraseOccurrences(normalizedSegment, normalizedPhrase, { textIsNormalized: true }).some((index) =>
+    hasSearchBoundaries(normalizedSegment, index, normalizedPhrase.length),
+  );
+}
+
 /**
  * Поддерживает single-вопросы с плотной числовой семьей вариантов.
  *
@@ -3058,6 +3079,54 @@ function bestExactNumericOptionSupport({ mode, pages, topQuestionPages, question
         text: segment.text,
         score,
         kind: "exact_numeric_option_segment",
+      });
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Узко поддерживает варианты времени, где PDF использует сокращение (`6 ч`),
+ * а вариант ответа дан полностью (`6 часов`). Это отдельный слой, чтобы не
+ * расширять общий numeric scorer и не усиливать соседние дозировки/сроки.
+ */
+function bestExactHourAliasOptionSupport({ mode, pages, topQuestionPages, question, answer, answers, answerTokens, questionTokens, focusTokens }) {
+  if (mode !== "single" || answers.filter((candidate) => extractNumbers(candidate.text).length > 0).length < 2) return null;
+  if (!exactNumericOptionQuestion(question)) return null;
+  const phrases = hourAliasPhrases(answer.text);
+  if (!phrases.length) return null;
+
+  const answerNumbers = new Set(extractNumbers(answer.text));
+  const questionConditionNumbers = extractNumbers(question).filter((number) => !answerNumbers.has(number));
+  const usefulFocus = (focusTokens?.length ? focusTokens : questionTokens).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token));
+  let best = null;
+
+  for (const page of pages) {
+    const nearTopPage =
+      !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
+    if (!nearTopPage) continue;
+    for (const segment of cachedLineWindowSegments(page)) {
+      const phraseHit = phrases.some((phrase) => segmentContainsBoundedPhrase(segment.normalized, phrase));
+      if (!phraseHit) continue;
+      if (questionConditionNumbers.length && !questionConditionNumbers.some((number) => containsNormalizedPhrase(segment.normalized, number))) continue;
+      const focusHits = tokenHitCount(usefulFocus, segment.tokens);
+      const questionCoverage = coverage(questionTokens, segment.tokens);
+      if (questionCoverage < 0.14 && focusHits < Math.min(2, usefulFocus.length)) continue;
+      const answerCoverage = strictSoftCoverage(answerTokens, segment.tokens);
+      const numericCoverage = numberCoverage(answer.text, segment.normalized);
+      const score =
+        15.2 +
+        numericCoverage * 3.2 +
+        answerCoverage * 2.2 +
+        Math.min(0.52, questionCoverage) * 5.2 +
+        Math.min(2, focusHits) * 0.9;
+      best = betterEvidence(best, {
+        answerId: answer.id,
+        page: page.page,
+        text: segment.text,
+        score,
+        kind: "exact_hour_alias_segment",
       });
     }
   }
@@ -4811,6 +4880,7 @@ function scoreAnswer(context) {
   const labelDefinition = bestLabelDefinitionSupport(context);
   const recommendationPolarity = recommendationPolarityAdjustment(context);
   const exactNumericOption = bestExactNumericOptionSupport(context);
+  const exactHourAlias = bestExactHourAliasOptionSupport(context);
   const ageEligibility = ageEligibilityAdjustment(context);
   const drugDose = bestDrugDoseSupport(context);
   const termDefinition = bestTermDefinitionSupport(context);
@@ -4881,6 +4951,7 @@ function scoreAnswer(context) {
     (recommendationPolarity.support?.score ?? 0) * 1.05 +
     recommendationPolarity.adjustment +
     (exactNumericOption?.score ?? 0) * 1.04 +
+    (exactHourAlias?.score ?? 0) * 1.08 +
     ageEligibility.adjustment +
     (drugDose?.score ?? 0) * 1.15 +
     (termDefinition?.score ?? 0) * 1.15 +
@@ -4956,6 +5027,7 @@ function scoreAnswer(context) {
     recommendationPolarity.support,
     recommendationPolarity.evidence,
     exactNumericOption,
+    exactHourAlias,
     ageEligibility.evidence,
     drugDose,
     termDefinition,
@@ -5146,6 +5218,7 @@ const CONFIDENCE_STRUCTURAL_KINDS = new Set([
   "preceding_question_label",
   "question_continuation_list",
   "exact_numeric_option_segment",
+  "exact_hour_alias_segment",
   "visual_table_column",
   "exact_short_label_visual_row",
   "short_label_visual_row",
