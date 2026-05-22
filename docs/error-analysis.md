@@ -542,3 +542,21 @@ Outcome:
 - dev stayed `386/503 = 0.7674`;
 - holdout stayed `484/580 = 0.8345`;
 - single stayed `0.8716`, multi stayed `0.7222`.
+
+## Iteration 74 Structural Hypothesis Notes
+
+Three hypotheses were checked in isolation.
+
+The broad enumeration-list parser is still too risky. It can see that several options are near each other, but without reliable boundaries it merges adjacent author classifications, neighboring clinical groups, and opposite condition rows. The experiment regressed dev to `378/503 = 0.7515`, so it was removed.
+
+The numeric relation parser is also not ready as a generic layer. It can fix some single numeric cases on dev, but holdout fell to `468/580 = 0.8069`: dose tables and monitoring schedules put many valid-looking numbers near the same question tokens. This confirms that numeric relation extraction needs stronger row/condition semantics before runtime use.
+
+The retained improvement is narrower: answer labels of the form `N тип` now participate in `answer_ordinal_row`. This covers definition-list/classification rows (`1 тип: ...`, `2 тип: ...`) and reuses the same row-boundary and focus-token checks as stage/degree labels.
+
+Outcome:
+
+- dev improved from `386/503 = 0.7674` to `387/503 = 0.7694`;
+- dev single improved from `0.8281` to `0.8309`;
+- dev multi stayed `0.6299`;
+- holdout stayed `484/580 = 0.8345`;
+- holdout single stayed `0.8716`, holdout multi stayed `0.7222`.

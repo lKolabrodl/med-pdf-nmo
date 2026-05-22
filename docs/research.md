@@ -31,6 +31,7 @@ Current parsed cases: 2697, including 17 unkeyed cases that are skipped by exact
 | Parenthetical category binding | Separates adjacent answer groups flattened into one paragraph | Unsafe if applied to incidental parentheses or factor-risk example lists | Kept narrowly for explicit category headings |
 | Stable medical abbreviation aliases | Recovers common RU abbreviations such as `СПЯ` and `РЭ` | Broad aliases can leak semantics into unrelated endometrium/cancer contexts | Kept as a small guarded dictionary and low-weight evidence |
 | PDF comparator artifact normalization | Distinguishes `<=4` from unrelated numeric thresholds | `£` can mean currency in general text | Kept only when `£` appears before a number |
+| Type-label ordinal binding | Recovers classification rows like `2 тип: ...` when answer options are `N тип` | Unsafe if treated as a broad numeric boost | Kept through the existing ordinal-row scorer with focus-token and row-boundary guards |
 
 ## Selected best architecture
 
@@ -59,9 +60,10 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - narrow hour-duration alias binding for stable Russian forms such as `6 часов` / `6 ч`, isolated from the broader numeric scorer after a general alias expansion regressed holdout.
 - narrow cleanup of spaced numeric reference artifacts such as `[ 8 10 ].`, gated to sentence-final references, plus count-relation binding for `различают N серотипов`-style prompts.
 - guarded inline parenthetical-group binding for same-sentence lists such as `ряд ферментов (A, B, C), ...`, requiring focus support around the group and multiple answer options inside it.
+- ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-The best current algorithm reaches dev exact accuracy `0.7674` and holdout exact accuracy `0.8345`, passing the required holdout `0.80` acceptance target. Future work is focused on multi-answer set selection, option-family resolution, and recommendation-block parsing with stronger structural binding.
+The best current algorithm reaches dev exact accuracy `0.7694` and holdout exact accuracy `0.8345`, passing the required holdout `0.80` acceptance target. Future work is focused on multi-answer set selection, option-family resolution, and recommendation-block parsing with stronger structural binding.
 
 ## Feature Calibrator Research Guardrails
 

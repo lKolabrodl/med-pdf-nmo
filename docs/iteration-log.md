@@ -289,3 +289,18 @@ Iteration 73 inline parenthetical group binding:
 - `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
 - `npm run diagnostics`: pass. Error counts remain dev `117`, holdout `96`.
 - Score delta from iteration 72: dev `+0`; holdout `+0`; single `+0`; multi `+0`. The newly added train-group regression is fixed without held-out regression.
+
+Iteration 74 type ordinal list binding:
+
+- Tested three structural hypotheses in separate iterations:
+  - broad multi enumeration/list parser: rejected. It regressed dev from `386/503 = 0.7674` to `378/503 = 0.7515`, mainly by merging neighboring classifications, recommendation groups, and opposite condition lists.
+  - local numeric relation binding for single answers: rejected. It improved dev by one exact answer but regressed holdout from `484/580 = 0.8345` to `468/580 = 0.8069`, because dense dose/frequency paragraphs contain many nearby numeric distractors.
+  - answer ordinal-row binding for `N тип` labels: retained. This extends the existing stage/degree row parser to classification type rows such as `2 тип: ...`, using the same focus-token and next-row boundary checks.
+- The retained change is not tied to a medical fact or PDF name. It only recognizes answer options of the stable form `1 тип`, `2 тип`, `III тип`, etc. and binds them to local definition/list rows that contain the question focus.
+- Targeted behavior: classification questions whose PDF text contains `N тип: definition...` can now select the type label by matching the definition text, instead of relying on a flat chunk where several type labels are adjacent.
+- `npm run typecheck`: pass.
+- `NMO_RUN_CASE_TESTS=0 npm test`: pass.
+- `npm test`: pass.
+- `npm run eval`: pass, dev exact accuracy `387/503 = 0.7694`, single `0.8309`, multi `0.6299`.
+- `npm run eval:holdout`: pass, holdout exact accuracy unchanged at `484/580 = 0.8345`, single `0.8716`, multi `0.7222`.
+- Score delta from iteration 73: dev `+1` exact (`+0.0020`), dev single `+0.0028`, dev multi `+0.0000`; holdout `+0`, holdout single `+0.0000`, holdout multi `+0.0000`.

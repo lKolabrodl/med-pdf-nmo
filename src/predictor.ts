@@ -4470,6 +4470,7 @@ function answerOrdinalLabel(answerText) {
   const kinds = [
     { kind: "stage", cue: normalizeForSearch("\u0441\u0442\u0430\u0434\u0438") },
     { kind: "degree", cue: normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d") },
+    { kind: "type", cue: normalizeForSearch("\u0442\u0438\u043f") },
   ];
   const kind = kinds.find((item) => tokens.some((token) => token.startsWith(item.cue)));
   if (!kind) return null;
@@ -4486,6 +4487,7 @@ function answerOrdinalLabel(answerText) {
 function ordinalKindCue(kind) {
   if (kind === "stage") return normalizeForSearch("\u0441\u0442\u0430\u0434\u0438");
   if (kind === "degree") return normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d");
+  if (kind === "type") return normalizeForSearch("\u0442\u0438\u043f");
   return normalizeForSearch("\u043a\u043b\u0430\u0441\u0441");
 }
 
@@ -4620,6 +4622,8 @@ const ANSWER_ORDINAL_GENERIC_FOCUS = new Set(
     "\u0441\u0442\u0430\u0434\u0438\u0438",
     "\u0441\u0442\u0435\u043f\u0435\u043d\u044c",
     "\u0441\u0442\u0435\u043f\u0435\u043d\u0438",
+    "\u0442\u0438\u043f",
+    "\u0442\u0438\u043f\u0430",
     "\u043a\u043b\u0430\u0441\u0441",
     "\u043a\u043b\u0430\u0441\u0441\u0430",
   ].flatMap((item) => uniqueTokens(item)),
