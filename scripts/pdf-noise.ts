@@ -19,8 +19,12 @@ const CLEAN_PATTERNS: Array<[string, RegExp]> = [
   ["page_num_only", /^[-–—\s]*\d{1,4}[-–—\s]*$/],
   ["guideline_header", /^клинические рекомендации\s*[-–—]/i],
   ["url", /(https?:\/\/|www\.|\.ru\b|\.com\b|disuria)/i],
-  ["god_utver", /^год утверждения|одобрен|разработчик|профессиональн.*ассоциац/i],
+  ["god_utver", /^год утверждения|^одобрен|^разработчик|профессиональн.*ассоциац/i],
   ["id_line", /^id\s*[:№]/i],
+  // remaining candidates (NOT yet stripped) — measure before deciding:
+  ["evidence_grade", /уровень убедительности|уровень достоверности|^удд\s|^уур\s|\bудд\b.*\bуур\b/i],
+  ["registry_boiler", /перечн[юе]\s+жнвлп|лекарственного препарата корректно|показаниями к применению и противопоказан/i],
+  ["appendix_ref", /^приложение\s+[а-я0-9]|см\.\s+приложение/i],
 ];
 
 // The mojibake forms hard-coded in the current stripLikelyBoilerplate.
@@ -44,6 +48,8 @@ async function main() {
   const cleanHits: Record<string, number> = {};
   const mojiHits = { moji_page: 0, moji_disuria: 0 };
   const perPdf: Array<{ group: string; pages: number; lines: number; boiler: number; top: string[] }> = [];
+  // line text (short) -> { total occurrences, set of PDFs it appears in }
+  const globalLines = new Map<string, { count: number; pdfs: Set<string> }>();
 
   for (const group of groups) {
     const pdfPath = path.join(testDir, group, "doc.pdf");
@@ -72,6 +78,13 @@ async function main() {
         if (!n) continue;
         pdfLines += 1;
         lineCount.set(n, (lineCount.get(n) ?? 0) + 1);
+        if (n.length >= 12 && n.length <= 90) {
+          const key = n.slice(0, 80);
+          const entry = globalLines.get(key) ?? { count: 0, pdfs: new Set<string>() };
+          entry.count += 1;
+          entry.pdfs.add(group);
+          globalLines.set(key, entry);
+        }
       }
     }
     // boilerplate = a line repeated on many pages, or matching a clean boilerplate pattern
@@ -110,6 +123,15 @@ async function main() {
   console.log(JSON.stringify(cleanHits, null, 0));
   console.log(`\n=== noise totals ===`);
   console.log(`total lines: ${totalLines} | repeated/boilerplate lines: ${totalBoilerplate} = ${(totalBoilerplate / Math.max(1, totalLines) * 100).toFixed(1)}%`);
+  console.log("\n=== cross-PDF repeated lines (appear in many PDFs = generic boilerplate) ===");
+  const crossPdf = [...globalLines.entries()]
+    .filter(([, v]) => v.pdfs.size >= 4 && v.count >= 10)
+    .sort((a, b) => b[1].pdfs.size - a[1].pdfs.size || b[1].count - a[1].count)
+    .slice(0, 20);
+  for (const [line, v] of crossPdf) {
+    console.log(`  ${v.pdfs.size} pdfs, ${v.count}x: ${line}`);
+  }
+
   console.log("\n=== per-PDF top repeated lines ===");
   for (const p of perPdf.sort((a, b) => b.boiler / b.lines - a.boiler / a.lines).slice(0, 14)) {
     console.log(`\n${p.group} (${p.pages}p, ${p.lines} lines, ${(p.boiler / p.lines * 100).toFixed(0)}% repeated):`);

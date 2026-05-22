@@ -145,6 +145,58 @@ function buildPageText(lines: string[]) {
   return out.join("\n");
 }
 
+const BIBLIO_HEADING = /^(список\s+литературы|литература|библиографи)/;
+const BIBLIO_NEXT_SECTION = /^(приложение|критерии оценки качества|связанные документы)/;
+
+/**
+ * Удаляет секцию "Список литературы" со страниц PDF.
+ *
+ * Список литературы это ссылки и цитаты (авторы, журналы, годы), он занимает
+ * около пятой части текста и не может быть правильным ответом на клинический
+ * вопрос НМО, но засоряет поиск и числовые/латинские совпадения. Секция строго
+ * ограничена: от заголовка "Список литературы" до следующего раздела
+ * ("Приложение ..."), поэтому все приложения с клиническим контентом
+ * сохраняются. Берется последнее вхождение заголовка (чтобы не спутать с
+ * пунктом оглавления) и только в последней части документа.
+ */
+function removeBibliographySection(pages: any[]) {
+  const flat: Array<{ p: number; l: number }> = [];
+  pages.forEach((page, p) => page.lines.forEach((_: string, l: number) => flat.push({ p, l })));
+  if (!flat.length) return;
+  const lineText = (f: { p: number; l: number }) => normalizeText(pages[f.p].lines[f.l]);
+
+  let start = -1;
+  for (let i = 0; i < flat.length; i += 1) {
+    const t = lineText(flat[i]);
+    if (BIBLIO_HEADING.test(t) && t.length <= 30) start = i;
+  }
+  if (start < 0 || start < flat.length * 0.4) return;
+
+  let end = flat.length;
+  for (let i = start + 1; i < flat.length; i += 1) {
+    if (BIBLIO_NEXT_SECTION.test(lineText(flat[i]))) {
+      end = i;
+      break;
+    }
+  }
+
+  const removeByPage = new Map<number, Set<number>>();
+  for (let i = start; i < end; i += 1) {
+    const f = flat[i];
+    if (!removeByPage.has(f.p)) removeByPage.set(f.p, new Set());
+    removeByPage.get(f.p)!.add(f.l);
+  }
+
+  for (const [p, removed] of removeByPage) {
+    const page = pages[p];
+    page.lines = page.lines.filter((_: string, idx: number) => !removed.has(idx));
+    page.lineItems = page.lineItems.filter((_: any, idx: number) => !removed.has(idx));
+    page.text = buildPageText(page.lines);
+    page.normalized = normalizeForSearch(page.text);
+    page.charLength = page.text.length;
+  }
+}
+
 /**
  * Извлекает текст и легкие layout-метаданные из PDF.
  *
@@ -186,6 +238,8 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
       charLength: text.length,
     });
   }
+
+  removeBibliographySection(pages);
 
   const pageTextChars = pages.reduce((sum, page) => sum + page.text.length, 0);
   return {
