@@ -3,6 +3,7 @@ dist/
 .cache/
 coverage/
 AGENTS.md
+.claude/
 __test__/*
 !__test__/
 !__test__/_runner.ts
