@@ -147,8 +147,12 @@ function buildPageText(lines: string[]) {
 
 const BIBLIO_HEADING = /^(список\s+литературы|литература|библиографи)/;
 const BIBLIO_NEXT_SECTION = /^(приложение|критерии оценки качества|связанные документы)/;
-const TOC_HEADING = /^(содержание|оглавление)$/;
-const TOC_END = /^(список сокращений|термины и определения|введение|общая информация|1\s+краткая)/;
+const TOC_HEADING = /^(содержание|оглавление)\b/;
+// Точечная выноска оглавления: "Диагностика ............ 12" или вариант с
+// символом многоточия "Диагностика …………… 12". 4+ точек подряд или символ «…»
+// в обычном тексте как выноска не встречаются. Одиночное «…» в прозе не опасно:
+// удаление включается только для плотного блока таких строк в начале документа.
+const TOC_LEADER = /\.(\s?\.){3,}|…/;
 
 /** Плоский индекс всех строк документа: {p: индекс страницы, l: индекс строки в странице}. */
 function buildFlatLineIndex(pages: any[]) {
@@ -180,38 +184,40 @@ function removeFlatLineSpan(pages: any[], flat: Array<{ p: number; l: number }>,
 }
 
 /**
- * Удаляет оглавление (Содержание/Оглавление) в начале документа.
+ * Удаляет оглавление в начале документа.
  *
- * Оглавление это навигация: названия разделов, номера страниц, точечные
- * выноски. Оно не несет содержания и дублирует реальные заголовки. Граница: от
- * "Содержание"/"Оглавление" в начале документа до первого реального раздела
- * ("Список сокращений", "Термины и определения" и т.п.). Срабатывает только при
- * явном заголовке в начале и при разумном размере блока (защита от ложного
- * совпадения слова "содержание" внутри предложения).
+ * В НМО-рекомендациях оглавление часто идет БЕЗ заголовка "Содержание" — сразу
+ * списком пунктов с точечными выносками ("Диагностика ........ 12"). Поэтому
+ * детект идет по сигнатуре выноски, а не по заголовку: в ранней части документа
+ * берется плотный блок от первой до последней строки с выноской и удаляется
+ * целиком (вместе с переносами длинных названий). Предшествующий заголовок
+ * "Содержание"/"Оглавление" тоже убирается, если он есть.
+ *
+ * Оглавление это навигация (названия разделов + номера страниц), оно дублирует
+ * реальные заголовки тела и не может быть ответом. Тело идет ПОСЛЕ оглавления и
+ * выносок не имеет, поэтому контент не страдает.
  */
 function removeTableOfContents(pages: any[]) {
   const flat = buildFlatLineIndex(pages);
   if (!flat.length) return;
-  const lineText = (f: { p: number; l: number }) => normalizeText(pages[f.p].lines[f.l]);
+  const lineRaw = (f: { p: number; l: number }) => pages[f.p].lines[f.l];
 
-  let start = -1;
-  const earlyLimit = Math.max(1, Math.floor(flat.length * 0.25));
+  // Пункты оглавления опознаются по точечной выноске; берем их в ранней части.
+  const earlyLimit = Math.max(1, Math.floor(flat.length * 0.4));
+  const leaderIdx: number[] = [];
   for (let i = 0; i < earlyLimit; i += 1) {
-    if (TOC_HEADING.test(lineText(flat[i]))) {
-      start = i;
-      break;
-    }
+    if (TOC_LEADER.test(lineRaw(flat[i]))) leaderIdx.push(i);
   }
-  if (start < 0) return;
+  if (leaderIdx.length < 5) return;
 
-  let end = -1;
-  for (let i = start + 1; i < flat.length; i += 1) {
-    if (TOC_END.test(lineText(flat[i]))) {
-      end = i;
-      break;
-    }
-  }
-  if (end < 0 || end - start > 220) return;
+  let start = leaderIdx[0];
+  const end = leaderIdx[leaderIdx.length - 1] + 1;
+  // Блок должен быть плотным по выноскам (оглавление, а не случайные строки).
+  if (leaderIdx.length / Math.max(1, end - start) < 0.3) return;
+  // Включить предшествующий заголовок "Содержание"/"Оглавление", если он есть.
+  const prev = start > 0 ? normalizeText(lineRaw(flat[start - 1])) : "";
+  if (prev && prev.length <= 30 && TOC_HEADING.test(prev)) start -= 1;
+
   removeFlatLineSpan(pages, flat, start, end);
 }
 
@@ -298,6 +304,36 @@ function removeMetadataAppendices(pages: any[], fromRank: number, toRank: number
 }
 
 /**
+ * Удаляет список приложений из front matter (первые ~15% документа).
+ *
+ * В части PDF оглавление перечисляет приложения отдельным блоком без точечных
+ * выносок ("Приложение А1. Состав рабочей группы... / Приложение А2. Методология
+ * / Приложение А3. Справочные материалы"), поэтому leader-детект оглавления его
+ * не ловит. Это TOC-остаток (само тело приложений в конце документа). Удаляется
+ * только плотный блок из >=2 заголовков приложений в первых 15% — настоящие
+ * приложения тела лежат в последней части и не затрагиваются.
+ */
+function removeFrontMatterAppendixList(pages: any[]) {
+  const flat = buildFlatLineIndex(pages);
+  if (!flat.length) return;
+  const limit = Math.max(1, Math.floor(flat.length * 0.15));
+  const idx: number[] = [];
+  for (let i = 0; i < limit; i += 1) {
+    if (appendixRank(normalizeText(pages[flat[i].p].lines[flat[i].l])) > 0) idx.push(i);
+  }
+  if (idx.length < 2 || idx[idx.length - 1] - idx[0] > 15) return;
+
+  const start = idx[0];
+  let end = idx[idx.length - 1] + 1;
+  // Захватить одну строку-перенос названия последнего приложения, если она короткая.
+  if (end < limit) {
+    const t = normalizeText(pages[flat[end].p].lines[flat[end].l]);
+    if (t.length > 0 && t.length < 60 && appendixRank(t) === 0 && !/^(список|термины|введение|1\b)/.test(t)) end += 1;
+  }
+  removeFlatLineSpan(pages, flat, start, end);
+}
+
+/**
  * Извлекает текст и легкие layout-метаданные из PDF.
  *
  * Экстрактор принимает байты, браузерные File/Blob, ArrayBuffer-подобные
@@ -340,6 +376,7 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
   }
 
   removeTableOfContents(pages);
+  removeFrontMatterAppendixList(pages);
   removeBibliographySection(pages);
   removeMetadataAppendices(pages, 1, 2);
 
