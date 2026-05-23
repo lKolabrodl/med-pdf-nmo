@@ -30,6 +30,11 @@ async function resolvePdfJs(options: any = {}) {
   }
 }
 
+function pdfVerbosity(pdfjs: any, options: any = {}) {
+  if (typeof options.pdfVerbosity === "number") return options.pdfVerbosity;
+  return pdfjs.VerbosityLevel?.ERRORS ?? 0;
+}
+
 async function toUint8Array(input: any): Promise<Uint8Array> {
   if (input instanceof Uint8Array) {
     return new Uint8Array(input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength));
@@ -341,7 +346,7 @@ function removeFrontMatterAppendixList(pages: any[]) {
  * текст и флаг `ocrNeeded`, если в PDF найдено подозрительно мало текста.
  *
  * @param pdfInput Байты PDF, File/Blob, ArrayBuffer, Uint8Array или URL.
- * @param options Необязательный `cacheKey` и явно переданный `pdfjsLib`.
+ * @param options Необязательный `cacheKey`, явно переданный `pdfjsLib` и уровень логирования PDF.js.
  * @returns Текст страниц и метаданные, которые использует predictor.
  */
 export async function extractPdfText(pdfInput: any, options: any = {}) {
@@ -352,6 +357,7 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
     disableWorker: true,
     useSystemFonts: true,
     isEvalSupported: false,
+    verbosity: pdfVerbosity(pdfjs, options),
   });
   const pdf = await loadingTask.promise;
   const pages: any[] = [];

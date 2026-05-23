@@ -1,6 +1,6 @@
 {
   "name": "med-pdf-nmo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Browser-first non-LLM predictor for answering NMO medical PDF questions.",
   "main": "./dist/index.js",

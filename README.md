@@ -157,6 +157,7 @@ const result = await answerQuestion(pdf, {
 - `mode`: alias for `type`.
 - `cacheKey`: optional PDF text cache key.
 - `pdfjsLib`: optional explicit PDF.js module override.
+- `pdfVerbosity`: optional PDF.js logging level. By default only PDF.js errors are shown, so non-fatal font warnings such as `TT: undefined function` are suppressed.
 
 Variants can be plain strings:
 

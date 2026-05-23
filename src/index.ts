@@ -52,6 +52,8 @@ export interface AnswerQuestionOptions {
   cacheKey?: string;
   /** Явно переданный модуль PDF.js, полезно для браузерного окружения. */
   pdfjsLib?: any;
+  /** Уровень логирования PDF.js. По умолчанию показываются только ошибки. */
+  pdfVerbosity?: number;
 }
 
 /**
@@ -115,7 +117,7 @@ export async function answerQuestion(
       answers,
       mode: options.type ?? options.mode ?? "single",
     },
-    { pdfjsLib: options.pdfjsLib },
+    { pdfjsLib: options.pdfjsLib, pdfVerbosity: options.pdfVerbosity },
   );
 
   const selectedAnswers = output.selected

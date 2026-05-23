@@ -3690,6 +3690,7 @@ export async function predict(input, options: any = {}) {
   const runtime = await getPdfRuntime(pdfInput, {
     cacheKey: input.cacheKey ?? input.pdfPath ?? input.pdfUrl ?? input.url,
     pdfjsLib: options.pdfjsLib,
+    pdfVerbosity: options.pdfVerbosity,
   });
   const question = String(input.question ?? "");
   const questionTokens = uniqueTokens(question);
