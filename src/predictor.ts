@@ -2242,6 +2242,125 @@ function bestTermDefinitionSupport({ pages, question, answer, answerTokens }) {
   return best;
 }
 
+const FREQUENCY_POLARITY_HIGH_CUES = [
+  "\u043d\u0430\u0438\u0431\u043e\u043b\u0435\u0435 \u0447\u0430\u0441\u0442",
+  "\u0441\u0430\u043c\u043e\u0439 \u0447\u0430\u0441\u0442",
+  "\u0441\u0430\u043c\u044b\u043c \u0447\u0430\u0441\u0442",
+  "\u0447\u0430\u0441\u0442\u043e \u0432\u0441\u0442\u0440\u0435\u0447",
+  "\u0447\u0430\u0449\u0435",
+  "\u0432\u0435\u0434\u0443\u0449",
+];
+
+const FREQUENCY_POLARITY_LOW_CUES = [
+  "\u0440\u0435\u0434\u043a",
+  "\u0440\u0435\u0436\u0435",
+];
+
+const FREQUENCY_POLARITY_GENERIC_FOCUS = new Set(
+  [
+    "\u043d\u0430\u0438\u0431\u043e\u043b\u0435\u0435",
+    "\u0447\u0430\u0441\u0442\u044b\u0439",
+    "\u0447\u0430\u0441\u0442\u0430\u044f",
+    "\u0447\u0430\u0441\u0442\u043e\u0439",
+    "\u0447\u0430\u0441\u0442\u043e\u0435",
+    "\u0440\u0435\u0434\u043a\u0438\u0439",
+    "\u0440\u0435\u0434\u043a\u0430\u044f",
+    "\u0440\u0435\u0434\u043a\u043e\u0439",
+    "\u0444\u043e\u0440\u043c\u0430",
+    "\u0444\u043e\u0440\u043c\u043e\u0439",
+    "\u0432\u0430\u0440\u0438\u0430\u043d\u0442",
+    "\u0432\u0430\u0440\u0438\u0430\u043d\u0442\u043e\u043c",
+    "\u0440\u043e\u043b\u044c",
+    "\u043e\u0442\u0432\u043e\u0434\u0438\u0442\u0441\u044f",
+    "\u0432\u0441\u0442\u0440\u0435\u0447\u0430\u0435\u0442\u0441\u044f",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+/** Определяет, спрашивает ли фрагмент о частом/редком/ведущем варианте. */
+function frequencyPolarity(normalized: string) {
+  if (FREQUENCY_POLARITY_LOW_CUES.some((cue) => containsNormalizedPhrase(normalized, cue))) return "low";
+  if (FREQUENCY_POLARITY_HIGH_CUES.some((cue) => containsNormalizedPhrase(normalized, cue))) return "high";
+  return null;
+}
+
+function frequencyPolarityFocusTokens(focusTokens, answerTokens) {
+  const answerSet = new Set(answerTokens ?? []);
+  return (focusTokens ?? []).filter((token) => token.length >= 4 && !answerSet.has(token) && !FREQUENCY_POLARITY_GENERIC_FOCUS.has(token));
+}
+
+/**
+ * Проверяет точное фразовое совпадение вне скобочных примеров.
+ *
+ * Для частотных вопросов это важно: `(менингит + менингококкемия)` рядом с
+ * "наиболее часто" обычно поясняет форму, но не обязательно является ответом.
+ */
+function containsPhraseOutsideParentheses(text: string, phrases: string[]) {
+  const normalized = normalizeForSearch(String(text ?? "").replace(/\([^)]*\)/gu, " "));
+  for (const phrase of phrases) {
+    const normalizedPhrase = normalizeForSearch(phrase);
+    if (!normalizedPhrase) continue;
+    if (normalized.includes(normalizedPhrase)) return true;
+  }
+  return false;
+}
+
+/** Делит line-window на небольшие предложение-подобные фрагменты для локального связывания cue и ответа. */
+function frequencyPolarityFragments(text: string) {
+  const fragments = String(text ?? "")
+    .split(/(?<=[.!?;])\s+/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 20);
+  return fragments.length ? fragments : [String(text ?? "")];
+}
+
+/**
+ * Ищет evidence для вопросов вида "наиболее частый/редкий/ведущий".
+ *
+ * Слой не знает медицинских фактов: он связывает вариант ответа с тем же
+ * предложением, где находится частотный маркер, и отбрасывает скобочные примеры.
+ */
+function bestFrequencyPolaritySupport({ mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
+  if (mode !== "single") return null;
+  const target = frequencyPolarity(normalizeForSearch(question));
+  if (!target) return null;
+  const answerPhrases = answerSearchPhrases(answer.text).slice(0, 16);
+  const specificTokens = frequencyPolarityFocusTokens(focusTokens, answerTokens);
+  let best = null;
+
+  for (const page of pages) {
+    if (
+      topQuestionPages?.size &&
+      !topQuestionPages.has(page.page) &&
+      !topQuestionPages.has(page.page - 1) &&
+      !topQuestionPages.has(page.page + 1)
+    ) {
+      continue;
+    }
+    for (const segment of cachedLineWindowSegments(page)) {
+      for (const fragment of frequencyPolarityFragments(segment.text)) {
+        const normalized = normalizeForSearch(fragment);
+        if (frequencyPolarity(normalized) !== target) continue;
+        const phraseHit = containsPhraseOutsideParentheses(fragment, answerPhrases);
+        if (!phraseHit) continue;
+        const fragmentTokens = tokenizeNormalized(normalized);
+        const answerCoverage = strictSoftCoverage(answerTokens, fragmentTokens);
+        const focusHits = tokenHitCount(specificTokens, fragmentTokens);
+        if (specificTokens.length >= 2 && focusHits <= 0) continue;
+        const score = 12.2 + (phraseHit ? 2.8 : 0) + answerCoverage * 4.2 + Math.min(2, focusHits) * 1.1;
+        best = betterEvidence(best, {
+          answerId: answer.id,
+          page: page.page,
+          text: fragment,
+          score,
+          kind: "frequency_polarity_segment",
+        });
+      }
+    }
+  }
+
+  return best;
+}
+
 function negatedAnswerPrefixAdjustment({ mode, pages, question, answer, answerTokens }) {
   if (mode !== "single" || answerTokens.length < 2) return { adjustment: 0, evidence: null };
   const questionNorm = normalizeForSearch(question);
@@ -3475,6 +3594,7 @@ function scoreAnswer(context) {
   const ageEligibility = ageEligibilityAdjustment(context);
   const drugDose = bestDrugDoseSupport(context);
   const termDefinition = bestTermDefinitionSupport(context);
+  const frequencyPolarity = bestFrequencyPolaritySupport(context);
   const negatedAnswerPrefix = negatedAnswerPrefixAdjustment(context);
   const impossibilityOnly = impossibilityOnlyAdjustment(context);
   const activeTherapyIndication = activeTherapyIndicationAdjustment(context);
@@ -3546,6 +3666,7 @@ function scoreAnswer(context) {
     ageEligibility.adjustment +
     (drugDose?.score ?? 0) * 1.15 +
     (termDefinition?.score ?? 0) * 1.15 +
+    (frequencyPolarity?.score ?? 0) * 1.08 +
     negatedAnswerPrefix.adjustment +
     impossibilityOnly.adjustment +
     activeTherapyIndication.adjustment +
@@ -3622,6 +3743,7 @@ function scoreAnswer(context) {
     ageEligibility.evidence,
     drugDose,
     termDefinition,
+    frequencyPolarity,
     negatedAnswerPrefix.evidence,
     impossibilityOnly.evidence,
     activeTherapyIndication.evidence,
@@ -3836,6 +3958,7 @@ const CONFIDENCE_STRUCTURAL_KINDS = new Set([
   "bounded_list_segment",
   "ordinal_list_segment",
   "drug_dose_segment",
+  "frequency_polarity_segment",
   "recommendation_item_segment",
   "explicit_recommendation_target_segment",
   "numeric_condition_less_than",

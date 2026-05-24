@@ -538,6 +538,21 @@ Current diagnostics after the retained changes:
 - holdout `488/580 = 0.8414`, single `0.8784`, multi `0.7292`;
 - remaining holdout errors: recommendation block parser `35`, option-family resolver `23`, multi-set selection `19`.
 
+## Iteration 86 Error Notes
+
+The retained frequency-polarity scorer fixed one held-out single-answer case without moving dev selections. The useful pattern is broad and document-neutral: a question asking for the most common/rare/leading entity should prefer an answer phrase in the same sentence-like fragment as `наиболее част...`, `редк...`, or `ведущ...`.
+
+Two rejected sub-attempts were important:
+
+- pre-normalizing cue constants before passing them to `containsNormalizedPhrase` silently produced zero-delta because the helper normalizes the needle again;
+- matching an entire line-window was too broad, because the answer can appear in a previous sentence or inside parenthetical examples that are not the named entity.
+
+Current diagnostics after the retained change:
+
+- dev `390/503 = 0.7753`, single `0.8367`, multi `0.6364`;
+- holdout `489/580 = 0.8431`, single `0.8807`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `23`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:

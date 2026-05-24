@@ -414,3 +414,12 @@ Iteration 85 option-family and recommendation-item probes: two retained, recomme
 - Attempts 6-7, slash-dose component resolver: fixed a parser bug where the right side of `100/400 мг` was also matched as a standalone `400 мг`, and ensured slash-dose pairs are resolved by component order near `A+B` / `A/B`. This fixed held-out component-dose questions without changing dev.
 - Final retained result: dev `390/503 = 0.7753`; holdout `488/580 = 0.8414`; holdout single `0.8739 -> 0.8784`; holdout multi unchanged `0.7292`.
 - The retained changes are structural and corpus-neutral: comparator direction, compact abbreviation-vs-unit filtering, and component order in slash dose pairs. No question, PDF, answer key, or medical fact was hardcoded.
+
+Iteration 86 frequency-polarity sentence binding: KEPT, holdout +1.
+
+- Theory 1 attempt set: use general Russian frequency wording (`наиболее част...`, `редк...`, `ведущ...`) as a structural cue for single-answer questions. This is not a medical-fact rule; it binds the option phrase to the same sentence-like fragment as the frequency cue.
+- Attempt 1 was too broad: pre-normalized cues were passed into `containsNormalizedPhrase`, which normalizes its needle again, so the scorer was zero-delta. Fixed by keeping cue strings raw.
+- Attempt 2 was also too broad: line-window matching boosted answers that appeared in a previous sentence or only inside parenthetical examples. Narrowed to sentence-like fragments and stripped parenthetical spans before phrase matching.
+- Final guard: no coverage-only support. The answer phrase must be present outside parentheses in the same fragment as the frequency cue, with optional question-focus support.
+- Result vs iteration 85: dev zero-delta `390/503 = 0.7753`; holdout `488 -> 489/580 = 0.8431`; holdout single `0.8784 -> 0.8807`; holdout multi unchanged `0.7292`.
+- Changed selected set: `11-mening#28` fixed from `[D]` to `[A]`. No dev selected sets changed.
