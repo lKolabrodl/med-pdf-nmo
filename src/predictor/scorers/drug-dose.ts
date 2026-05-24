@@ -77,7 +77,7 @@ function drugTokenIndex(normalized, drugTokens) {
 
 function doseSlashNumbers(sourceText, drugTokens) {
   const out = [];
-  const slashPattern = /(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*мг/giu;
+  const slashPattern = /(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/giu;
   for (const match of sourceText.matchAll(slashPattern)) {
     const rawIndex = match.index ?? 0;
     const beforeText = sourceText.slice(Math.max(0, rawIndex - 150), rawIndex);
@@ -107,7 +107,7 @@ function doseNearDrugNumbers(sourceText, drugTokens) {
   if (drugIndex < 0) return [];
   const local = normalized.slice(drugIndex, Math.min(normalized.length, drugIndex + 95));
   if (!containsNormalizedPhrase(local, "\u043c\u0433")) return [];
-  if (/\d+(?:[.,]\d+)?\s*\/\s*\d+(?:[.,]\d+)?\s*mг/iu.test(local)) return [];
+  if (/\d+(?:[.,]\d+)?\s*\/\s*\d+(?:[.,]\d+)?\s*[\u006d\u043c][\u0433g]/iu.test(local)) return [];
   const firstNumber = local.match(/\d+(?:[.,]\d+)?/u);
   if (!firstNumber || (firstNumber.index ?? 0) > 55) return [];
   if (local.slice(0, firstNumber.index ?? 0).includes("+")) return [];
@@ -148,6 +148,8 @@ function sourceDoseFacts(sourceText, drugTokens) {
   for (const match of local.matchAll(dosePattern)) {
     const index = match.index ?? 0;
     if (index > 80) continue;
+    const beforeNumber = local.slice(0, index).replace(/\s+$/u, "");
+    if (beforeNumber.endsWith("/")) continue;
     facts.push({
       dose: normalizeDoseNumber(match[2] ?? match[1]),
       doseRange: match[2] ? [normalizeDoseNumber(match[1]), normalizeDoseNumber(match[2])] : null,

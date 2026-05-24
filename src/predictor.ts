@@ -32,6 +32,7 @@ import {
 } from "./predictor/scorers/coordinate-table.js";
 import { bestFocusedSupport, bestLineTokenSupport, cachedLineTokenSegments, questionFocusTokens } from "./predictor/scorers/focused.js";
 import { bestRecommendationItemSupport, explicitRecommendationTargetAdjustment } from "./predictor/scorers/recommendation-item.js";
+import { optionFamilyCompactComboAdjustment, optionFamilyComparatorAdjustment } from "./predictor/scorers/option-family.js";
 import {
   contrastCueMismatchAdjustment,
   excludedConditionMismatchAdjustment,
@@ -3658,6 +3659,16 @@ function scoreAnswer(context) {
   const contrastCue = contrastCueMismatchAdjustment(context, evidence.sort((a, b) => b.score - a.score));
   raw += contrastCue.adjustment;
   if (contrastCue.evidence) evidence.push(contrastCue.evidence);
+  if (context.config?.optionFamilyComparatorGuard) {
+    const optionFamilyComparator = optionFamilyComparatorAdjustment({ answer: context.answer, answers: context.answers, evidence });
+    raw += optionFamilyComparator.adjustment;
+    if (optionFamilyComparator.evidence) evidence.push(optionFamilyComparator.evidence);
+  }
+  if (context.config?.optionFamilyCompactComboGuard) {
+    const optionFamilyCompactCombo = optionFamilyCompactComboAdjustment({ question: context.question, answer: context.answer, evidence });
+    raw += optionFamilyCompactCombo.adjustment;
+    if (optionFamilyCompactCombo.evidence) evidence.push(optionFamilyCompactCombo.evidence);
+  }
   const excludedCondition = excludedConditionMismatchAdjustment(context, evidence.sort((a, b) => b.score - a.score));
   raw += excludedCondition.adjustment;
   if (excludedCondition.evidence) evidence.push(excludedCondition.evidence);

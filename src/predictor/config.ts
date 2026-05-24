@@ -21,6 +21,8 @@ export const DEFAULT_CONFIG = {
   singleTieSpecificityGap: 0.5,
   sharedMultiSegmentBoost: true,
   countRelationBoost: true,
+  optionFamilyComparatorGuard: true,
+  optionFamilyCompactComboGuard: true,
   topQuestionChunks: 28,
   evidenceLimit: 8,
 };

@@ -522,6 +522,22 @@ Outcome:
 - holdout stayed `484/580 = 0.8345`;
 - single stayed `0.8716`, multi stayed `0.7222`.
 
+## Iteration 85 Error Notes
+
+The latest error pass confirmed that broad recommendation-line support is still unsafe. It can fix isolated dev cases, but it over-trusts neighboring recommendations on holdout because many NMO PDFs place several valid-looking recommendations back-to-back.
+
+The retained improvements target option-family ambiguity instead:
+
+- simple comparator contradiction (`>N` vs `<N`) fixed one dev single-answer miss and did not change holdout;
+- compact abbreviation combinations (`A/B`, `A+B`) are now distinguished from alternatives only when both parts look like short non-unit abbreviations;
+- component slash doses (`90/400 мг`) no longer leak the right-hand dose into the first component.
+
+Current diagnostics after the retained changes:
+
+- dev `390/503 = 0.7753`, single `0.8367`, multi `0.6364`;
+- holdout `488/580 = 0.8414`, single `0.8784`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `23`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:
