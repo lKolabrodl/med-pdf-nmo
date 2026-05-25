@@ -8,6 +8,11 @@ const DOSE_DRUG_GENERIC = new Set(
     "\u0434\u043e\u0437\u0430",
     "\u0434\u043e\u0437\u044b",
     "\u0434\u043e\u0437\u0435",
+    "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u0435\u043c\u0430\u044f",
+    "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u0435\u043c\u044b\u0439",
+    "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443\u0435\u0442\u0441\u044f",
+    "\u043d\u0430\u0437\u043d\u0430\u0447\u0430\u0435\u0442\u0441\u044f",
+    "\u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435",
     "\u043f\u0440\u0438",
     "\u043b\u0435\u0447\u0435\u043d\u0438\u0438",
     "\u043b\u0435\u0447\u0435\u043d\u0438\u044f",
@@ -122,6 +127,22 @@ function doseNearDrugNumbers(sourceText, drugTokens) {
   return extractNumbers(local).slice(0, 2).map((number) => String(number).replace(",", "."));
 }
 
+function doseAssignedToDrugNumbers(sourceText, drugTokens) {
+  const normalized = normalizeForSearch(sourceText);
+  const out = [];
+  const dosePattern = /(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/giu;
+  for (const match of normalized.matchAll(dosePattern)) {
+    const index = match.index ?? 0;
+    if (normalized.slice(Math.max(0, index - 2), index).includes("/")) continue;
+    const afterWindow = normalized.slice(index + match[0].length, Math.min(normalized.length, index + match[0].length + 70));
+    const boundary = afterWindow.search(/[+.]|(?:^|\s)o\s|\s\d+(?:[.,]\d+)?\s*[\u0440p]\s*\/?\s*\u0434/u);
+    const after = boundary >= 0 ? afterWindow.slice(0, boundary) : afterWindow;
+    if (softCoverage(drugTokens, tokenizeNormalized(after)) < 0.8) continue;
+    out.push(normalizeDoseNumber(match[1]));
+  }
+  return out;
+}
+
 function normalizeDoseNumber(value) {
   return String(value ?? "").replace(",", ".").replace(/\.0$/u, "");
 }
@@ -142,8 +163,16 @@ function sourceDoseFacts(sourceText, drugTokens) {
   const normalized = normalizeForSearch(sourceText);
   const drugIndex = drugTokenIndex(normalized, drugTokens);
   if (drugIndex < 0) return [];
+  const assignedNumbers = doseAssignedToDrugNumbers(sourceText, drugTokens);
+  if (assignedNumbers.length) {
+    return assignedNumbers.map((number) => ({ dose: number, doseRange: null, frequency: null }));
+  }
   const local = normalized.slice(drugIndex, Math.min(normalized.length, drugIndex + 125));
   const facts = [];
+  const slashNumbers = doseSlashNumbers(sourceText, drugTokens);
+  if (slashNumbers.length) {
+    return slashNumbers.map((number) => ({ dose: normalizeDoseNumber(number), doseRange: null, frequency: null }));
+  }
   const dosePattern = /(\d+(?:[.,]\d+)?)(?:\s*-\s*(\d+(?:[.,]\d+)?))?\s*[\u006d\u043c]\u0433(?:\s*[\u0078\u0445]\s*(\d+(?:[.,]\d+)?))?/giu;
   for (const match of local.matchAll(dosePattern)) {
     const index = match.index ?? 0;
@@ -157,7 +186,7 @@ function sourceDoseFacts(sourceText, drugTokens) {
     });
     break;
   }
-  for (const number of [...doseSlashNumbers(sourceText, drugTokens), ...doseNearDrugNumbers(sourceText, drugTokens)]) {
+  for (const number of doseNearDrugNumbers(sourceText, drugTokens)) {
     facts.push({ dose: normalizeDoseNumber(number), doseRange: null, frequency: null });
   }
   return facts;

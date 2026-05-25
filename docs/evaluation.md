@@ -56,16 +56,16 @@ Command: `npm run eval`
 ```json
 {
   "total": 503,
-  "correct": 391,
-  "exactAccuracy": 0.7773,
-  "singleAccuracy": 0.8395,
+  "correct": 392,
+  "exactAccuracy": 0.7793,
+  "singleAccuracy": 0.8424,
   "multiExactAccuracy": 0.6364,
-  "macroAccuracyByPdf": 0.7841,
+  "macroAccuracyByPdf": 0.7857,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.801,
-  "avgConfidenceIncorrect": 0.6763,
+  "avgConfidenceCorrect": 0.8022,
+  "avgConfidenceIncorrect": 0.6764,
   "errorBuckets": {
-    "confused_with_distractor": 74,
+    "confused_with_distractor": 73,
     "multi_cardinality": 38
   },
   "skippedNoExpected": 0

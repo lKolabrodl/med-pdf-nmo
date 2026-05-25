@@ -457,3 +457,13 @@ Iteration 90 clinical course manifestation binding: KEPT, holdout +1.
 - Result vs iteration 89: dev zero-delta `391/503 = 0.7773`; holdout `492 -> 493/580 = 0.8500`; holdout single `0.8876 -> 0.8899`; multi unchanged `0.7292`.
 - Changed selected set: holdout `33-aorta#56` fixed `[A] -> [B]`. No dev selected sets changed.
 - Validation: `npm run typecheck`, `npm test`, `npm run eval`, `npm run eval:holdout`, and `npm run diagnostics` passed.
+
+Iteration 91 component-assigned dose binding: KEPT, dev +1, holdout zero-delta.
+
+- Theory 4 continuation: dose rows for combination drugs often use `N mg component + M mg component`. A number should support only the component named in the same local dose assignment, not every drug mentioned earlier in the row.
+- Attempt 1 added `N mg <drug>` assignment parsing, but it was too broad and treated the right side of slash doses (`90/400 mg`) as a standalone component dose. Holdout regressed, so the rule was narrowed.
+- Attempt 2 skipped numbers immediately after `/`, then returned slash-pair facts before ordinary standalone dose facts. This preserves the existing slash-order resolver for `A+B 100/400 mg` style rows.
+- Attempt 3 added local boundaries after the assigned dose: plus sign, sentence boundary, bullet-like `o`, and frequency forms like `1 r/d`. This prevents a dose from the previous drug/item from flowing into the next drug name in flattened PDF text.
+- Result vs iteration 90: dev `391 -> 392/503 = 0.7793`; holdout zero-delta `493/580 = 0.8500`; dev single `0.8395 -> 0.8424`; multi unchanged.
+- Changed selected set: dev `34-covid#42` fixed `[B] -> [A]`. No holdout selected sets changed.
+- Validation: `npm run typecheck`, `npm test`, `npm run eval`, `npm run eval:holdout`, and `npm run diagnostics` passed.

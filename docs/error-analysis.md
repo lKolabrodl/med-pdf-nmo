@@ -617,6 +617,23 @@ Current diagnostics after the retained change:
 - holdout `493/580 = 0.8500`, single `0.8899`, multi `0.7292`;
 - remaining holdout errors: recommendation block parser `35`, option-family resolver `21`, multi-set selection `19`.
 
+## Iteration 91 Error Notes
+
+The component-assigned dose parser fixed one dev dose miss without changing holdout selected sets. The important constraint is that `N mg component` assignment must not override slash-dose pairs or cross into the next list item/drug regimen.
+
+Retained form:
+
+- dose-question target extraction ignores generic words like `recommended`/`назначение`;
+- assigned-dose support reads `N mg <component>` only inside the local component span;
+- numbers immediately after `/` are ignored by this assigned-dose parser and left to the slash-dose resolver;
+- after-dose scanning stops at plus signs, sentence boundaries, bullet-like markers, and frequency forms such as `1 r/d`.
+
+Current diagnostics after the retained change:
+
+- dev `392/503 = 0.7793`, single `0.8424`, multi `0.6364`;
+- holdout `493/580 = 0.8500`, single `0.8899`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `21`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:
