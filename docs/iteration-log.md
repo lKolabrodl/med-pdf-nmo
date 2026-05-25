@@ -439,3 +439,11 @@ Iteration 88 definition exact-fragment binding: KEPT, dev +1, holdout +1.
 - Attempt 3 added term-label binding: the fragment label must match the question's primary definition token, with one-edit tolerance for OCR typos such as `Реиидив` vs `рецидив`. Generic label words such as `признак` are skipped so named signs bind to `Гизе`, `Зака`, `Преображенского`, etc.
 - Result vs iteration 87: dev `390 -> 391/503 = 0.7773`; holdout `490 -> 491/580 = 0.8466`; single dev `0.8367 -> 0.8395`; single holdout `0.8830 -> 0.8853`; multi unchanged.
 - Changed selected sets: dev `28-tanzilt#31` fixed `[A] -> [C]`; holdout `14-sarkoidoz#43` fixed `[C] -> [D]`.
+
+Iteration 89 definition completion specificity: KEPT, holdout +1.
+
+- Theory 2 continuation: in definition questions, options can be nested (`short definition` / `short + qualifier` / `short + qualifier + final condition`). Flat scoring can overvalue the shortest exact prefix.
+- Added `definition_completion_specificity` after base evidence is collected. It fires only for single-answer definition questions, only when the candidate already has strong definition evidence, and only when its normalized answer text contains one or more shorter alternatives.
+- Attempt rationale: this is a structural completeness signal, not a medical fact. It does not select a longer answer unless the document evidence already supports the answer family.
+- Result vs iteration 88: dev zero-delta `391/503 = 0.7773`; holdout `491 -> 492/580 = 0.8483`; holdout single `0.8853 -> 0.8876`; multi unchanged.
+- Changed selected set: holdout `14-sarkoidoz#41` fixed `[D] -> [C]`.

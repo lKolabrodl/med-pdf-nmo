@@ -2361,6 +2361,39 @@ function bestDefinitionExactAnswerSupport({ mode, pages, topQuestionPages, quest
   return best;
 }
 
+const DEFINITION_COMPLETION_EVIDENCE = new Set(["definition_exact_answer_segment", "term_definition_segment", "label_definition_segment"]);
+
+function definitionCompletionAdjustment({ mode, question, answer, answers, answerTokens }, evidence) {
+  if (mode !== "single" || !definitionQuestionLike(question)) return { adjustment: 0, evidence: null };
+  const definitionEvidence = evidence.find((item) => DEFINITION_COMPLETION_EVIDENCE.has(item.kind) && (item.score ?? 0) >= 18);
+  if (!definitionEvidence) return { adjustment: 0, evidence: null };
+  const answerNorm = normalizeForSearch(answer.text);
+  if (answerTokens.length < 5 || answerNorm.length < 32) return { adjustment: 0, evidence: null };
+
+  let contained = 0;
+  for (const candidate of answers) {
+    if (candidate.id === answer.id) continue;
+    const candidateNorm = normalizeForSearch(candidate.text);
+    if (candidateNorm.length < 18 || candidateNorm === answerNorm) continue;
+    const candidateTokens = uniqueTokens(candidate.text);
+    if (candidateTokens.length < 3 || candidateTokens.length >= answerTokens.length) continue;
+    if (answerNorm.includes(candidateNorm)) contained += 1;
+  }
+  if (!contained) return { adjustment: 0, evidence: null };
+
+  const adjustment = Math.min(5.0, contained * 2.4);
+  return {
+    adjustment,
+    evidence: {
+      answerId: answer.id,
+      page: definitionEvidence.page,
+      text: definitionEvidence.text,
+      score: Math.max(8.5, Math.min(14.5, definitionEvidence.score)),
+      kind: "definition_completion_specificity",
+    },
+  };
+}
+
 const FREQUENCY_POLARITY_HIGH_CUES = [
   "\u043d\u0430\u0438\u0431\u043e\u043b\u0435\u0435 \u0447\u0430\u0441\u0442",
   "\u0441\u0430\u043c\u043e\u0439 \u0447\u0430\u0441\u0442",
@@ -3953,6 +3986,9 @@ function scoreAnswer(context) {
     exactShortLabelRow,
     shortLabelRow,
   ].filter(Boolean);
+  const definitionCompletion = definitionCompletionAdjustment(context, evidence);
+  raw += definitionCompletion.adjustment;
+  if (definitionCompletion.evidence) evidence.push(definitionCompletion.evidence);
   const contrastCue = contrastCueMismatchAdjustment(context, evidence.sort((a, b) => b.score - a.score));
   raw += contrastCue.adjustment;
   if (contrastCue.evidence) evidence.push(contrastCue.evidence);
@@ -4130,6 +4166,7 @@ const CONFIDENCE_STRUCTURAL_KINDS = new Set([
   "label_number_proximity",
   "label_definition_segment",
   "definition_exact_answer_segment",
+  "definition_completion_specificity",
   "row_label_segment",
   "bounded_list_segment",
   "ordinal_list_segment",

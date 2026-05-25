@@ -590,6 +590,16 @@ Current diagnostics after the retained change:
 - holdout `491/580 = 0.8466`, single `0.8853`, multi `0.7292`;
 - remaining holdout errors: recommendation block parser `35`, option-family resolver `22`, multi-set selection `19`.
 
+## Iteration 89 Error Notes
+
+The definition completion adjustment fixed one more held-out nested-definition error. It is intentionally post-evidence and conservative: a longer answer is preferred only when it contains shorter alternatives and already has strong definition evidence.
+
+Current diagnostics after the retained change:
+
+- dev `391/503 = 0.7773`, single `0.8395`, multi `0.6364`;
+- holdout `492/580 = 0.8483`, single `0.8876`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `21`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:
