@@ -34,6 +34,7 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     drug_dose_segment: 0.9,
     frequency_polarity_segment: 0.9,
     frequency_polarity_list_item: 0.95,
+    clinical_course_cue_segment: 0.9,
     recommendation_item_segment: 0.85,
     explicit_recommendation_target_segment: 0.85,
     numeric_condition_less_than: 0.85,

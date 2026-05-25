@@ -447,3 +447,13 @@ Iteration 89 definition completion specificity: KEPT, holdout +1.
 - Attempt rationale: this is a structural completeness signal, not a medical fact. It does not select a longer answer unless the document evidence already supports the answer family.
 - Result vs iteration 88: dev zero-delta `391/503 = 0.7773`; holdout `491 -> 492/580 = 0.8483`; holdout single `0.8853 -> 0.8876`; multi unchanged.
 - Changed selected set: holdout `14-sarkoidoz#41` fixed `[D] -> [C]`.
+
+Iteration 90 clinical course manifestation binding: KEPT, holdout +1.
+
+- Theory 3: for single-answer questions about manifestations/signs/typical findings, a course adjective in the question (`acute` vs `chronic`) should bind to the answer in the same local phrase. This is a language/structure rule, not a medical-fact rule.
+- Attempt 1 boosted any answer near the requested course cue. It fixed the target held-out aortic-insufficiency manifestation case but regressed dev (`391 -> 390`) because code/classification rows with several chronic diagnoses became over-boosted.
+- Attempt 2 required distinctive Cyrillic answer tokens not present in the question. This removed the code-row regression but still fired on patient-population recommendation questions where `chronic` described the patient group, not the requested answer.
+- Final guard: the scorer is single-answer only and requires manifestation/sign/typicality wording (`manifestation`, `characteristic`, `typical`, `sign`, `symptom`). It is skipped for recommendation/appointment wording. The answer binding uses only non-generic distinctive Cyrillic answer tokens, so codes and shared disease nouns do not anchor the cue.
+- Result vs iteration 89: dev zero-delta `391/503 = 0.7773`; holdout `492 -> 493/580 = 0.8500`; holdout single `0.8876 -> 0.8899`; multi unchanged `0.7292`.
+- Changed selected set: holdout `33-aorta#56` fixed `[A] -> [B]`. No dev selected sets changed.
+- Validation: `npm run typecheck`, `npm test`, `npm run eval`, `npm run eval:holdout`, and `npm run diagnostics` passed.

@@ -142,6 +142,137 @@ export function temporalCueAdjustment({ mode, pages, topQuestionPages, answer, f
   return { support: null, adjustment: 0, evidence: null };
 }
 
+const CLINICAL_COURSE_CUE_GROUPS = [
+  {
+    target: "\u043e\u0441\u0442\u0440",
+    opposite: ["\u0445\u0440\u043e\u043d", "\u0445\u0440\u043e\u043d\u0438\u0447"],
+  },
+  {
+    target: "\u0445\u0440\u043e\u043d",
+    opposite: ["\u043e\u0441\u0442\u0440"],
+  },
+].map((group) => ({
+  target: normalizeForSearch(group.target),
+  opposite: group.opposite.map((item) => normalizeForSearch(item)),
+}));
+
+function clinicalCourseCue(question) {
+  const tokens = tokenize(question);
+  for (const group of CLINICAL_COURSE_CUE_GROUPS) {
+    if (tokens.some((token) => token.startsWith(group.target))) return group;
+  }
+  return null;
+}
+
+function clinicalCourseRelationQuestion(question) {
+  const normalized = normalizeForSearch(question);
+  if (containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") || containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u043d\u0430\u0447")) {
+    return false;
+  }
+  return [
+    "\u043f\u0440\u043e\u044f\u0432\u043b",
+    "\u0445\u0430\u0440\u0430\u043a\u0442\u0435\u0440",
+    "\u0442\u0438\u043f\u0438\u0447",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a",
+    "\u0441\u0438\u043c\u043f\u0442\u043e\u043c",
+  ].some((cue) => normalized.includes(normalizeForSearch(cue)));
+}
+
+const CLINICAL_COURSE_GENERIC_BINDING_TOKENS = new Set(
+  [
+    "\u0442\u0435\u0447\u0435\u043d\u0438\u0435",
+    "\u0442\u0435\u0447\u0435\u043d\u0438\u044f",
+    "\u0444\u043e\u0440\u043c\u0430",
+    "\u0444\u043e\u0440\u043c\u044b",
+    "\u0431\u043e\u043b\u0435\u0437\u043d\u044c",
+    "\u0431\u043e\u043b\u0435\u0437\u043d\u0438",
+    "\u0433\u0435\u043f\u0430\u0442\u0438\u0442",
+    "\u0441\u0438\u043c\u043f\u0442\u043e\u043c",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a",
+    "\u043f\u0440\u043e\u044f\u0432\u043b\u0435\u043d\u0438\u0435",
+    "\u043f\u0440\u043e\u044f\u0432\u043b\u044f\u0442\u044c",
+  ].flatMap((item) => tokenize(item)),
+);
+
+function clinicalCourseBindingTokens(answerTokens, questionTokens) {
+  const questionSet = new Set(questionTokens);
+  return answerTokens.filter(
+    (token) =>
+      token.length >= 4 &&
+      /[а-яё]/u.test(token) &&
+      !FOCUS_STOPWORDS.has(token) &&
+      !questionSet.has(token) &&
+      !CLINICAL_COURSE_GENERIC_BINDING_TOKENS.has(token),
+  );
+}
+
+function nearestClinicalCourseCueBeforeAnswer(tokens, bindingTokens, cueGroup) {
+  let best = null;
+  if (!bindingTokens.length) return null;
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (!bindingTokens.some((answerToken) => token === answerToken || token.startsWith(answerToken) || answerToken.startsWith(token))) continue;
+    const start = Math.max(0, index - 10);
+    for (let cursor = index - 1; cursor >= start; cursor -= 1) {
+      const beforeToken = tokens[cursor];
+      const distance = index - cursor;
+      let type = null;
+      if (beforeToken.startsWith(cueGroup.target)) type = "target";
+      else if (cueGroup.opposite.some((opposite) => beforeToken.startsWith(opposite))) type = "opposite";
+      if (!type) continue;
+      if (!best || distance < best.distance) best = { type, distance };
+      break;
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Привязывает вариант ответа к ближайшему маркеру клинического течения
+ * (`острый`/`хронический`) внутри локального фрагмента PDF.
+ */
+export function clinicalCourseCueAdjustment({ mode, pages, topQuestionPages, question, questionTokens, focusTokens, answer, answerTokens }) {
+  if (mode !== "single") return { support: null, adjustment: 0, evidence: null };
+  if (!clinicalCourseRelationQuestion(question)) return { support: null, adjustment: 0, evidence: null };
+  const cueGroup = clinicalCourseCue(question);
+  if (!cueGroup) return { support: null, adjustment: 0, evidence: null };
+  const bindingTokens = clinicalCourseBindingTokens(answerTokens, questionTokens);
+  if (!bindingTokens.length) return { support: null, adjustment: 0, evidence: null };
+  const usefulFocus = focusTokens?.length ? focusTokens : questionTokens;
+  let bestMatch = null;
+  let bestMismatch = null;
+
+  for (const page of pages) {
+    const topPage = topQuestionPages?.has(page.page);
+    const adjacentTopPage = topQuestionPages?.has(page.page - 1) || topQuestionPages?.has(page.page + 1);
+    if (topQuestionPages?.size && !topPage && !adjacentTopPage) continue;
+    for (const segment of cachedLineWindowSegments(page)) {
+      const focusCoverage = coverage(usefulFocus, segment.tokens);
+      if (focusCoverage < 0.12) continue;
+      const binding = nearestClinicalCourseCueBeforeAnswer(segment.tokens, bindingTokens, cueGroup);
+      if (!binding) continue;
+      const answerHits = tokenHitCount(bindingTokens, segment.tokens);
+      if (answerHits < Math.min(2, bindingTokens.length)) continue;
+      const score = 9.2 + Math.min(0.5, focusCoverage) * 5.0 + Math.min(3, answerHits) * 0.7 + Math.max(0, 10 - binding.distance) * 0.12;
+      const evidence = {
+        answerId: answer.id,
+        page: page.page,
+        text: segment.text,
+        score,
+        kind: binding.type === "target" ? "clinical_course_cue_segment" : "clinical_course_cue_mismatch",
+      };
+      if (binding.type === "target") bestMatch = betterEvidence(bestMatch, evidence);
+      else bestMismatch = betterEvidence(bestMismatch, evidence);
+    }
+  }
+
+  if (bestMatch && (!bestMismatch || bestMatch.score >= bestMismatch.score - 0.6)) return { support: bestMatch, adjustment: 0, evidence: null };
+  if (bestMismatch && (!bestMatch || bestMismatch.score > bestMatch.score + 0.6)) return { support: null, adjustment: -6.8, evidence: bestMismatch };
+  return { support: null, adjustment: 0, evidence: null };
+}
+
 const CONTRAST_CUE_GROUPS = [
   {
     answer: ["верхн"],

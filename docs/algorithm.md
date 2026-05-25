@@ -143,7 +143,7 @@ The predictor returns machine-readable JSON:
 - `definition_exact_answer_segment` in `src/predictor.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
 - `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item scorer.
 - `src/predictor/scorers/fibrosis-stage.ts`: fibrosis/METAVIR stage row scorer.
-- `src/predictor/scorers/direction.ts`: polarity, temporal day/night, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
+- `src/predictor/scorers/direction.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
 - `src/predictor/scorers/numeric.ts`: cloze-gap, condition-pair, exact-numeric/hour option, condition/numeric-condition, and count-relation scorers.
 - `src/predictor/scorers/option-family.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
 - `src/predictor/types.ts`: answer/evidence score contracts.

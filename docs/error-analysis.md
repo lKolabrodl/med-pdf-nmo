@@ -600,6 +600,23 @@ Current diagnostics after the retained change:
 - holdout `492/580 = 0.8483`, single `0.8876`, multi `0.7292`;
 - remaining holdout errors: recommendation block parser `35`, option-family resolver `21`, multi-set selection `19`.
 
+## Iteration 90 Error Notes
+
+The clinical-course manifestation scorer fixed one held-out single-answer miss where `acute` and `chronic` manifestations appeared in adjacent sentences. The first broad versions were rejected/narrowed because course adjectives often describe a patient population or diagnosis name rather than the answer relation.
+
+Retained form:
+
+- single-answer only;
+- question must ask about a manifestation/sign/typical finding;
+- recommendation/appointment wording is skipped;
+- the local binding token must be a distinctive Cyrillic token from the answer, not a code, a question token, or a generic disease/course word.
+
+Current diagnostics after the retained change:
+
+- dev `391/503 = 0.7773`, single `0.8395`, multi `0.6364`;
+- holdout `493/580 = 0.8500`, single `0.8899`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `21`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:

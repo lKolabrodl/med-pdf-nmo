@@ -56,17 +56,17 @@ Command: `npm run eval`
 ```json
 {
   "total": 503,
-  "correct": 386,
-  "exactAccuracy": 0.7674,
-  "singleAccuracy": 0.8281,
-  "multiExactAccuracy": 0.6299,
-  "macroAccuracyByPdf": 0.7715,
+  "correct": 391,
+  "exactAccuracy": 0.7773,
+  "singleAccuracy": 0.8395,
+  "multiExactAccuracy": 0.6364,
+  "macroAccuracyByPdf": 0.7841,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.7952,
-  "avgConfidenceIncorrect": 0.6704,
+  "avgConfidenceCorrect": 0.801,
+  "avgConfidenceIncorrect": 0.6763,
   "errorBuckets": {
-    "confused_with_distractor": 77,
-    "multi_cardinality": 40
+    "confused_with_distractor": 74,
+    "multi_cardinality": 38
   },
   "skippedNoExpected": 0
 }
@@ -81,17 +81,17 @@ The command returned exit code `0` because the acceptance target was met.
 ```json
 {
   "total": 580,
-  "correct": 482,
-  "exactAccuracy": 0.831,
-  "singleAccuracy": 0.867,
-  "multiExactAccuracy": 0.7222,
-  "macroAccuracyByPdf": 0.8269,
+  "correct": 493,
+  "exactAccuracy": 0.85,
+  "singleAccuracy": 0.8899,
+  "multiExactAccuracy": 0.7292,
+  "macroAccuracyByPdf": 0.8457,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.8154,
-  "avgConfidenceIncorrect": 0.6919,
+  "avgConfidenceCorrect": 0.8209,
+  "avgConfidenceIncorrect": 0.6777,
   "errorBuckets": {
-    "confused_with_distractor": 67,
-    "multi_cardinality": 31
+    "confused_with_distractor": 55,
+    "multi_cardinality": 32
   },
   "skippedNoExpected": 0
 }
@@ -102,20 +102,22 @@ Holdout by PDF:
 | PDF group | accuracy |
 | --- | ---: |
 | `06-co-toksic` | 0.8571 |
-| `11-mening` | 0.8571 |
-| `14-sarkoidoz` | 0.8625 |
-| `17-gepatit` | 0.8571 |
+| `11-mening` | 0.8857 |
+| `14-sarkoidoz` | 0.9000 |
+| `17-gepatit` | 0.8714 |
 | `18-gepatitabc` | 0.8143 |
-| `19-gepatitc` | 0.7800 |
+| `19-gepatitc` | 0.8400 |
 | `23-nimana` | 0.8429 |
-| `33-aorta` | 0.7714 |
+| `33-aorta` | 0.8000 |
 | `43-anomali` | 0.8000 |
 
 ## Current All 44 PDF Groups
 
-Combining train, dev, and holdout diagnostic runs gives `1969/2680 = 0.7347` exact accuracy across all answer-keyed cases (`73.47%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1969/2697 = 0.7301`.
+The full all-group snapshot below predates the latest dev/holdout-only iterations. Use the "Final Dev Result" and "Final Holdout Result" sections above for current acceptance numbers.
 
-Latest split percentages:
+Combining that older train, dev, and holdout diagnostic run gives `1969/2680 = 0.7347` exact accuracy across all answer-keyed cases (`73.47%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1969/2697 = 0.7301`.
+
+Snapshot split percentages:
 
 | split | correct / total | exact accuracy |
 | --- | ---: | ---: |

@@ -34,6 +34,7 @@ import { bestFocusedSupport, bestLineTokenSupport, cachedLineTokenSegments, ques
 import { bestRecommendationItemSupport, explicitRecommendationTargetAdjustment } from "./predictor/scorers/recommendation-item.js";
 import { optionFamilyCompactComboAdjustment, optionFamilyComparatorAdjustment } from "./predictor/scorers/option-family.js";
 import {
+  clinicalCourseCueAdjustment,
   contrastCueMismatchAdjustment,
   excludedConditionMismatchAdjustment,
   polarityAdjustment,
@@ -3782,6 +3783,7 @@ function scoreAnswer(context) {
   const chunk = bestChunkSupport(context);
   const polarity = polarityAdjustment(context);
   const temporal = temporalCueAdjustment(context);
+  const clinicalCourseCue = clinicalCourseCueAdjustment(context);
   const conditionPair = conditionPairAdjustment(context);
   const riskCondition = riskConditionAdjustment(context);
   const genericPopulation = genericPopulationConditionAdjustmentForMode(context);
@@ -3853,6 +3855,8 @@ function scoreAnswer(context) {
     polarity.adjustment +
     (temporal.support?.score ?? 0) * 1.0 +
     temporal.adjustment +
+    (clinicalCourseCue.support?.score ?? 0) * 1.05 +
+    clinicalCourseCue.adjustment +
     conditionPair.adjustment +
     riskCondition.adjustment +
     genericPopulation.adjustment +
@@ -3931,6 +3935,8 @@ function scoreAnswer(context) {
     polarity.evidence,
     temporal.support,
     temporal.evidence,
+    clinicalCourseCue.support,
+    clinicalCourseCue.evidence,
     conditionPair.evidence,
     riskCondition.evidence,
     genericPopulation.evidence,
@@ -4173,6 +4179,7 @@ const CONFIDENCE_STRUCTURAL_KINDS = new Set([
   "drug_dose_segment",
   "frequency_polarity_segment",
   "frequency_polarity_list_item",
+  "clinical_course_cue_segment",
   "recommendation_item_segment",
   "explicit_recommendation_target_segment",
   "numeric_condition_less_than",
