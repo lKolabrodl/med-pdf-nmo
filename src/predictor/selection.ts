@@ -26,6 +26,7 @@ const STRUCTURAL_EVIDENCE_WEIGHTS = new Map(
     classification_code_segment: 1.15,
     label_number_proximity: 1.0,
     label_definition_segment: 1.0,
+    definition_exact_answer_segment: 1.0,
     row_label_segment: 0.95,
     bounded_list_segment: 0.95,
     ordinal_list_segment: 0.9,

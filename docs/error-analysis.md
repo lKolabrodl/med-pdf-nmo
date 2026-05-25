@@ -568,6 +568,28 @@ Current diagnostics after the retained change:
 - holdout `490/580 = 0.8448`, single `0.8830`, multi `0.7292`;
 - remaining holdout errors: recommendation block parser `35`, option-family resolver `23`, multi-set selection `19`.
 
+## Iteration 88 Error Notes
+
+The definition exact-fragment scorer reduced both dev and holdout errors by one without changing multi-answer behavior. The key constraint is term-label binding: exact answer text alone is not safe when adjacent definitions sit in the same extracted line-window.
+
+Rejected sub-attempts:
+
+- whole-window exact-definition support caused neighboring-definition leakage;
+- fragment-only exact-definition support still overmatched generic labels like `Признак`.
+
+Retained form:
+
+- split definition evidence into sentence/semicolon fragments;
+- require the fragment label to match the question's primary definition term;
+- allow one edit in that label to absorb OCR noise;
+- skip generic definition labels such as `признак`.
+
+Current diagnostics after the retained change:
+
+- dev `391/503 = 0.7773`, single `0.8395`, multi `0.6364`;
+- holdout `491/580 = 0.8466`, single `0.8853`, multi `0.7292`;
+- remaining holdout errors: recommendation block parser `35`, option-family resolver `22`, multi-set selection `19`.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:

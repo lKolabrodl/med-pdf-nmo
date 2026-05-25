@@ -430,3 +430,12 @@ Iteration 87 frequency-polarity list-heading binding: KEPT, holdout +1.
 - Added `frequency_polarity_list_item` for single-answer questions only. It requires a heading line with the same frequency polarity as the question, optional focus-token support in the heading, and an exact answer phrase in one of the immediately following bullet/list lines. The list can continue onto the next page, but stops at the first non-list line after items begin.
 - Result vs iteration 86: dev zero-delta `390/503 = 0.7753`; holdout `489 -> 490/580 = 0.8448`; holdout single `0.8807 -> 0.8830`; holdout multi unchanged `0.7292`.
 - Changed selected set: `11-mening#54` fixed from `[B]` to `[D]`. No dev selected sets changed.
+
+Iteration 88 definition exact-fragment binding: KEPT, dev +1, holdout +1.
+
+- Theory 2: definition questions often have the full answer phrase in a local `X это ...` / `Под X понимают ...` / dash-definition row, but flat retrieval can prefer a neighboring definition.
+- Attempt 1 added exact-answer support inside definition-like windows. It fixed one held-out case but broke another because a line-window contained two adjacent definitions.
+- Attempt 2 split definition windows into sentence-like fragments by `.`, `!`, `?`, and `;`. This reduced neighboring-definition leakage but still treated generic `Признак` as the primary label for named signs.
+- Attempt 3 added term-label binding: the fragment label must match the question's primary definition token, with one-edit tolerance for OCR typos such as `Реиидив` vs `рецидив`. Generic label words such as `признак` are skipped so named signs bind to `Гизе`, `Зака`, `Преображенского`, etc.
+- Result vs iteration 87: dev `390 -> 391/503 = 0.7773`; holdout `490 -> 491/580 = 0.8466`; single dev `0.8367 -> 0.8395`; single holdout `0.8830 -> 0.8853`; multi unchanged.
+- Changed selected sets: dev `28-tanzilt#31` fixed `[A] -> [C]`; holdout `14-sarkoidoz#43` fixed `[C] -> [D]`.

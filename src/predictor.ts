@@ -2242,6 +2242,125 @@ function bestTermDefinitionSupport({ pages, question, answer, answerTokens }) {
   return best;
 }
 
+function definitionQuestionLike(question: string) {
+  const normalized = normalizeForSearch(question);
+  return (
+    questionDefinitionTerm(question) ||
+    containsNormalizedPhrase(normalized, "\u044d\u0442\u043e") ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043d\u0438\u043c\u0430") ||
+    containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u044b\u0432\u0430")
+  );
+}
+
+function definitionCueWindow(normalized: string) {
+  return (
+    containsNormalizedPhrase(normalized, "\u044d\u0442\u043e") ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043d\u0438\u043c\u0430") ||
+    containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u044b\u0432\u0430") ||
+    /(?:^|\s)[a-z\u0430-\u044f]{4,}\s+[-\u2013\u2014]\s+/iu.test(normalized)
+  );
+}
+
+function definitionExactFragments(text: string) {
+  const fragments = String(text ?? "")
+    .split(/(?<=[.!?;])\s+/u)
+    .map((item) => item.trim())
+    .filter((item) => item.length >= 20);
+  return fragments.length ? fragments : [String(text ?? "")];
+}
+
+const DEFINITION_TERM_GENERIC_TOKENS = new Set(
+  [
+    "\u043f\u043e\u0434",
+    "\u043f\u043e\u043d\u0438\u043c\u0430\u044e\u0442",
+    "\u043f\u043e\u043d\u0438\u043c\u0430\u0435\u0442\u0441\u044f",
+    "\u044d\u0442\u043e",
+    "\u0441\u0447\u0438\u0442\u0430\u0435\u0442\u0441\u044f",
+    "\u043f\u0440\u0438\u0437\u043d\u0430\u043a",
+  ].flatMap((item) => uniqueTokens(item)),
+);
+
+function primaryDefinitionTermToken(question: string) {
+  const term = questionDefinitionTerm(question);
+  const tokens = uniqueTokens(term ?? question).filter((token) => token.length >= 4 && !DEFINITION_TERM_GENERIC_TOKENS.has(token));
+  return tokens[0] ?? "";
+}
+
+function editDistanceAtMostOne(left: string, right: string) {
+  if (left === right) return true;
+  if (Math.abs(left.length - right.length) > 1) return false;
+  let edits = 0;
+  let i = 0;
+  let j = 0;
+  while (i < left.length && j < right.length) {
+    if (left[i] === right[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (left.length > right.length) i += 1;
+    else if (right.length > left.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  return edits + (left.length - i) + (right.length - j) <= 1;
+}
+
+function definitionFragmentMatchesQuestionTerm(fragmentTokens: string[], primaryTerm: string) {
+  if (!primaryTerm) return true;
+  const cueIndex = fragmentTokens.findIndex((token) => token === normalizeForSearch("\u044d\u0442\u043e"));
+  const labelTokens = fragmentTokens.slice(0, cueIndex >= 0 ? cueIndex : Math.min(3, fragmentTokens.length));
+  return labelTokens.some((token) => token.length >= 4 && editDistanceAtMostOne(token, primaryTerm));
+}
+
+/**
+ * Поддерживает definition-вопросы, когда полный вариант ответа найден рядом с
+ * `это`/`понимают`/тире-определением. Это помогает пережить OCR-ошибку в самом
+ * термине, но не читает медицинский факт из датасета.
+ */
+function bestDefinitionExactAnswerSupport({ mode, pages, topQuestionPages, question, answer, answerTokens }) {
+  if (mode !== "single" || !definitionQuestionLike(question)) return null;
+  const answerPhrases = answerSearchPhrases(answer.text).slice(0, 12);
+  const primaryTerm = primaryDefinitionTermToken(question);
+  let best = null;
+
+  for (const page of pages) {
+    if (
+      topQuestionPages?.size &&
+      !topQuestionPages.has(page.page) &&
+      !topQuestionPages.has(page.page - 1) &&
+      !topQuestionPages.has(page.page + 1)
+    ) {
+      continue;
+    }
+    for (const source of cachedLineWindowSegments(page)) {
+      for (const fragment of definitionExactFragments(source.text)) {
+        const normalized = normalizeForSearch(fragment);
+        if (!definitionCueWindow(normalized)) continue;
+        const fragmentTokens = tokenizeNormalized(normalized);
+        if (!definitionFragmentMatchesQuestionTerm(fragmentTokens, primaryTerm)) continue;
+        const phraseHit = answerPhrases.some((phrase) => containsNormalizedPhrase(normalized, phrase));
+        const answerCoverage = strictSoftCoverage(answerTokens, fragmentTokens);
+        if (!phraseHit || answerCoverage < 0.72) continue;
+        const score = 15.2 + answerCoverage * 6.0 + numberCoverage(answer.text, normalized) * 0.8;
+        best = betterEvidence(best, {
+          answerId: answer.id,
+          page: page.page,
+          text: fragment,
+          score,
+          kind: "definition_exact_answer_segment",
+        });
+      }
+    }
+  }
+
+  return best;
+}
+
 const FREQUENCY_POLARITY_HIGH_CUES = [
   "\u043d\u0430\u0438\u0431\u043e\u043b\u0435\u0435 \u0447\u0430\u0441\u0442",
   "\u0441\u0430\u043c\u043e\u0439 \u0447\u0430\u0441\u0442",
@@ -3647,6 +3766,7 @@ function scoreAnswer(context) {
   const ageEligibility = ageEligibilityAdjustment(context);
   const drugDose = bestDrugDoseSupport(context);
   const termDefinition = bestTermDefinitionSupport(context);
+  const definitionExactAnswer = bestDefinitionExactAnswerSupport(context);
   const frequencyPolarity = bestFrequencyPolaritySupport(context);
   const negatedAnswerPrefix = negatedAnswerPrefixAdjustment(context);
   const impossibilityOnly = impossibilityOnlyAdjustment(context);
@@ -3719,6 +3839,7 @@ function scoreAnswer(context) {
     ageEligibility.adjustment +
     (drugDose?.score ?? 0) * 1.15 +
     (termDefinition?.score ?? 0) * 1.15 +
+    (definitionExactAnswer?.score ?? 0) * 1.12 +
     (frequencyPolarity?.score ?? 0) * 1.08 +
     negatedAnswerPrefix.adjustment +
     impossibilityOnly.adjustment +
@@ -3796,6 +3917,7 @@ function scoreAnswer(context) {
     ageEligibility.evidence,
     drugDose,
     termDefinition,
+    definitionExactAnswer,
     frequencyPolarity,
     negatedAnswerPrefix.evidence,
     impossibilityOnly.evidence,
@@ -4007,6 +4129,7 @@ const CONFIDENCE_STRUCTURAL_KINDS = new Set([
   "classification_code_segment",
   "label_number_proximity",
   "label_definition_segment",
+  "definition_exact_answer_segment",
   "row_label_segment",
   "bounded_list_segment",
   "ordinal_list_segment",
