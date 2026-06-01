@@ -660,6 +660,25 @@ Current diagnostics after the retained change:
 
 Next recommendation-block work should target either single-answer condition binding inside a recommendation item, or multi item boundary/contrast cleanup. Broad single recommendation boosts are now known to be unsafe.
 
+## Iteration 94 Error Notes
+
+The abbreviation-list alias layer fixes a real structural miss: a content sentence can use only an abbreviation while the full answer phrase is defined earlier in `Список сокращений`. The retained form is intentionally narrow:
+
+- use the abbreviation list as a document-specific dictionary only;
+- strip service ATC-code parentheticals from abbreviation entries;
+- do not score the abbreviation-list page itself as clinical evidence;
+- apply only to multi-answer questions;
+- ignore two-character aliases and generic reverse matches such as `с-м = синдром`;
+- reduce raw contribution when the answer already has strong literal evidence.
+
+Current metrics after the retained change:
+
+- dev `395/503 = 0.7853`, single `0.8424`, multi `0.6558`;
+- holdout `494/580 = 0.8517`, single `0.8899`, multi `0.7361`;
+- target `46-yazva#8` now selects `[A, B, C]`.
+
+The useful holdout change is `43-anomali#30`, where abbreviation/list context helps recover the missing multi member. Two changed holdout cases remain wrong but do not reduce exact accuracy. The main remaining error classes are still multi set selection and option-family boundaries rather than PDF abbreviation extraction.
+
 ## Iteration 73 Inline Parenthetical Group Notes
 
 The Helicobacter enzyme case was not a retrieval miss. The predictor found the exact sentence:

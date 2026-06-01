@@ -20,6 +20,7 @@ import {
 import { bestDrugDoseSupport } from "./predictor/scorers/drug-dose.js";
 import { bestExactAnswerSupport } from "./predictor/scorers/exact-answer.js";
 import { bestFibrosisStageSupport } from "./predictor/scorers/fibrosis-stage.js";
+import { bestAbbreviationAliasSupport } from "./predictor/scorers/abbreviation-alias.js";
 import { bestFrequencyRecommendationSupport, frequencyAnswer, frequencySearchPhrases } from "./predictor/scorers/frequency.js";
 import { bestGeneSentenceSupport, bestLatinFuzzySupport, geneMutationQuestion, latinAnswerTokens, sentenceSegments } from "./predictor/scorers/biomedical-symbols.js";
 import {
@@ -3255,7 +3256,8 @@ function addSharedMultiSegmentSupport(answerScores, intent, question) {
     if (!best) return item;
     const minPriorRatio = topRaw < 10 ? 0.48 : 0.38;
     if (item.raw < topRaw * minPriorRatio) return item;
-    const supportRatio = topRaw < 13 ? 0.96 : best.score >= 12 ? 0.82 : 0.76;
+    const hasAbbreviationAlias = item.evidence.some((evidenceItem) => evidenceItem.kind === "abbreviation_alias_window");
+    const supportRatio = hasAbbreviationAlias ? 0.455 : topRaw < 13 ? 0.96 : best.score >= 12 ? 0.82 : 0.76;
     const boostedRaw = Math.max(item.raw, topRaw * supportRatio);
     if (boostedRaw <= item.raw + 0.05) return item;
     return { ...item, raw: boostedRaw, evidence: [...item.evidence, best] };
@@ -3834,6 +3836,7 @@ function scoreAnswer(context) {
   const parentheticalGroup = bestParentheticalGroupSupport(context);
   const questionContinuationList = bestQuestionContinuationListSupport(context);
   const shortMedicalAlias = bestShortMedicalAliasSupport(context);
+  const abbreviationAlias = bestAbbreviationAliasSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
   const clinicalFeature = clinicalFeatureAdjustment(context);
@@ -3850,6 +3853,8 @@ function scoreAnswer(context) {
   const focusedWeight = context.mode === "multi" ? 0.15 : 0.9;
   const lineTokenWeight = context.mode === "single" ? 0.85 : 0;
   const latinFuzzyWeight = context.mode === "multi" && polarity.evidence?.kind !== "polarity_mismatch" ? 1.15 : 0;
+  const abbreviationAliasWeight =
+    Math.max(chunk?.score ?? 0, phrase?.score ?? 0, focused?.score ?? 0, exactAnswer?.score ?? 0) >= 8.8 ? 0.04 : 0.23;
   let raw =
     (anchor?.score ?? 0) * 1.35 +
     (section?.score ?? 0) * 1.2 +
@@ -3911,6 +3916,7 @@ function scoreAnswer(context) {
     (parentheticalGroup?.score ?? 0) * 1.16 +
     (questionContinuationList?.score ?? 0) * 1.1 +
     (shortMedicalAlias?.score ?? 0) * 0.35 +
+    (abbreviationAlias?.score ?? 0) * abbreviationAliasWeight +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
     (geneSentence?.score ?? 0) * 1.18 +
     (clinicalFeature.support?.score ?? 0) * 1.12 +
@@ -3992,6 +3998,7 @@ function scoreAnswer(context) {
     parentheticalGroup,
     questionContinuationList,
     shortMedicalAlias,
+    abbreviationAlias,
     latinFuzzy,
     geneSentence,
     clinicalFeature.support,
@@ -4086,6 +4093,7 @@ export async function predict(input, options: any = {}) {
     const answerTokens = uniqueTokens(answer.text);
     const result = scoreAnswer({
       pages: runtime.pdfText.pages,
+      pdfText: runtime.pdfText,
       chunks: runtime.chunks,
       index: runtime.index,
       config,

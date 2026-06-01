@@ -488,3 +488,19 @@ Iteration 93 multi recommendation-block item binding: KEPT, dev +3, holdout zero
 - Selected-set comparison vs accepted artifacts: dev changed `4` cases (`3` fixed, `1` still wrong), holdout changed `1` case (still wrong).
 - Current diagnostics: dev errors `111 -> 108`, dev recommendation bucket `25 -> 22`; holdout errors unchanged `87`.
 - Validation: `npm run typecheck`, `npm test`, `npm run eval`, `npm run eval:holdout`, and `npm run diagnostics` passed.
+
+Iteration 94 document abbreviation-list alias binding: KEPT, holdout +1 and target case fixed.
+
+- Trigger: the `46-yazva#8` target case had the clinical sentence `антациды, блокаторы H2... и ИПН`, while the full answer phrase `ингибиторы протонного насоса` appeared in `Список сокращений` as `ИПН – ингибиторы протонного насоса (Код АТХ: A02BC01)`. This is a general PDF structure issue, not a question-specific fact.
+- Extraction pass: real abbreviation-list blocks are detected only when a `Список сокращений`-like heading is followed by multiple abbreviation entries. Service ATC parentheticals such as `(Код АТХ: A02BC01)` are stripped, including split-line leftovers like trailing `(Код` / next-line `АТХ: ...)`.
+- Scorer: `abbreviation_alias_window` uses the extracted `{abbr, expansion}` as a document-specific alias. It fires only for multi-answer questions, only outside the glossary source page, and only when the abbreviation occurrence has enough local question-context support.
+- Rejected broad forms during the iteration:
+  - single-answer alias support: regressed `15-toxic#6`, where `ЭНМГ` and `ИПН`-style synonym variants were both valid textually but the dataset expected one concrete answer form;
+  - glossary-page evidence: it boosted answers from the abbreviation list itself instead of clinical content;
+  - reverse substring matching (`с-м = синдром` supporting every `синдром X`): it over-selected syndrome distractors;
+  - very short aliases and soft coverage: `АВК = антагонисты витамина К` accidentally supported `КТ коронарографии`, so alias matching now requires exact expansion containment or strict token coverage with enough informative tokens.
+- Interaction guard: when an answer already has strong ordinary literal evidence, alias evidence receives only a small raw contribution. This prevents a correct but already-found option from becoming so dominant that multi-selection drops another correct neighbor.
+- Targeted result: `46-yazva#8` changed from `[A, C]` to `[A, B, C]`.
+- Result vs iteration 93: dev unchanged `395/503 = 0.7853`, single `0.8424`, multi `0.6558`; holdout `493 -> 494/580 = 0.8517`, holdout single unchanged `0.8899`, holdout multi `0.7292 -> 0.7361`.
+- Selected-set comparison vs accepted artifacts: dev changed `4` cases (`3` fixed, `1` still wrong), holdout changed `3` cases (`1` fixed, `2` still wrong).
+- Validation: `npm run typecheck`, `npm test`, `npm run eval`, and `npm run eval:holdout` passed.

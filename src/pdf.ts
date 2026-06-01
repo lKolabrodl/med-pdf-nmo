@@ -158,12 +158,32 @@ const TOC_HEADING = /^(содержание|оглавление)\b/;
 // в обычном тексте как выноска не встречаются. Одиночное «…» в прозе не опасно:
 // удаление включается только для плотного блока таких строк в начале документа.
 const TOC_LEADER = /\.(\s?\.){3,}|…/;
+const ABBREVIATION_HEADING = /^(?:список\s+сокращ(?:ений|ения)?|перечень\s+сокращ(?:ений|ения)?|условные\s+сокращения)\b/iu;
+const ABBREVIATION_STOP_HEADING =
+  /^(?:термины\b|термины\s+и\s+определения\b|\d+(?:\.\d+)*\.?\s+|краткая\s+информация\b|список\s+литературы\b|приложение\b|клинические\s+рекомендации\b)/iu;
+const ATC_CODE_PARENTHETICAL = /\s*\((?:код\s+)?(?:атх|atc)\s*[:：]\s*[^)]{1,80}\)/giu;
 
 /** Плоский индекс всех строк документа: {p: индекс страницы, l: индекс строки в странице}. */
 function buildFlatLineIndex(pages: any[]) {
   const flat: Array<{ p: number; l: number }> = [];
   pages.forEach((page, p) => page.lines.forEach((_: string, l: number) => flat.push({ p, l })));
   return flat;
+}
+
+function rebuildPage(page: any) {
+  const lines: string[] = [];
+  const lineItems: any[] = [];
+  for (let index = 0; index < page.lines.length; index += 1) {
+    const line = String(page.lines[index] ?? "").trim();
+    if (!normalizeForSearch(line)) continue;
+    lines.push(line);
+    lineItems.push(page.lineItems[index]);
+  }
+  page.lines = lines;
+  page.lineItems = lineItems;
+  page.text = buildPageText(page.lines);
+  page.normalized = normalizeForSearch(page.text);
+  page.charLength = page.text.length;
 }
 
 /**
@@ -182,9 +202,7 @@ function removeFlatLineSpan(pages: any[], flat: Array<{ p: number; l: number }>,
     const page = pages[p];
     page.lines = page.lines.filter((_: string, idx: number) => !removed.has(idx));
     page.lineItems = page.lineItems.filter((_: any, idx: number) => !removed.has(idx));
-    page.text = buildPageText(page.lines);
-    page.normalized = normalizeForSearch(page.text);
-    page.charLength = page.text.length;
+    rebuildPage(page);
   }
 }
 
@@ -338,6 +356,146 @@ function removeFrontMatterAppendixList(pages: any[]) {
   removeFlatLineSpan(pages, flat, start, end);
 }
 
+function stripAbbreviationEntryNoise(text: string) {
+  return String(text ?? "")
+    .replace(ATC_CODE_PARENTHETICAL, "")
+    .replace(/\s*\((?:код\s*)?$/iu, "")
+    .replace(/^(?:код\s+)?(?:атх|atc)\s*[:：]\s*[^)]{1,80}\)\s*/iu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isAbbreviationHeading(text: string) {
+  const normalized = normalizeText(text);
+  return (
+    ABBREVIATION_HEADING.test(normalized) ||
+    (normalized.includes("сокращ") &&
+      (normalized.includes("список") || normalized.includes("перечень") || normalized.includes("условн") || normalized.startsWith("сокращ")))
+  );
+}
+
+function splitAbbreviationEntry(text: string) {
+  const cleaned = stripAbbreviationEntryNoise(text);
+  const dashMatch = cleaned.match(/^(.{1,42}?)\s+(?:[–—]|-)\s+(.{3,})$/u);
+  if (dashMatch) return { abbr: dashMatch[1], expansion: dashMatch[2] };
+
+  const spaceMatch = cleaned.match(/^([A-ZА-ЯЁ0-9][A-ZА-ЯЁ0-9./+<>*_-]{1,18})\s+(.{4,})$/u);
+  if (spaceMatch) return { abbr: spaceMatch[1], expansion: spaceMatch[2] };
+  return null;
+}
+
+function compactAbbreviation(value: string) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*-\s*/g, "-")
+    .trim();
+}
+
+function likelyAbbreviation(value: string) {
+  const compact = String(value ?? "").replace(/[^A-Za-zА-ЯЁа-яё0-9]/gu, "");
+  if (compact.length < 2 || compact.length > 24) return false;
+  const hasUpper = /[A-ZА-ЯЁ]/u.test(value);
+  const hasDigit = /\d/u.test(value);
+  if (!hasUpper && !hasDigit && compact.length > 5) return false;
+  return true;
+}
+
+function likelyAbbreviationExpansion(value: string) {
+  const normalized = normalizeForSearch(value);
+  if (normalized.length < 4 || normalized.length > 360) return false;
+  if (/^(?:код\s+)?(?:атх|atc)\b/iu.test(normalized)) return false;
+  return true;
+}
+
+function isAbbreviationContinuation(value: string) {
+  const cleaned = stripAbbreviationEntryNoise(value);
+  if (cleaned.length < 4 || cleaned.length > 220) return false;
+  if (/^[\d\s.,;:()[\]-]+$/u.test(cleaned)) return false;
+  if (ABBREVIATION_STOP_HEADING.test(normalizeText(cleaned))) return false;
+  return !splitAbbreviationEntry(cleaned);
+}
+
+function parseAbbreviationEntry(line: string, pageNumber: number) {
+  const parsed = splitAbbreviationEntry(line);
+  if (!parsed) return null;
+  const abbr = compactAbbreviation(parsed.abbr);
+  const expansion = stripAbbreviationEntryNoise(parsed.expansion);
+  if (!likelyAbbreviation(abbr) || !likelyAbbreviationExpansion(expansion)) return null;
+  return { abbr, expansion, page: pageNumber };
+}
+
+function countAbbreviationEntries(lines: string[]) {
+  return lines.reduce((count, line) => count + (parseAbbreviationEntry(line, 0) ? 1 : 0), 0);
+}
+
+function dedupeAbbreviations(items: Array<{ abbr: string; expansion: string; page: number }>) {
+  const out: Array<{ abbr: string; expansion: string; page: number }> = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    const key = `${normalizeForSearch(item.abbr)}=>${normalizeForSearch(item.expansion)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
+/**
+ * Извлекает пары из разделов "Список сокращений" и очищает внутри этих строк служебные ATC-коды.
+ *
+ * Раздел сокращений полезен как словарь алиасов, но сам по себе не является клиническим evidence.
+ * Поэтому здесь сохраняется только общая пара `аббревиатура -> расшифровка`, а шум вида
+ * `(Код АТХ: A02BC01)` удаляется из строки до построения чанков и BM25.
+ */
+function extractAndCleanAbbreviationLists(pages: any[]) {
+  const abbreviations: Array<{ abbr: string; expansion: string; page: number }> = [];
+  const touchedPages = new Set<number>();
+
+  for (let p = 0; p < pages.length; p += 1) {
+    const page = pages[p];
+    const lines = page.lines;
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!isAbbreviationHeading(lines[index])) continue;
+
+      const preview = lines.slice(index + 1, Math.min(lines.length, index + 26));
+      if (countAbbreviationEntries(preview) < 2) continue;
+
+      let current: { abbr: string; expansion: string; page: number } | null = null;
+      for (let cursor = index + 1; cursor < lines.length; cursor += 1) {
+        const original = lines[cursor];
+        const cleaned = stripAbbreviationEntryNoise(original);
+        if (cleaned !== original) {
+          lines[cursor] = cleaned;
+          if (page.lineItems[cursor]) page.lineItems[cursor].text = cleaned;
+          touchedPages.add(p);
+        }
+
+        const normalized = normalizeText(cleaned);
+        if (/^[\d\s]+$/u.test(normalized)) continue;
+        if (ABBREVIATION_STOP_HEADING.test(normalized)) break;
+
+        const entry = parseAbbreviationEntry(cleaned, page.page);
+        if (entry) {
+          if (current) abbreviations.push(current);
+          current = entry;
+          continue;
+        }
+
+        if (current && isAbbreviationContinuation(cleaned)) {
+          current = {
+            ...current,
+            expansion: stripAbbreviationEntryNoise(`${current.expansion} ${cleaned}`).slice(0, 360),
+          };
+        }
+      }
+      if (current) abbreviations.push(current);
+    }
+  }
+
+  for (const p of touchedPages) rebuildPage(pages[p]);
+  return dedupeAbbreviations(abbreviations);
+}
+
 /**
  * Извлекает текст и легкие layout-метаданные из PDF.
  *
@@ -385,14 +543,16 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
   removeFrontMatterAppendixList(pages);
   removeBibliographySection(pages);
   removeMetadataAppendices(pages, 1, 2);
+  const abbreviations = extractAndCleanAbbreviationLists(pages);
 
   const pageTextChars = pages.reduce((sum, page) => sum + page.text.length, 0);
   return {
     pdfId: options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : "<browser-pdf>"),
-    cacheVersion: 1,
+    cacheVersion: 2,
     pageCount: pdf.numPages,
     extractedAt: new Date().toISOString(),
     pages,
+    abbreviations,
     ocrNeeded: pageTextChars < Math.max(1000, pdf.numPages * 100),
   };
 }
