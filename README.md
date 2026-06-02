@@ -1,5 +1,9 @@
 # med-pdf-nmo
 
+[![npm version](https://img.shields.io/npm/v/med-pdf-nmo.svg)](https://www.npmjs.com/package/med-pdf-nmo)
+[![total downloads](https://img.shields.io/npm/dt/med-pdf-nmo.svg?label=%D0%B2%D1%81%D0%B5%D0%B3%D0%BE%20%D1%81%D0%BA%D0%B0%D1%87%D0%B8%D0%B2%D0%B0%D0%BD%D0%B8%D0%B9)](https://www.npmjs.com/package/med-pdf-nmo)
+
+
 [Русская версия](./README.ru.md)
 
 `med-pdf-nmo` is a browser-first JavaScript/Node.js package that selects the most likely answer, or answer set, for NMO-style medical questions using a source PDF with clinical recommendations.
