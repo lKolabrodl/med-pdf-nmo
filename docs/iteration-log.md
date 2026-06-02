@@ -504,3 +504,12 @@ Iteration 94 document abbreviation-list alias binding: KEPT, holdout +1 and targ
 - Result vs iteration 93: dev unchanged `395/503 = 0.7853`, single `0.8424`, multi `0.6558`; holdout `493 -> 494/580 = 0.8517`, holdout single unchanged `0.8899`, holdout multi `0.7292 -> 0.7361`.
 - Selected-set comparison vs accepted artifacts: dev changed `4` cases (`3` fixed, `1` still wrong), holdout changed `3` cases (`1` fixed, `2` still wrong).
 - Validation: `npm run typecheck`, `npm test`, `npm run eval`, and `npm run eval:holdout` passed.
+
+Iteration 95 abbreviation-list parenthetical cleanup: KEPT, behavior-preserving after boundary fix.
+
+- Trigger: abbreviation entries can contain non-clinical parenthetical noise beyond ATC codes, e.g. `СД - синдром дауна( хв 1223)`. These tails should not become part of the document-specific expansion alias.
+- Attempt 1 stripped every parenthetical group inside abbreviation-list entries. This cleaned the text but regressed dev by one case (`395 -> 394/503`): the abbreviation-list parser continued past `Список сокращений` into `Термины и определения`, because the stop regex used JavaScript `\b`, which does not provide a useful Cyrillic word boundary here.
+- Retained fix: keep the broad parenthetical cleanup for abbreviation entries, but bound the abbreviation block with whitespace/end-of-line heading checks (`Термины`, numbered sections, bibliography, appendices) instead of `\b`. Added a generic guard so ordinary multi-word Title Case phrases are not accepted as abbreviation keys.
+- Targeted result: `28-tanzilt#40` returned to the correct single answer after false glossary aliases were removed. Abbreviation extraction for that PDF now ends at `ХТ -> хронический тонзиллит` and no longer captures `Тонзиллогенные заболевания/осложнения` as aliases.
+- Result vs iteration 94: dev unchanged `395/503 = 0.7853`, single `0.8424`, multi `0.6558`; holdout unchanged `494/580 = 0.8517`, single `0.8899`, multi `0.7361`.
+- Validation: `npm run typecheck`, `npm test`, `npm run eval`, and `npm run eval:holdout` passed.

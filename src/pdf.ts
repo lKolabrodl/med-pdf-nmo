@@ -160,8 +160,10 @@ const TOC_HEADING = /^(содержание|оглавление)\b/;
 const TOC_LEADER = /\.(\s?\.){3,}|…/;
 const ABBREVIATION_HEADING = /^(?:список\s+сокращ(?:ений|ения)?|перечень\s+сокращ(?:ений|ения)?|условные\s+сокращения)\b/iu;
 const ABBREVIATION_STOP_HEADING =
-  /^(?:термины\b|термины\s+и\s+определения\b|\d+(?:\.\d+)*\.?\s+|краткая\s+информация\b|список\s+литературы\b|приложение\b|клинические\s+рекомендации\b)/iu;
+  /^(?:термины(?:\s|$)|термины\s+и\s+определения(?:\s|$)|\d+(?:\.\d+)*\.?\s+|краткая\s+информация(?:\s|$)|список\s+литературы(?:\s|$)|приложение(?:\s|$)|клинические\s+рекомендации(?:\s|$))/iu;
 const ATC_CODE_PARENTHETICAL = /\s*\((?:код\s+)?(?:атх|atc)\s*[:：]\s*[^)]{1,80}\)/giu;
+const ABBREVIATION_PARENTHETICAL = /\s*\([^)]{1,160}\)/gu;
+const ABBREVIATION_TRAILING_PARENTHETICAL = /\s*\([^)]*$/u;
 
 /** Плоский индекс всех строк документа: {p: индекс страницы, l: индекс строки в странице}. */
 function buildFlatLineIndex(pages: any[]) {
@@ -359,7 +361,8 @@ function removeFrontMatterAppendixList(pages: any[]) {
 function stripAbbreviationEntryNoise(text: string) {
   return String(text ?? "")
     .replace(ATC_CODE_PARENTHETICAL, "")
-    .replace(/\s*\((?:код\s*)?$/iu, "")
+    .replace(ABBREVIATION_PARENTHETICAL, "")
+    .replace(ABBREVIATION_TRAILING_PARENTHETICAL, "")
     .replace(/^(?:код\s+)?(?:атх|atc)\s*[:：]\s*[^)]{1,80}\)\s*/iu, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -396,6 +399,9 @@ function likelyAbbreviation(value: string) {
   if (compact.length < 2 || compact.length > 24) return false;
   const hasUpper = /[A-ZА-ЯЁ]/u.test(value);
   const hasDigit = /\d/u.test(value);
+  const letters = value.match(/[A-Za-zА-ЯЁа-яё]/gu) ?? [];
+  const uppers = value.match(/[A-ZА-ЯЁ]/gu) ?? [];
+  if (/\s/u.test(value) && compact.length > 8 && uppers.length / Math.max(1, letters.length) < 0.6) return false;
   if (!hasUpper && !hasDigit && compact.length > 5) return false;
   return true;
 }
