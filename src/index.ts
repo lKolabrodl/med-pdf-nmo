@@ -1,7 +1,33 @@
 import { predict, clearPredictorCache } from "./predictor.js";
 import { setPdfJsLib } from "./pdf.js";
+import type {
+  AnswerMode,
+  AnswerOption,
+  AnswerSources,
+  EvidenceItem,
+  PredictionSources,
+  PredictorInput,
+  PredictorMeta,
+  PredictorOptions,
+  PredictorResult,
+  SourceExcerpt,
+  SourceHighlight,
+} from "./predictor/types.js";
 
 export { predict, clearPredictorCache, setPdfJsLib };
+export type {
+  AnswerMode,
+  AnswerOption,
+  AnswerSources,
+  EvidenceItem,
+  PredictionSources,
+  PredictorInput,
+  PredictorMeta,
+  PredictorOptions,
+  PredictorResult,
+  SourceExcerpt,
+  SourceHighlight,
+};
 
 /**
  * PDF-вход, который принимает высокоуровневый API.
@@ -54,6 +80,12 @@ export interface AnswerQuestionOptions {
   pdfjsLib?: any;
   /** Уровень логирования PDF.js. По умолчанию показываются только ошибки. */
   pdfVerbosity?: number;
+  /** Return display-ready source paragraphs. Enabled by default. */
+  includeSources?: boolean;
+  /** Maximum character size of one source paragraph. */
+  sourcePassageMaxChars?: number;
+  /** Number of source paragraphs kept for each answer variant (1-3). */
+  sourcePassagesPerAnswer?: number;
 }
 
 /**
@@ -76,11 +108,13 @@ export interface AnswerQuestionResult {
     raw: number;
   }>;
   /** Исходный низкоуровневый результат predictor. */
-  raw: any;
+  raw: Omit<PredictorResult, "sources">;
   /** Фрагменты PDF и evidence, использованные при скоринге. */
-  evidence: any;
+  evidence: EvidenceItem[];
+  /** Display-ready question context and paragraph-sized sources per variant. */
+  sources: PredictionSources;
   /** Runtime-метаданные, например число страниц и признак необходимости OCR. */
-  meta: any;
+  meta: PredictorMeta;
 }
 
 /**
@@ -117,12 +151,19 @@ export async function answerQuestion(
       answers,
       mode: options.type ?? options.mode ?? "single",
     },
-    { pdfjsLib: options.pdfjsLib, pdfVerbosity: options.pdfVerbosity },
+    {
+      pdfjsLib: options.pdfjsLib,
+      pdfVerbosity: options.pdfVerbosity,
+      includeSources: options.includeSources,
+      sourcePassageMaxChars: options.sourcePassageMaxChars,
+      sourcePassagesPerAnswer: options.sourcePassagesPerAnswer,
+    },
   );
 
   const selectedAnswers = output.selected
     .map((id) => answers.find((answer) => answer.id === id))
     .filter(Boolean);
+  const { sources, ...rawOutput } = output;
 
   return {
     selected: selectedAnswers.map((answer) => answer.text),
@@ -135,8 +176,9 @@ export async function answerQuestion(
       score: output.scores[answer.id] ?? 0,
       raw: output.rawScores[answer.id] ?? 0,
     })),
-    raw: output,
+    raw: rawOutput,
     evidence: output.evidence,
+    sources,
     meta: output.meta,
   };
 }

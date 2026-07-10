@@ -1,29 +1,25 @@
 # Evaluation
 
-## Dataset Layout
+## Dataset
 
-As of the latest run, the repository contains 44 PDF groups under `__test__/NN-name/`.
+The local corpus currently contains 46 PDF groups under `__test__/NN-name/` and 2,831 parsed cases. Exact metrics exclude 17 cases with `expected: []`, leaving 2,814 answer-keyed cases: 1,938 single-answer and 876 multi-answer cases.
 
-Each group has:
+| split | PDF groups | keyed cases | single | multi |
+| --- | ---: | ---: | ---: | ---: |
+| train | 28 | 1,731 | 1,153 | 578 |
+| dev | 9 | 503 | 349 | 154 |
+| holdout | 9 | 580 | 436 | 144 |
+| total | 46 | 2,814 | 1,938 | 876 |
 
-- `doc.pdf`
-- `cases.test.ts`
-
-The case files contain question text, answer variants, mode, and expected answers. Expected answers are parsed only by `scripts/eval.ts` and `scripts/cases.ts`.
+Each group contains `doc.pdf` and `cases.test.ts`. Runtime code receives only the PDF path, question, answer variants, and mode. Expected labels are read only by scripts under `scripts/`.
 
 ## Split
 
-The split is group-wise by PDF, so questions from one PDF cannot appear in more than one split.
-
-- seed: `20260509`
-- holdout ratio: 20%
-- dev ratio: 20%
-- remaining groups: train
-
-Groups:
+The deterministic split uses seed `20260509` and assigns whole directory groups, not individual questions.
 
 - dev: `07-hron`, `08-ask`, `15-toxic`, `28-tanzilt`, `31-hbs`, `32-gemor`, `34-covid`, `41-destonia`, `44-girshprunga`
 - holdout: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `18-gepatitabc`, `19-gepatitc`, `23-nimana`, `33-aorta`, `43-anomali`
+- train: the remaining 28 groups
 
 ## Commands
 
@@ -32,202 +28,104 @@ npm test
 npm run typecheck
 npm run eval
 npm run eval:holdout
+npm run predict -- --input request.json
 ```
 
-`npm run eval:holdout` exits non-zero when holdout exact accuracy is below `0.80`.
+`npm run eval:holdout` exits non-zero when exact accuracy is below `0.80`.
 
-## Metrics
+## Current Result
 
-Eval reports:
+The baseline below is the checkout before iterations 96-100. The final result enables the retained relation-tuple resolver and explicit ordinal-range set decoder.
 
-- overall exact accuracy;
-- single-answer exact accuracy;
-- multi-answer exact set accuracy;
-- macro accuracy by PDF;
-- error buckets;
-- number of no-evidence cases;
-- average confidence for correct and incorrect predictions.
-- `skippedNoExpected`: cases with `expected: []`, which are excluded from exact-accuracy denominators because no answer key exists.
+| split | version | exact | single | multi exact set | macro by PDF |
+| --- | --- | ---: | ---: | ---: | ---: |
+| dev | baseline | `395/503 = 0.7853` | `0.8424` | `0.6558` | `0.7915` |
+| dev | final | `401/503 = 0.7972` | `0.8453` | `0.6883` | `0.8010` |
+| holdout | baseline | `494/580 = 0.8517` | `0.8899` | `0.7361` | `0.8494` |
+| holdout | final | `494/580 = 0.8517` | `0.8899` | `0.7361` | `0.8494` |
 
-## Final Dev Result
+The final dev run changed exactly six selected sets relative to baseline. All six changes were wrong-to-right: five ordinal multi sets in `32-gemor` and one relation-bound numeric single in `34-covid`. The final holdout selected sets are byte-for-byte equivalent at the case level: zero changes across all 580 cases.
 
-Command: `npm run eval`
+Final dev summary:
 
 ```json
 {
   "total": 503,
-  "correct": 392,
-  "exactAccuracy": 0.7793,
-  "singleAccuracy": 0.8424,
-  "multiExactAccuracy": 0.6364,
-  "macroAccuracyByPdf": 0.7857,
+  "correct": 401,
+  "exactAccuracy": 0.7972,
+  "singleAccuracy": 0.8453,
+  "multiExactAccuracy": 0.6883,
+  "macroAccuracyByPdf": 0.801,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.8022,
-  "avgConfidenceIncorrect": 0.6764,
+  "avgConfidenceCorrect": 0.8108,
+  "avgConfidenceIncorrect": 0.6698,
   "errorBuckets": {
-    "confused_with_distractor": 73,
-    "multi_cardinality": 38
-  },
-  "skippedNoExpected": 0
+    "confused_with_distractor": 72,
+    "multi_cardinality": 30
+  }
 }
 ```
 
-## Final Holdout Result
-
-Command: `npm run eval:holdout`
-
-The command returned exit code `0` because the acceptance target was met.
+Final holdout-regression summary:
 
 ```json
 {
   "total": 580,
-  "correct": 493,
-  "exactAccuracy": 0.85,
+  "correct": 494,
+  "exactAccuracy": 0.8517,
   "singleAccuracy": 0.8899,
-  "multiExactAccuracy": 0.7292,
-  "macroAccuracyByPdf": 0.8457,
+  "multiExactAccuracy": 0.7361,
+  "macroAccuracyByPdf": 0.8494,
   "noEvidence": 0,
-  "avgConfidenceCorrect": 0.8209,
-  "avgConfidenceIncorrect": 0.6777,
+  "avgConfidenceCorrect": 0.8279,
+  "avgConfidenceIncorrect": 0.6844,
   "errorBuckets": {
-    "confused_with_distractor": 55,
-    "multi_cardinality": 32
-  },
-  "skippedNoExpected": 0
+    "confused_with_distractor": 57,
+    "multi_cardinality": 29
+  }
 }
 ```
 
-Holdout by PDF:
+## Presentation-Layer Zero-Delta Check
 
-| PDF group | accuracy |
-| --- | ---: |
-| `06-co-toksic` | 0.8571 |
-| `11-mening` | 0.8857 |
-| `14-sarkoidoz` | 0.9000 |
-| `17-gepatit` | 0.8714 |
-| `18-gepatitabc` | 0.8143 |
-| `19-gepatitc` | 0.8400 |
-| `23-nimana` | 0.8429 |
-| `33-aorta` | 0.8000 |
-| `43-anomali` | 0.8000 |
+Iteration 101 adds display-only `sources` and logical PDF block metadata. Batch evaluation calls `predict(..., { includeSources: false })`, but still uses the refactored PDF extractor and therefore checks that scoring text and selection remain stable.
 
-## Current All 44 PDF Groups
+Case-level comparison against the accepted iteration-100 artifacts:
 
-The full all-group snapshot below predates the latest dev/holdout-only iterations. Use the "Final Dev Result" and "Final Holdout Result" sections above for current acceptance numbers.
+| split | before | after | selected-set changes |
+| --- | ---: | ---: | ---: |
+| dev | `401/503` | `401/503` | `0/503` |
+| holdout regression | `494/580` | `494/580` | `0/580` |
 
-Combining that older train, dev, and holdout diagnostic run gives `1969/2680 = 0.7347` exact accuracy across all answer-keyed cases (`73.47%`). Including the `17` unkeyed `22-eozif` cases as denominator gives `1969/2697 = 0.7301`.
+The source builder itself is covered separately by unit and public-API tests, including real bullet boundaries, paragraph clipping, answer ordering, selected-answer primary context, numeric token boundaries, comparator/range/slash semantics, conflict labeling, JSON serialization, and enabled/disabled output equivalence.
 
-Snapshot split percentages:
+## Evaluation Integrity Audit
 
-| split | correct / total | exact accuracy |
-| --- | ---: | ---: |
-| train | `1101/1597` answer-keyed, `1101/1614` including unkeyed | `68.94%` answer-keyed, `68.22%` including unkeyed |
-| dev | `386/503` | `76.74%` |
-| holdout | `482/580` | `83.10%` |
-| all answer-keyed cases | `1969/2680` | `73.47%` |
-| all cases including 17 unkeyed `22-eozif` cases | `1969/2697` | `73.01%` |
+The command-level acceptance gate passes, but the current holdout must be interpreted as a regression suite, not as an unbiased estimate of generalization.
 
-Per-PDF percentages across all 44 groups:
+- The holdout has informed decisions over more than 95 historical iterations. Repeated model selection against it removes its status as a blind holdout.
+- Directory-level grouping does not prevent content duplication under different group names. The audit found an identical `04-hep-d`/`18-gepatitabc` PDF-question corpus across train and holdout, train `09-covid` questions duplicated in dev `34-covid`, and 138 normalized question/answer records with an exact counterpart across split boundaries.
+- The local corpus has 46 groups, but only five group case files are tracked by Git; 41 local groups are ignored. Therefore the published metrics are not reproducible from the tracked repository alone.
+- At least one malformed label exists (`28-tanzilt#11` contains duplicate expected id `A`), and two `41-destonia` labels conflict with literal source statements. These labels were not used to tune runtime facts or silently corrected.
 
-| PDF group | correct / total | exact accuracy |
-| --- | ---: | ---: |
-| `01-toksic-galogen` | `50/68` | `73.53%` |
-| `02-metanol-glikol` | `55/70` | `78.57%` |
-| `03-chadlv` | `47/67` | `70.15%` |
-| `04-hep-d` | `57/70` | `81.43%` |
-| `05-bronhit-hron` | `48/70` | `68.57%` |
-| `06-co-toksic` | `60/70` | `85.71%` |
-| `07-hron` | `55/71` | `77.46%` |
-| `08-ask` | `28/30` | `93.33%` |
-| `09-covid` | `57/70` | `81.43%` |
-| `10-LPP` | `50/70` | `71.43%` |
-| `11-mening` | `60/70` | `85.71%` |
-| `12-nos` | `19/30` | `63.33%` |
-| `13-pisha` | `45/70` | `64.29%` |
-| `14-sarkoidoz` | `69/80` | `86.25%` |
-| `15-toxic` | `51/70` | `72.86%` |
-| `16-hb` | `48/70` | `68.57%` |
-| `17-gepatit` | `60/70` | `85.71%` |
-| `18-gepatitabc` | `57/70` | `81.43%` |
-| `19-gepatitc` | `39/50` | `78.00%` |
-| `20-hron` | `52/70` | `74.29%` |
-| `21-citovirus` | `52/70` | `74.29%` |
-| `22-eozif` | `23/31` | `74.19%` |
-| `23-nimana` | `59/70` | `84.29%` |
-| `24-kalit` | `41/70` | `58.57%` |
-| `25-shigez` | `50/70` | `71.43%` |
-| `26-blevota` | `38/50` | `76.00%` |
-| `27-cistit` | `22/30` | `73.33%` |
-| `28-tanzilt` | `38/50` | `76.00%` |
-| `29-tpank` | `45/70` | `64.29%` |
-| `30-heart` | `39/70` | `55.71%` |
-| `31-hbs` | `31/43` | `72.09%` |
-| `32-gemor` | `54/70` | `77.14%` |
-| `33-aorta` | `54/70` | `77.14%` |
-| `34-covid` | `57/70` | `81.43%` |
-| `35-cron` | `41/72` | `56.94%` |
-| `36-anrid` | `43/70` | `61.43%` |
-| `37-bazal` | `40/70` | `57.14%` |
-| `38-katarakta` | `22/30` | `73.33%` |
-| `39-glaurova` | `47/69` | `68.12%` |
-| `40-deficit` | `38/50` | `76.00%` |
-| `41-destonia` | `54/69` | `78.26%` |
-| `42-skvoz` | `32/50` | `64.00%` |
-| `43-anomali` | `24/30` | `80.00%` |
-| `44-girshprunga` | `21/30` | `70.00%` |
+A future trustworthy estimate requires a newly deduplicated PDF-level split whose test labels remain unseen until the algorithm is frozen. Until then, dev is the primary iteration signal and holdout is a compatibility/acceptance report only.
 
 ## Leakage Checks
 
-`npm test` verifies that runtime predictor/CLI files do not reference:
+`npm test` scans runtime predictor and CLI sources and rejects references to test cases, expected labels, answer keys, or split/eval files. The predictor does not receive case ids, PDF-group names, expected cardinality, or correct labels during inference.
 
-- `__test__`
-- case files
-- expected labels
-- answer keys
+The new rules are language- and layout-based. They do not contain question ids, PDF names, answer ids, page numbers, dataset medical facts, or expected answer text.
 
-The predictor receives only PDF path, question, answers, and mode during inference.
+## Metrics
 
-The leakage check currently scans `src/predictor.ts`, `src/predictor/**/*.ts`, and `src/cli.ts`; eval and answer-key parsing stay in `scripts/`.
+- Single-answer accuracy requires exactly one correct id.
+- Multi-answer accuracy requires exact set equality.
+- Macro accuracy is the unweighted mean of per-PDF exact accuracy.
+- `skippedNoExpected` excludes cases without a complete key.
+- `noEvidence` counts predictions without a supporting PDF evidence item.
 
-## Offline Feature Export
-
-`npm run features:export -- --split dev` creates `.cache/features/dev-features.json` for non-LLM calibrator research.
-
-The exporter is intentionally separate from runtime inference:
-
-- it reads labels only in `scripts/`, like eval;
-- it calls predictor without answer keys;
-- it writes labels outside the `features` object;
-- `features` contain no question text, answer text, PDF text, PDF group, case id, or answer id;
-- PDF group and case id are metadata only for split diagnostics;
-- the JSON summary reports `stringValuesInsideFeatures`; it must stay empty.
-
-Current feature exports:
-
-| split | cases | answer rows | exact | single | multi | oracle top-k | multi oracle top-k |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| train | `1597` | `6689` | `0.6925` | `0.7802` | `0.5196` | `0.7445` | `0.6797` |
-| dev | `473` | `1956` | `0.7674` | `0.8328` | `0.6181` | `0.8076` | `0.7500` |
-| holdout | `550` | `2283` | `0.8291` | `0.8578` | `0.7344` | `0.8509` | `0.8359` |
-
-All three feature exports report an empty `stringValuesInsideFeatures` list.
-
-This export is a diagnostic baseline only. Learned weights are not part of runtime yet and must not be selected on holdout.
-
-## Calibrator Experiment
-
-`npm run calibrator:experiment` reads the local feature exports and writes `.cache/features/calibrator-experiment.json`.
-
-Current experiment:
-
-| selector | train exact | dev exact | holdout report-only exact | decision |
-| --- | ---: | ---: | ---: | --- |
-| baseline | `0.6925` | `0.7674` | `0.8291` | current runtime |
-| logistic model replaces selector | `0.6988` | `0.7421` | `0.8000` | rejected |
-| logistic post-corrects baseline multi | `0.6938` | `0.7674` | `0.8255` | rejected for instability |
-
-The learned selectors still do not improve dev and do not survive holdout reporting, so no learned weights are frozen into predictor.
+Eval artifacts are written under `.cache/eval/`; frozen before/after artifacts for iterations 96-100 are under `.cache/experiments/user-3-theories/`.
 
 ## OCR Limitation
 
-The extractor marks `ocrNeeded: true` when a PDF yields too little text. A JS-only OCR fallback is not implemented. Current corpus PDFs produce text with `pdfjs-dist`, but table/layout semantics are often flattened.
+The extractor sets `ocrNeeded: true` for low-text PDFs. No OCR fallback is implemented. Current PDFs are text-extractable, but table and recommendation layout can still be flattened by `pdfjs-dist`.

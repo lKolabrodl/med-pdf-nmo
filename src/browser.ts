@@ -12,3 +12,20 @@ import { setPdfJsLib } from "./pdf.js";
 setPdfJsLib(pdfjsLib);
 
 export { answerQuestion, predict, clearPredictorCache, setPdfJsLib } from "./index.js";
+export type {
+  AnswerQuestionOptions,
+  AnswerQuestionResult,
+  AnswerVariant,
+  AnswerMode,
+  AnswerOption,
+  AnswerSources,
+  EvidenceItem,
+  PdfInput,
+  PredictionSources,
+  PredictorMeta,
+  PredictorInput,
+  PredictorOptions,
+  PredictorResult,
+  SourceExcerpt,
+  SourceHighlight,
+} from "./index.js";

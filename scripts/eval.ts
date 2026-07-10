@@ -113,13 +113,16 @@ async function evaluate(splitName) {
 
   for (let i = 0; i < selectedCases.length; i += 1) {
     const testCase = selectedCases[i];
-    const output = await predict({
-      pdfData: await readPdf(testCase.pdfPath),
-      cacheKey: testCase.pdfPath,
-      question: testCase.question,
-      answers: testCase.answers,
-      mode: testCase.mode,
-    });
+    const output = await predict(
+      {
+        pdfData: await readPdf(testCase.pdfPath),
+        cacheKey: testCase.pdfPath,
+        question: testCase.question,
+        answers: testCase.answers,
+        mode: testCase.mode,
+      },
+      { includeSources: false },
+    );
     const correct = sameSet(output.selected, testCase.expectedIds);
     results.push({ case: testCase, output, correct });
     if ((i + 1) % 100 === 0) {

@@ -174,6 +174,74 @@ function explicitRecommendationSegments(pages) {
   return segments;
 }
 
+function atomicRecommendationBoundary(line, isFirstLine) {
+  if (isFirstLine) return false;
+  if (isPageNumberOnly(line)) return false;
+  if (explicitRecommendationLineStart(line) || startsBullet(line)) return true;
+  const clean = normalizeText(line);
+  return (
+    /^(?:уровень\s+(?:убедительности|достоверности)(?:\s|$)|ууд(?:\s|$|[-–—:])|уур(?:\s|$|[-–—:])|комментари(?:й|и)(?:\s|$|:)|примечани(?:е|я)(?:\s|$|:))/u.test(clean) ||
+    /^(?:\d+\.\s+|\d+(?:\.\d+)+\.?\s+)[а-яё]/u.test(clean)
+  );
+}
+
+/**
+ * Строит узкие пункты рекомендаций: от явного `рекомендовано/рекомендуется`
+ * до УДД/УУР, комментария, следующего пункта или следующей рекомендации.
+ *
+ * В отличие от широких 12/22-строчных окон, эти сегменты не захватывают
+ * комментарий и соседний пункт, поэтому пригодны для однозначного single-bind.
+ */
+export function buildAtomicRecommendationSegments(pages) {
+  const segments = [];
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex];
+    const pageLines = page.lines ?? [];
+    for (let lineIndex = 0; lineIndex < pageLines.length; lineIndex += 1) {
+      if (!explicitRecommendationLineStart(pageLines[lineIndex]) && !startsBullet(pageLines[lineIndex])) continue;
+      const startedWithBullet = startsBullet(pageLines[lineIndex]);
+      const lines = [];
+      let done = false;
+      for (let currentPageIndex = pageIndex; currentPageIndex < Math.min(pages.length, pageIndex + 2) && !done; currentPageIndex += 1) {
+        const currentLines = pages[currentPageIndex]?.lines ?? [];
+        const start = currentPageIndex === pageIndex ? lineIndex : 0;
+        for (let index = start; index < currentLines.length && lines.length < 10; index += 1) {
+          const line = currentLines[index];
+          const first = currentPageIndex === pageIndex && index === lineIndex;
+          const recommendationContinuation =
+            !first &&
+            startedWithBullet &&
+            lines.length <= 3 &&
+            /(?:^|\s)(?:и|или|в|на|с|при|для|по|к|от|до)\s*$/u.test(lines[lines.length - 1]) &&
+            !startsBullet(line) &&
+            /^[а-яё]/u.test(String(line ?? "").trim()) &&
+            !lines.some((item) => explicitRecommendationLineStart(item)) &&
+            explicitRecommendationLineStart(line);
+          if (!recommendationContinuation && atomicRecommendationBoundary(line, first)) {
+            done = true;
+            break;
+          }
+          if (isPageNumberOnly(line)) continue;
+          lines.push(line);
+          if (lines.join(" ").length >= 1800) {
+            done = true;
+            break;
+          }
+        }
+      }
+      const text = lines.join(" ").replace(/\s+/gu, " ").trim();
+      if (text.length < 24) continue;
+      if (!recommendationCueSegment(normalizeForSearch(text))) continue;
+      segments.push({
+        page: page.page,
+        text,
+        normalized: normalizeForSearch(text),
+      });
+    }
+  }
+  return segments;
+}
+
 function recommendationSubjectCompatible(questionNorm, segmentNorm) {
   const questionBiological = containsNormalizedPhrase(questionNorm, "\u0431\u0438\u043e\u043b\u043e\u0433");
   const questionMechanical = containsNormalizedPhrase(questionNorm, "\u043c\u0435\u0445\u0430\u043d");

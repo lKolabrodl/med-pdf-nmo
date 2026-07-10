@@ -391,7 +391,7 @@ async function exportFeatures(splitName, options) {
         answers: testCase.answers,
         mode: testCase.mode,
       },
-      { diagnostics: true },
+      { diagnostics: true, includeSources: false },
     );
     const expectedSet = new Set(testCase.expectedIds);
     const selectedSet = new Set(output.selected);

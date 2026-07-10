@@ -23,6 +23,8 @@ export const DEFAULT_CONFIG = {
   countRelationBoost: true,
   optionFamilyComparatorGuard: true,
   optionFamilyCompactComboGuard: true,
+  relationTupleResolver: true,
+  explicitOrdinalRangeSetDecoder: true,
   topQuestionChunks: 28,
   evidenceLimit: 8,
 };

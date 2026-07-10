@@ -9,6 +9,10 @@ __test__/*
 !__test__/_runner.ts
 !__test__/leakage.test.ts
 !__test__/normalize.test.ts
+!__test__/recommendation-item.test.ts
+!__test__/relation-tuple.test.ts
+!__test__/source-context.test.ts
+!__test__/multi-set.test.ts
 !__test__/01-toksic-galogen/
 !__test__/01-toksic-galogen/**
 !__test__/02-metanol-glikol/

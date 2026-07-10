@@ -513,3 +513,54 @@ Iteration 95 abbreviation-list parenthetical cleanup: KEPT, behavior-preserving 
 - Targeted result: `28-tanzilt#40` returned to the correct single answer after false glossary aliases were removed. Abbreviation extraction for that PDF now ends at `ХТ -> хронический тонзиллит` and no longer captures `Тонзиллогенные заболевания/осложнения` as aliases.
 - Result vs iteration 94: dev unchanged `395/503 = 0.7853`, single `0.8424`, multi `0.6558`; holdout unchanged `494/580 = 0.8517`, single `0.8899`, multi `0.7361`.
 - Validation: `npm run typecheck`, `npm test`, `npm run eval`, and `npm run eval:holdout` passed.
+
+Iteration 96 atomic single-recommendation binding: REJECTED after two guarded versions.
+
+- Starting baseline: dev `395/503 = 0.7853`, single `0.8424`, multi `0.6558`; holdout `494/580 = 0.8517`, single `0.8899`, multi `0.7361`.
+- Theory: parse explicit recommendation items into atomic units, then prefer the single answer bound to the same item as the question target and conditions.
+- Version 1 was dev zero-delta but reduced holdout to `493/580`. Hardening item boundaries, grade/comment stops, target coverage, and condition checks kept dev at `395/503` but reduced holdout further to `492/580`.
+- Error mechanism: neighboring recommendation items frequently reuse the same patient/context terms while differing in the final target, polarity, or subgroup. Item membership alone remains insufficient for a single-answer override.
+- Decision: remove the single-answer scorer. Keep only the independently tested atomic segment builder because it provides bounded input to the later set-level theory; it does not change predictions on its own.
+
+Iteration 97 broad relation-aware numeric resolver: REJECTED.
+
+- Theory: dense numeric option families should be resolved by a relation tuple rather than by isolated number proximity.
+- First implementation improved dev to `397/503`, but holdout fell to `490/580`.
+- Review found three generic failure modes: numbers could cross unit families, a value elsewhere in a broad window could satisfy the relation, and the new rule could override stronger structural evidence unconditionally.
+- Decision: reject the broad implementation and redesign around fresh bounded proof fragments and abstention.
+
+Iteration 98 bounded relation-tuple resolver: KEPT, dev +1, holdout zero-delta.
+
+- The hardened resolver runs only for single-answer families of at least three distinct numeric variants with one shared lexical skeleton and exact canonical unit signature.
+- It recognizes an explicit question role (for example maximum/maintenance dose, child/adult prevalence, systolic/diastolic metric, rank, age, interval, percent of cases, or ordinal stage) and requires subject focus, mandatory conditions, comparator, value, and unit in one sentence/clause or tightly bounded two-line fragment.
+- It skips negative/ambiguous questions and does not override conflicting trusted coordinate, fibrosis, or drug-dose evidence.
+- Isolated result: dev `396/503 = 0.7873` (`+1` exact), holdout `494/580 = 0.8517` with zero selected-set changes. The only dev change was wrong-to-right.
+- Decision: retain as `relationTupleResolver`; broad v1 remains rejected.
+
+Iteration 99 source-coherent ordinal multi set decoder: KEPT, dev +5, holdout zero-delta.
+
+- Theory: when answer options are a pure ordinal family and one source recommendation explicitly states a range/list, decode that source set directly instead of estimating each member independently.
+- Version 1 reached dev `399/503` and holdout `494/580`, but review exposed grammar risks: evidence grades could look like degrees, bare population text could bypass target binding, postposed negation and adversative clauses could mix polarity, and line continuation could merge sibling bullets.
+- The hardened decoder accepts only one unambiguous set from one atomic positive recommendation clause. It requires question focus, intervention target, mandatory conditions, matching ordinal suffix, a strict subset of available options, and no trusted structural conflict. It masks citations/evidence-grade annotations, splits adversative clauses, rejects postposed negation, and follows a new line only through an explicit connector.
+- Hardened isolated result before the final grammar-only guard pass: dev `400/503 = 0.7952`, multi `0.6883`; holdout `494/580 = 0.8517` with zero selected-set changes. Five dev multi sets changed from wrong to exact.
+- Decision: retain as `explicitOrdinalRangeSetDecoder`. Ordinary membership-list completion remains disabled.
+
+Iteration 100 final combination and integrity audit: KEPT.
+
+- Combined result: dev `401/503 = 0.7972`, single `0.8453`, multi exact `0.6883`, macro by PDF `0.8010`; holdout `494/580 = 0.8517`, single `0.8899`, multi exact `0.7361`, macro `0.8494`.
+- Case-level diff vs iteration 95: exactly six dev selected sets changed and all six became correct; all 580 holdout selected sets are identical to baseline.
+- Diagnostics: dev errors fell `108 -> 102`; option-family `30 -> 29`, multi-set `22` residual, recommendation `22 -> 17`. Holdout diagnostics and selections are unchanged.
+- Validation: `npm test` passes 36 focused/leakage tests, `npm run typecheck` passes, `npm run eval` passes, `npm run eval:holdout` passes the `0.80` gate, and `npm run diagnostics` completes.
+- Integrity finding: the historical holdout is not blind after 95+ selection iterations, and content duplicates cross split boundaries. It is now documented as a regression suite. No case id, PDF name, page number, answer key, or dataset medical fact was added to runtime logic.
+
+Iteration 101 typed display-source/provenance layer: KEPT, behavior-preserving.
+
+- Goal: expose paragraph-sized original PDF context for the question and every answer variant without enlarging or changing scorer `evidence.text`, because several selection rules read that internal text.
+- Structure: PDF extraction now keeps `page.blocks` with logical text plus zero-based physical `lineStart/lineEnd`. Historical `page.text` joining remains byte-for-byte unchanged for scoring. A separate `src/predictor/source-context.ts` runs only after calibration, selection, and confidence.
+- Public API: low-level `predict()` and high-level `answerQuestion()` return `sources = { question, answers[] }`. Every answer entry preserves input order and includes `id`, `variant`, `selected`, and paragraph excerpts. Excerpts include page, line range, original newlines, block kind, stance, localization/content match quality, evidence kinds, score, clipping flag, and exact highlight offsets.
+- Honesty guards: a source is omitted when evidence cannot be localized; standalone numbers use token boundaries (`800` cannot match `8000`); comparator, decimal, range, and slash semantics remain distinct; broad evidence is labeled `context`, conflicts become `mixed`, and numeric distractor families require structural support before an unselected option receives a passage.
+- Primary question context: prefer the strongest localized excerpt of a selected answer, then fall back across several question-search matches. This avoids visually convincing but irrelevant generic sections such as patient-information appendices.
+- Performance: source candidates are bounded, page windows are prepared lazily, and prepared pages are cached. Real cached prediction overhead fell from roughly `500 ms` in the eager draft to about `4-100 ms` depending on first use; batch eval/export explicitly disables presentation sources.
+- Real smoke checks: the salbutamol-dose case shows only the correct `400` source paragraph on page 48; `800/1000/200` no longer point to `8000` participants, FEV1 `1000 ml`, or `200 ml`. The relation-tuple dose case shows the selected `800 mg` recommendation block and leaves unsupported numeric distractors empty.
+- Result: dev remains `401/503 = 0.7972`; holdout remains `494/580 = 0.8517`. Case-level diff is zero on all `503` dev and `580` holdout cases.
+- Validation: `49` unit/leakage tests pass, including `13` source-context tests; `npm run typecheck`, `npm run build`, `npm run eval`, and `npm run eval:holdout` pass.

@@ -135,19 +135,47 @@ function stripLikelyBoilerplate(lines: any[]) {
   });
 }
 
-function buildPageText(lines: string[]) {
-  const out: string[] = [];
-  for (const line of lines) {
-    const previous = out[out.length - 1] ?? "";
-    const startsList = /^(\d+(?:\.\d+)*[.)]?|[-*вЂў]|[a-zР°-СЏ]\))\s+/iu.test(line);
+export type PdfTextBlock = {
+  text: string;
+  lineStart: number;
+  lineEnd: number;
+};
+
+/**
+ * Groups physical PDF lines into logical paragraphs while retaining source
+ * line ranges for the presentation/provenance layer.
+ */
+function groupPageBlocks(lines: string[], startsList: (line: string) => boolean): PdfTextBlock[] {
+  const out: PdfTextBlock[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const previous = out[out.length - 1]?.text ?? "";
     const previousEnds = /[.!?;:]$/.test(previous) || previous.length < 30;
-    if (out.length && !startsList && !previousEnds && line.length < 100) {
-      out[out.length - 1] = `${previous} ${line}`.replace(/\s+/g, " ");
+    if (out.length && !startsList(line) && !previousEnds && line.length < 100) {
+      out[out.length - 1] = {
+        ...out[out.length - 1],
+        text: `${previous} ${line}`.replace(/\s+/g, " "),
+        lineEnd: index,
+      };
     } else {
-      out.push(line);
+      out.push({ text: line, lineStart: index, lineEnd: index });
     }
   }
-  return out.join("\n");
+  return out;
+}
+
+export function buildPageBlocks(lines: string[]): PdfTextBlock[] {
+  return groupPageBlocks(lines, (line) =>
+    /^(?:(?:\d+(?:\.\d+)+|\d+)[.)]|[-*•▪◦]|[a-zа-я][.)])\s+/iu.test(line),
+  );
+}
+
+function buildPageText(lines: string[]) {
+  // Keep the historical scoring text byte-for-byte stable. Display blocks use
+  // the corrected list markers above, while scorer chunks retain old joining.
+  return groupPageBlocks(lines, (line) => /^(\d+(?:\.\d+)*[.)]?|[-*вЂў]|[a-zР°-СЏ]\))\s+/iu.test(line))
+    .map((block) => block.text)
+    .join("\n");
 }
 
 const BIBLIO_HEADING = /^(список\s+литературы|литература|библиографи)/;
@@ -183,6 +211,7 @@ function rebuildPage(page: any) {
   }
   page.lines = lines;
   page.lineItems = lineItems;
+  page.blocks = buildPageBlocks(page.lines);
   page.text = buildPageText(page.lines);
   page.normalized = normalizeForSearch(page.text);
   page.charLength = page.text.length;
@@ -534,11 +563,13 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
     });
     const lineObjects = stripLikelyBoilerplate(groupItemsIntoLineObjects(content.items));
     const lines = lineObjects.map((line) => line.text);
+    const blocks = buildPageBlocks(lines);
     const text = buildPageText(lines);
     pages.push({
       page: pageNumber,
       text,
       lines,
+      blocks,
       lineItems: lineObjects,
       normalized: normalizeForSearch(text),
       charLength: text.length,

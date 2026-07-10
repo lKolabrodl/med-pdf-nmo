@@ -42,6 +42,8 @@ import {
   explicitRecommendationTargetAdjustment,
 } from "./predictor/scorers/recommendation-item.js";
 import { optionFamilyCompactComboAdjustment, optionFamilyComparatorAdjustment } from "./predictor/scorers/option-family.js";
+import { applySingleRelationTupleResolver } from "./predictor/scorers/relation-tuple.js";
+import { applyExplicitOrdinalRangeSetScores, resolveExplicitOrdinalRangeSet } from "./predictor/scorers/multi-set.js";
 import {
   clinicalCourseCueAdjustment,
   contrastCueMismatchAdjustment,
@@ -69,6 +71,8 @@ import {
   findSectionSegments,
 } from "./predictor/scorers/search.js";
 import { applyFrozenFeatureRanker, calibrateScores, round4, selectAnswers } from "./predictor/selection.js";
+import { buildPredictionSources, emptyPredictionSources } from "./predictor/source-context.js";
+import type { PredictorInput, PredictorOptions, PredictorResult } from "./predictor/types.js";
 import {
   answerSearchPhrases,
   betterEvidence,
@@ -4047,7 +4051,7 @@ function scoreAnswer(context) {
  * @param options Необязательные runtime-зависимости, например явный модуль PDF.js.
  * @returns ID выбранных ответов, калиброванные score, raw score, evidence и метаданные.
  */
-export async function predict(input, options: any = {}) {
+export async function predict(input: PredictorInput, options: PredictorOptions = {}): Promise<PredictorResult> {
   const config = { ...DEFAULT_CONFIG, ...options };
   const pdfInput = input.pdfData ?? input.pdfBuffer ?? input.pdf ?? input.file ?? input.blob ?? input.pdfUrl ?? input.url ?? input.pdfPath;
   if (!pdfInput) throw new Error("predict input requires pdfData, pdfUrl, file/blob, or pdfPath-compatible data");
@@ -4066,7 +4070,8 @@ export async function predict(input, options: any = {}) {
   const intent = detectQuestionIntent(question);
   const anchorSegments = findAnchorSegments(runtime.pdfText.pages, question);
   const sectionSegments = findSectionSegments(runtime.pdfText.pages, question);
-  const topQuestionPages = new Set(runtime.index.search(questionTokens, { limit: 6 }).map((result) => result.chunk.page));
+  const topQuestionMatches = runtime.index.search(questionTokens, { limit: 6 });
+  const topQuestionPages = new Set(topQuestionMatches.map((result) => result.chunk.page));
   const rowSegments = findRowSegments(runtime.pdfText.pages, question, topQuestionPages);
   const boundedListSegments = findBoundedListSegments(runtime.pdfText.pages, question, topQuestionPages, mode, intent);
   const visualTableColumnTargetsByPage =
@@ -4138,13 +4143,40 @@ export async function predict(input, options: any = {}) {
       return hasLatin && !hasLatinSupport ? { ...item, raw: item.raw * 0.68 } : item;
     });
   }
+  const explicitOrdinalRangeSet = config.explicitOrdinalRangeSetDecoder
+    ? resolveExplicitOrdinalRangeSet({ mode, pages: runtime.pdfText.pages, topQuestionPages, question, answers })
+    : null;
+  if (explicitOrdinalRangeSet) answerScores = applyExplicitOrdinalRangeSetScores(answerScores, explicitOrdinalRangeSet);
   answerScores = applyFrozenFeatureRanker(answerScores, mode, config, { question });
+  if (config.relationTupleResolver) {
+    answerScores = applySingleRelationTupleResolver(answerScores, {
+      mode,
+      pages: runtime.pdfText.pages,
+      topQuestionPages,
+      question,
+      answers,
+    });
+  }
 
   const calibrated = calibrateScores(answerScores);
   const selected = selectAnswers(calibrated, mode, config);
   const confidence = predictionConfidence(calibrated, selected, mode);
   const scores = Object.fromEntries(calibrated.map((item) => [item.answer.id, item.score]));
   const rawScores = Object.fromEntries(calibrated.map((item) => [item.answer.id, round4(item.raw)]));
+  const sources = options.includeSources === false
+    ? emptyPredictionSources(answers, selected)
+    : buildPredictionSources({
+        pages: runtime.pdfText.pages,
+        question,
+        answers,
+        selected,
+        answerScores: calibrated,
+        questionAnchors: topQuestionMatches,
+        options: {
+          maxChars: options.sourcePassageMaxChars,
+          excerptsPerAnswer: options.sourcePassagesPerAnswer,
+        },
+      });
   const evidence = calibrated
     .flatMap((item) => item.evidence.map((evidenceItem) => ({ ...evidenceItem, answerId: item.answer.id, score: round4(evidenceItem.score) })))
     .sort((a, b) => b.score - a.score)
@@ -4158,6 +4190,7 @@ export async function predict(input, options: any = {}) {
     scores,
     rawScores,
     evidence,
+    sources,
     ...(diagnostics ? { diagnostics } : {}),
     meta: {
       pageCount: runtime.pdfText.pageCount,

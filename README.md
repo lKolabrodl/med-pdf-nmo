@@ -162,6 +162,9 @@ const result = await answerQuestion(pdf, {
 - `cacheKey`: optional PDF text cache key.
 - `pdfjsLib`: optional explicit PDF.js module override.
 - `pdfVerbosity`: optional PDF.js logging level. By default only PDF.js errors are shown, so non-fatal font warnings such as `TT: undefined function` are suppressed.
+- `includeSources`: include display-ready source paragraphs; defaults to `true`.
+- `sourcePassageMaxChars`: maximum length of one source paragraph; defaults to `1400`.
+- `sourcePassagesPerAnswer`: paragraphs kept for each variant, from `1` to `3`; defaults to `1`.
 
 Variants can be plain strings:
 
@@ -182,7 +185,7 @@ variants: [
 ### Result Shape
 
 ```js
-{
+const result = {
   selected: ["Answer B"],
   selectedIds: ["B"],
   mode: "single",
@@ -192,9 +195,16 @@ variants: [
     { id: "B", variant: "Answer B", score: 0.73, raw: 1.92 }
   ],
   evidence: [],
+  sources: {
+    question: null,
+    answers: [
+      { id: "A", variant: "Answer A", selected: false, excerpts: [] },
+      { id: "B", variant: "Answer B", selected: true, excerpts: [] }
+    ]
+  },
   meta: {},
   raw: {}
-}
+};
 ```
 
 Important fields:
@@ -204,7 +214,58 @@ Important fields:
 - `confidence`: relative confidence for the selected answer or set.
 - `scores`: calibrated and raw score per variant.
 - `evidence`: PDF snippets used by the scorer.
+- `sources`: paragraph-sized original PDF context for the question and every variant.
 - `raw`: low-level predictor output.
+
+### Display-ready sources
+
+`evidence` remains a compact scoring/debug trace. The separate `sources` field is intended for UI display and does not affect answer selection:
+
+```js
+const sources = {
+  question: {
+    page: 12,
+    text: "A larger paragraph from the original PDF...",
+    lineStart: 18,
+    lineEnd: 23,
+    blockKind: "recommendation",
+    stance: "context",
+    highlights: [{ start: 34, end: 59, role: "question" }],
+    origin: "search_fallback",
+    localizationMatch: "normalized",
+    contentMatch: "partial",
+    evidenceKinds: ["question_search"],
+    score: 12.48,
+    truncated: false
+  },
+  answers: [
+    {
+      id: "B",
+      variant: "Answer B",
+      selected: true,
+      excerpts: [
+        {
+          page: 12,
+          text: "The full recommendation paragraph with nearby context...",
+          lineStart: 20,
+          lineEnd: 23,
+          blockKind: "recommendation",
+          stance: "support",
+          highlights: [{ start: 110, end: 148, role: "answer" }],
+          origin: "scoring_evidence",
+          localizationMatch: "exact",
+          contentMatch: "exact",
+          evidenceKinds: ["recommendation_item_segment"],
+          score: 14.2,
+          truncated: false
+        }
+      ]
+    }
+  ]
+};
+```
+
+Line indexes are zero-based within the extracted page. `highlights` point into the returned `text`, so a UI can emphasize the matching words without re-running normalization. When `truncated` is true, `lineStart`/`lineEnd` identify the parent source block for navigation, while highlight offsets remain exact for the displayed text. `stance: "context"` means the paragraph is a broad lookup hit, not strong proof; `contradiction` marks negative evidence and `mixed` marks conflicting signals.
 
 ## Multi-Answer Questions
 

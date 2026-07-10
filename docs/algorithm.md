@@ -35,6 +35,7 @@ The predictor returns machine-readable JSON:
 - `scores`: calibrated score per answer id;
 - `rawScores`: uncalibrated evidence score per answer id;
 - `evidence`: PDF snippets with page, answer id, evidence kind, and score;
+- `sources`: display-ready question context plus paragraph-sized source excerpts for every answer variant;
 - `meta`: PDF page/chunk count and detected question intent.
 
 ## Runtime Pipeline
@@ -110,6 +111,10 @@ The predictor returns machine-readable JSON:
    A small route synonym dictionary maps high-confidence administration-route forms inside table evidence: `per os`/`внутрь` to peroral, `в/в` to intravenous, `в/м` to intramuscular, and `п/к` to subcutaneous.
    Frequency/duration recommendation evidence is guarded by the subject of the answer: matching only `3 суток` or `7 дней` is not enough when the answer names a different drug or medical agent. Frequency-polarity evidence handles general language cues such as `наиболее част...`, `редк...`, and `ведущ...`: the answer phrase must occur in the same sentence-like fragment as the cue and outside parenthetical examples, or in a bullet item immediately under a matching heading such as `Редкие формы:`. Dose evidence treats ranges such as `10-15 мг` as ranges; a range answer is not considered confirmed by a separate maximum-dose statement such as `до 25 мг`. Slash-dose pairs such as `90/400 мг` are bound by component order near compact combinations (`A+B`, `A/B`), and the right side of the slash is not re-read as a standalone dose for the first component. Hour duration aliases are handled narrowly: answer phrases such as `6 часов` can match a bounded source phrase `6 ч` / `6 ч.`, but this is isolated in `exact_hour_alias_segment` so dense month/dose numeric families are not broadly reweighted. Count-relation evidence binds `количество/число` questions to local count forms such as `различают N серотипов` and requires the target word near the counted number. Parenthetical-group evidence handles both category headings and tightly guarded inline lists such as `ряд ферментов (A, B, C), повреждающих...`, requiring question-focus support around the parentheses and at least two answer options inside the same group. Type-label ordinal evidence handles classification definition rows such as `2 тип: ...` with the same focus-token and next-row boundary checks used for stages/degrees. Simple dense comparator families are guarded: if an answer says `>N` but its evidence only supports `<N` for the same number, the answer is penalized. Compact treatment abbreviations such as `A/B` are treated as combinations only when the parts look like short non-unit abbreviations; units such as `мл/кг` and `МЕ/мл` are not treated as treatment combinations. For questions that explicitly exclude a clinical subgroup (`без X`), local evidence under `при X` / `наличие X` is penalized; procedural phrases such as `без проведения` are skipped.
    Definition-exact evidence handles `X это ...`, `Под X понимают ...`, and dash-definition rows. The answer phrase must be in the same definition fragment and the fragment label must match the question term, allowing a one-edit OCR typo in the label. For nested definition options, a conservative completion adjustment prefers a longer option only when it contains shorter alternatives and already has strong definition evidence.
+   Two additional conservative structural passes run only when their complete contracts are satisfied:
+   - `relation_tuple_segment` handles single-answer dense numeric families. It first verifies that all options share one lexical skeleton and exact unit signature, then requires one bounded source fragment to jointly support the question subject, an explicit semantic role, mandatory conditions, comparator direction, value, and unit. It abstains on negative/ambiguous questions, cross-unit evidence, missing roles, or conflicting trusted structural evidence.
+   - `explicit_ordinal_range_set` is a set-level decoder for multi-answer questions whose options are only ordinal labels of one kind (for example, several stages or degrees). It may override ordinary thresholds only when one atomic positive recommendation clause contains the question focus, intervention target, mandatory conditions, and one unambiguous explicit range/list. Citations, evidence-grade annotations, sibling bullets, adversative clauses, negated recommendations, and conflicting coordinate-table evidence are excluded.
+   - Both passes use fresh bounded fragments rather than global BM25 windows. Atomic recommendation segments stop at grade/comment lines, new bullets, numbered headings, and unconnected line continuations.
 7. Combine evidence into raw answer scores.
 8. Apply a frozen non-LLM feature layer over the evidence kinds:
    - evidence-kind contracts, structural/broad groups, and selection/confidence evidence lists are centralized in `src/predictor/scorer-registry.ts`;
@@ -127,6 +132,7 @@ The predictor returns machine-readable JSON:
    - `multi`: answers passing absolute, relative, or score-gap thresholds.
 11. In `multi` mode, apply a filtered shared-segment boost: if strong selected candidates point to the same high-quality segment, another candidate can be lifted only when it also matches that segment and already has enough prior raw support. This reduces under-selection while avoiding the broad extra-answer regression seen in earlier experiments.
 12. Compute output `confidence` separately from selection. This confidence layer does not change selected answers; it discounts predictions supported only by flat search evidence, close selected/unselected raw boundaries, or broad shared chunks without structural evidence.
+13. Build UI provenance after selection. `source-context.ts` localizes the unchanged short scorer evidence inside the original PDF page blocks, expands it to a bounded paragraph/recommendation/table-row context, preserves source line ranges and newlines, and adds highlight offsets. This post-selection layer cannot change raw scores, selected ids, or confidence.
 
 ## Code Layout
 
@@ -147,11 +153,14 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
 - `frequency_polarity_segment` / `frequency_polarity_list_item` in `src/predictor.ts`: narrow sentence/list-heading scorers for common/rare/leading frequency wording.
 - `definition_exact_answer_segment` in `src/predictor.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
-- `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item, explicit target, and multi recommendation-block item scorers.
+- `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item, explicit target, and multi recommendation-block scorers, plus the atomic recommendation-segment builder shared by the ordinal set decoder.
 - `src/predictor/scorers/fibrosis-stage.ts`: fibrosis/METAVIR stage row scorer.
 - `src/predictor/scorers/direction.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
 - `src/predictor/scorers/numeric.ts`: cloze-gap, condition-pair, exact-numeric/hour option, condition/numeric-condition, and count-relation scorers.
 - `src/predictor/scorers/option-family.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
+- `src/predictor/scorers/relation-tuple.ts`: bounded subject/role/condition/value/unit resolver for single-answer numeric option families.
+- `src/predictor/scorers/multi-set.ts`: explicit ordinal range/list decoder for source-coherent multi-answer sets.
+- `src/predictor/source-context.ts`: post-selection, display-only question/answer source paragraph builder.
 - `src/predictor/types.ts`: answer/evidence score contracts.
 - `src/predictor/selection.ts`: score calibration and single/multi selection.
 - `src/pdf.ts`, `src/chunk.ts`, `src/bm25.ts`, `src/normalize.ts`: extraction, chunking, retrieval, and normalization utilities.

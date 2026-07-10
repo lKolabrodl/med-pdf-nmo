@@ -158,6 +158,9 @@ const result = await answerQuestion(pdf, {
 - `cacheKey`: необязательный ключ кеша для текста PDF.
 - `pdfjsLib`: необязательная явная передача PDF.js модуля.
 - `pdfVerbosity`: необязательный уровень логирования PDF.js. По умолчанию показываются только ошибки PDF.js, поэтому нефатальные font warnings вроде `TT: undefined function` подавляются.
+- `includeSources`: добавлять крупные фрагменты источника для интерфейса; по умолчанию `true`.
+- `sourcePassageMaxChars`: максимальная длина одного фрагмента; по умолчанию `1400` символов.
+- `sourcePassagesPerAnswer`: число фрагментов на вариант от `1` до `3`; по умолчанию `1`.
 
 Варианты можно передавать строками:
 
@@ -178,7 +181,7 @@ variants: [
 ### Результат
 
 ```js
-{
+const result = {
   selected: ["Ответ B"],
   selectedIds: ["B"],
   mode: "single",
@@ -190,7 +193,7 @@ variants: [
   evidence: [],
   meta: {},
   raw: {}
-}
+};
 ```
 
 Главные поля:
@@ -293,6 +296,56 @@ Runtime API пакета во время inference не читает eval-фай
 - Сканированные PDF без текстового слоя могут потребовать OCR до передачи в пакет.
 - Алгоритм выбирает вероятные ответы по PDF evidence, но не гарантирует абсолютную правильность.
 - Runtime inference не использует LLM и не обращается к внешним интеллектуальным сервисам.
+
+## Расширенные фрагменты источника
+
+Короткий `evidence` остаётся техническим следом scoring. Для отображения пользователю результат дополнительно содержит отдельный ключ `sources`, который не влияет на выбор ответа:
+
+```js
+const sources = {
+  question: {
+    page: 12,
+    text: "Расширенный абзац из исходного PDF...",
+    lineStart: 18,
+    lineEnd: 23,
+    blockKind: "recommendation",
+    stance: "context",
+    highlights: [{ start: 34, end: 59, role: "question" }],
+    origin: "search_fallback",
+    localizationMatch: "normalized",
+    contentMatch: "partial",
+    evidenceKinds: ["question_search"],
+    score: 12.48,
+    truncated: false
+  },
+  answers: [
+    {
+      id: "B",
+      variant: "Ответ B",
+      selected: true,
+      excerpts: [
+        {
+          page: 12,
+          text: "Полный пункт рекомендации с соседним контекстом...",
+          lineStart: 20,
+          lineEnd: 23,
+          blockKind: "recommendation",
+          stance: "support",
+          highlights: [{ start: 110, end: 148, role: "answer" }],
+          origin: "scoring_evidence",
+          localizationMatch: "exact",
+          contentMatch: "exact",
+          evidenceKinds: ["recommendation_item_segment"],
+          score: 14.2,
+          truncated: false
+        }
+      ]
+    }
+  ]
+};
+```
+
+Индексы строк отсчитываются с нуля внутри извлечённой страницы. Диапазоны `highlights` относятся прямо к возвращённому `text`, поэтому интерфейс может подсветить совпавшие слова без повторной нормализации. При `truncated: true` поля `lineStart`/`lineEnd` указывают на родительский блок для навигации, а offsets подсветки остаются точными для показанного текста. `stance: "context"` означает широкий поисковый контекст, `contradiction` — противоречащий фрагмент, а `mixed` — конфликтующие сигналы.
 
 ## Лицензия
 

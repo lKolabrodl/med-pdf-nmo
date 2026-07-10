@@ -6,13 +6,15 @@ Runtime inference is JavaScript/Node.js only. It does not use LLMs, transformer 
 
 ## Data found
 
-The current corpus has 44 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
+The current local corpus has 46 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
 
-Current parsed cases: 2697, including 17 unkeyed cases that are skipped by exact eval.
+Current parsed cases: 2,831, including 17 unkeyed cases that are skipped by exact eval.
 
-- answer-keyed cases: 2680
-- single-answer answer-keyed cases: 1845
-- multi-answer answer-keyed cases: 835
+- answer-keyed cases: 2,814
+- single-answer answer-keyed cases: 1,938
+- multi-answer answer-keyed cases: 876
+
+Reproducibility caveat: only five group case files are tracked by Git; 41 corpus groups are local/ignored. The current metrics therefore require the local workspace dataset.
 
 ## Approaches considered
 
@@ -32,6 +34,37 @@ Current parsed cases: 2697, including 17 unkeyed cases that are skipped by exact
 | Stable medical abbreviation aliases | Recovers common RU abbreviations such as `СПЯ` and `РЭ` | Broad aliases can leak semantics into unrelated endometrium/cancer contexts | Kept as a small guarded dictionary and low-weight evidence |
 | PDF comparator artifact normalization | Distinguishes `<=4` from unrelated numeric thresholds | `£` can mean currency in general text | Kept only when `£` appears before a number |
 | Type-label ordinal binding | Recovers classification rows like `2 тип: ...` when answer options are `N тип` | Unsafe if treated as a broad numeric boost | Kept through the existing ordinal-row scorer with focus-token and row-boundary guards |
+
+## Iterations 96-100: Three Focused Theories
+
+| theory | isolated validation | decision |
+| --- | --- | --- |
+| Atomic recommendation binding for single answers | Dev stayed `395/503`; guarded variants reduced holdout to `493/580` and then `492/580` | Rejected. Item boundaries alone do not reliably bind target, condition, and role. |
+| Relation-aware numeric tuple resolution | Hardened version reached dev `396/503`; holdout remained `494/580` with zero selected-set changes | Retained. It requires one bounded `(subject, role, conditions, comparator, value, exact unit)` proof and otherwise abstains. |
+| Source-coherent multi set decoding | Hardened isolated version reached dev `400/503`; holdout remained `494/580` with zero selected-set changes | Retained only for pure ordinal answer families and an explicit range/list in one atomic recommendation clause. |
+
+The two retained rules are orthogonal: the tuple resolver handles single-answer numeric families, while the set decoder handles multi-answer ordinal families. Combined they reach dev `401/503 = 0.7972`, six cases above baseline, with no holdout selection changes.
+
+Broad variants were intentionally rejected. Global number proximity crossed units and sibling rows; generic set completion treated ordinary list membership as correctness; recommendation-item boosts confused adjacent targets.
+
+## Evaluation Integrity Finding
+
+The deterministic split is group-wise by directory, but not content-deduplicated. A corpus audit found an identical train/holdout PDF-question group pair, train/dev question duplication, and 138 exact normalized records with counterparts across split boundaries. In addition, historical holdout labels informed more than 95 iterations. The current `0.8517` holdout score is therefore a regression/acceptance result, not a blind generalization estimate.
+
+## Display Source / Provenance Research
+
+The old public `evidence` array is a global top-N scorer trace. It is intentionally compact, may contain penalties or broad lookup hits, and does not guarantee one item per answer. Enlarging `EvidenceItem.text` in place was rejected because selection and structural grouping read that text internally.
+
+The retained architecture adds a post-selection presentation layer instead:
+
+- preserve scorer evidence unchanged;
+- retain logical PDF blocks and physical line ranges beside the historical scoring text;
+- localize the best evidence for each variant back into original page blocks;
+- prefer selected-answer evidence as the primary question paragraph;
+- expose explicit `stance`, `localizationMatch`, `contentMatch`, and `truncated` metadata so UI code does not mistake a broad mention for exact proof;
+- return empty excerpts rather than a guessed citation when localization or numeric semantics are unsafe.
+
+Real-PDF review found and fixed several visual-provenance traps before retention: `800` inside `8000`, `<5%` vs `>5%`, `3.5` vs `3-5`, slash-dose vs range, unrelated top question pages, mojibake bullet markers, numeric dose lines misread as list numbering, paragraph over-expansion, and eager all-page preparation. The final layer is selection-neutral and uses lazy cached page windows.
 
 ## Selected best architecture
 
@@ -63,7 +96,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-The best current algorithm reaches dev exact accuracy `0.7694` and holdout exact accuracy `0.8345`, passing the required holdout `0.80` acceptance target. Future work is focused on multi-answer set selection, option-family resolution, and recommendation-block parsing with stronger structural binding.
+The best current algorithm reaches dev exact accuracy `401/503 = 0.7972` and holdout-regression exact accuracy `494/580 = 0.8517`, passing the command-level `0.80` acceptance target. Relative to the iteration-95 baseline, dev gains six exact cases and holdout has zero selected-set changes. Future work should prioritize a newly sealed deduplicated split, then recommendation target/condition parsing and deeper table/list reconstruction.
 
 ## Feature Calibrator Research Guardrails
 
