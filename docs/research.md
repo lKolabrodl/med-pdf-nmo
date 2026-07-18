@@ -62,6 +62,8 @@ The retained architecture adds a post-selection presentation layer instead:
 - localize the best evidence for each variant back into original page blocks;
 - prefer selected-answer evidence as the primary question paragraph;
 - expose explicit `stance`, `localizationMatch`, `contentMatch`, and `truncated` metadata so UI code does not mistake a broad mention for exact proof;
+- expose a singular `source: { page, text } | null` projection for clients that need only the primary citation; long excerpts prefer sentence boundaries and nearby paragraph edges;
+- expose full extracted page text once per referenced page in `sources.pages`, rather than duplicating it inside every excerpt;
 - return empty excerpts rather than a guessed citation when localization or numeric semantics are unsafe.
 
 Real-PDF review found and fixed several visual-provenance traps before retention: `800` inside `8000`, `<5%` vs `>5%`, `3.5` vs `3-5`, slash-dose vs range, unrelated top question pages, mojibake bullet markers, numeric dose lines misread as list numbering, paragraph over-expansion, and eager all-page preparation. The final layer is selection-neutral and uses lazy cached page windows.

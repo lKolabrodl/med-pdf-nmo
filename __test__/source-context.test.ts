@@ -129,6 +129,12 @@ describe("source context presentation layer", () => {
     expect(sources.answers.map((item) => item.selected)).toEqual([true, false]);
     expect(sources.answers[0].excerpts).toHaveLength(1);
     expect(sources.answers[1].excerpts).toEqual([]);
+    expect(sources.pages).toHaveLength(1);
+    expect(sources.pages[0]).toEqual({
+      page: 7,
+      text: fixturePage().lines.join("\n"),
+    });
+    expect(sources.pages[0].text).toContain("Следующая рекомендация");
   });
 
   it("deduplicates one paragraph and merges its evidence kinds", () => {
@@ -324,6 +330,45 @@ describe("source context presentation layer", () => {
     expect(excerpt.text).toContain("препарат Альфа");
   });
 
+  it("clips long source text at sentence boundaries and includes nearby paragraph edges", () => {
+    const target = "Целевое предложение сообщает, что пациентам рекомендуется препарат Альфа для основной терапии.";
+    const buildSource = (text: string) => buildPredictionSources({
+      pages: [{
+        page: 12,
+        lines: [text],
+        blocks: [{ text, lineStart: 0, lineEnd: 0 }],
+        text,
+      }],
+      question: "Какой препарат рекомендуется для основной терапии?",
+      answers,
+      selected: ["A"],
+      answerScores: [
+        {
+          answer: answers[0],
+          raw: 10,
+          evidence: [{ answerId: "A", page: 12, text: target, score: 14, kind: "recommendation_item_segment" }],
+        },
+        { answer: answers[1], raw: 1, evidence: [] },
+      ],
+      questionAnchors: [],
+      options: { maxChars: 400 },
+    }).question!;
+
+    const nearbyStart = "Короткое вводное предложение об основном лечении.";
+    const distantTail = "Отдалённое предложение с информацией из другой части абзаца. ".repeat(12).trim();
+    const fromStart = buildSource(`${nearbyStart} ${target} ${distantTail}`);
+    expect(fromStart.text.startsWith(nearbyStart)).toBe(true);
+    expect(fromStart.text).toContain(target);
+    expect(fromStart.text).not.toContain("другой части абзаца");
+    expect(fromStart.text.endsWith(".…")).toBe(true);
+
+    const distantPrefix = "Отдалённое предложение с информацией из другой части абзаца. ".repeat(12).trim();
+    const nearbyEnd = "Краткое завершение абзаца.";
+    const throughEnd = buildSource(`${distantPrefix} ${target} ${nearbyEnd}`);
+    expect(throughEnd.text.startsWith(`…${target}`)).toBe(true);
+    expect(throughEnd.text.endsWith(nearbyEnd)).toBe(true);
+  });
+
   it("keeps the public answer structure when source building is disabled", () => {
     expect(emptyPredictionSources(answers, ["A"])).toEqual({
       question: null,
@@ -331,6 +376,7 @@ describe("source context presentation layer", () => {
         { id: "A", variant: "препарат Альфа", selected: true, excerpts: [] },
         { id: "B", variant: "препарат Бета", selected: false, excerpts: [] },
       ],
+      pages: [],
     });
   });
 
@@ -371,8 +417,17 @@ describe("source context presentation layer", () => {
     expect(compact.confidence).toBe(withSources.confidence);
     expect(withSources.sources.answers.map((item) => item.id)).toEqual(["A", "B"]);
     expect(withSources.sources.answers.find((item) => item.selected)?.excerpts.length).toBeGreaterThan(0);
+    expect(withSources.sources.pages).toHaveLength(1);
+    expect(withSources.sources.pages[0].page).toBe(1);
+    expect(withSources.sources.pages[0].text).toContain("Лечение заболевания");
+    expect(withSources.sources.pages[0].text).toContain("препарат Альфа");
+    expect(withSources.source?.page).toBe(1);
+    expect(withSources.source?.text).toContain("препарат Альфа");
     expect(compact.sources.answers.every((item) => item.excerpts.length === 0)).toBe(true);
+    expect(compact.sources.pages).toEqual([]);
+    expect(compact.source).toBeNull();
     expect(withSources.raw).not.toHaveProperty("sources");
+    expect(withSources.raw).not.toHaveProperty("source");
     expect(() => JSON.stringify(withSources.sources)).not.toThrow();
   });
 });

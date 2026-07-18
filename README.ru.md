@@ -122,6 +122,7 @@ console.log(result.selectedIds);
 console.log(result.selected);
 console.log(result.confidence);
 console.log(result.evidence);
+console.log(result.source);
 ```
 
 В Node.js PDF можно передавать как `Buffer`, `Uint8Array`, `ArrayBuffer` или URL-строку.
@@ -191,6 +192,20 @@ const result = {
     { id: "B", variant: "Ответ B", score: 0.73, raw: 1.92 }
   ],
   evidence: [],
+  source: {
+    page: 12,
+    text: "Законченное предложение или ближайший абзац из исходного PDF."
+  },
+  sources: {
+    question: null,
+    answers: [],
+    pages: [
+      {
+        page: 12,
+        text: "Полный извлечённый текст страницы 12 с сохранёнными переносами строк."
+      }
+    ]
+  },
   meta: {},
   raw: {}
 };
@@ -203,7 +218,13 @@ const result = {
 - `confidence`: относительная уверенность.
 - `scores`: score по всем вариантам.
 - `evidence`: найденные фрагменты PDF.
+- `source`: один основной источник `{ page, text }`, связанный с выбранным ответом, либо `null`.
+- `sources`: подробный контекст вопроса, вариантов ответа и полный текст упомянутых страниц.
 - `raw`: низкоуровневый результат predictor.
+
+`source.text` по возможности начинается и заканчивается на границе предложения. Если граница абзаца находится рядом, фрагмент расширяется до начала или конца абзаца. Поле строится после выбора ответа и не участвует в скоринге. При `includeSources: false` оно равно `null`.
+
+`sources.pages` содержит полный извлечённый текст каждой страницы, на которую ссылаются `sources.question` или `sources.answers[].excerpts`. Одна страница добавляется только один раз, страницы сортируются по номеру, физические переносы строк сохраняются. При `includeSources: false` массив пуст.
 
 ## Multi-answer вопросы
 

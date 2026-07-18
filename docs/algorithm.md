@@ -35,7 +35,7 @@ The predictor returns machine-readable JSON:
 - `scores`: calibrated score per answer id;
 - `rawScores`: uncalibrated evidence score per answer id;
 - `evidence`: PDF snippets with page, answer id, evidence kind, and score;
-- `sources`: display-ready question context plus paragraph-sized source excerpts for every answer variant;
+- `sources`: display-ready question context, paragraph-sized excerpts for every answer variant, and deduplicated full extracted text for every referenced page;
 - `meta`: PDF page/chunk count and detected question intent.
 
 ## Runtime Pipeline
@@ -132,7 +132,7 @@ The predictor returns machine-readable JSON:
    - `multi`: answers passing absolute, relative, or score-gap thresholds.
 11. In `multi` mode, apply a filtered shared-segment boost: if strong selected candidates point to the same high-quality segment, another candidate can be lifted only when it also matches that segment and already has enough prior raw support. This reduces under-selection while avoiding the broad extra-answer regression seen in earlier experiments.
 12. Compute output `confidence` separately from selection. This confidence layer does not change selected answers; it discounts predictions supported only by flat search evidence, close selected/unselected raw boundaries, or broad shared chunks without structural evidence.
-13. Build UI provenance after selection. `source-context.ts` localizes the unchanged short scorer evidence inside the original PDF page blocks, expands it to a bounded paragraph/recommendation/table-row context, preserves source line ranges and newlines, and adds highlight offsets. This post-selection layer cannot change raw scores, selected ids, or confidence.
+13. Build UI provenance after selection. `source-context.ts` localizes the unchanged short scorer evidence inside the original PDF page blocks, expands it to a bounded paragraph/recommendation/table-row context, preserves source line ranges and newlines, and adds highlight offsets. The result also exposes a simplified singular `source: { page, text } | null`; long text is clipped at sentence boundaries when possible and includes nearby paragraph edges. This post-selection layer cannot change raw scores, selected ids, or confidence.
 
 ## Code Layout
 

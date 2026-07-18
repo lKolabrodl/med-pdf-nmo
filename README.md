@@ -126,6 +126,7 @@ console.log(result.selectedIds);
 console.log(result.selected);
 console.log(result.confidence);
 console.log(result.evidence);
+console.log(result.source);
 ```
 
 In Node.js, the PDF input can be a `Buffer`, `Uint8Array`, `ArrayBuffer`, or URL string.
@@ -195,11 +196,18 @@ const result = {
     { id: "B", variant: "Answer B", score: 0.73, raw: 1.92 }
   ],
   evidence: [],
+  source: {
+    page: 12,
+    text: "A complete source sentence or nearby paragraph from the PDF."
+  },
   sources: {
     question: null,
     answers: [
       { id: "A", variant: "Answer A", selected: false, excerpts: [] },
       { id: "B", variant: "Answer B", selected: true, excerpts: [] }
+    ],
+    pages: [
+      { page: 12, text: "The complete extracted text of PDF page 12..." }
     ]
   },
   meta: {},
@@ -214,12 +222,13 @@ Important fields:
 - `confidence`: relative confidence for the selected answer or set.
 - `scores`: calibrated and raw score per variant.
 - `evidence`: PDF snippets used by the scorer.
-- `sources`: paragraph-sized original PDF context for the question and every variant.
+- `source`: one primary `{ page, text }` citation associated with the selected answer, or `null`.
+- `sources`: paragraph excerpts plus full extracted text for every referenced PDF page.
 - `raw`: low-level predictor output.
 
 ### Display-ready sources
 
-`evidence` remains a compact scoring/debug trace. The separate `sources` field is intended for UI display and does not affect answer selection:
+`evidence` remains a compact scoring/debug trace. `source` is the simplest UI field: it contains only the page and the primary localized text. Its text is clipped at sentence boundaries when possible and expands to a nearby paragraph edge. The detailed `sources` field is intended for richer UI display. Neither field affects answer selection:
 
 ```js
 const sources = {
@@ -261,11 +270,17 @@ const sources = {
         }
       ]
     }
+  ],
+  pages: [
+    {
+      page: 12,
+      text: "The complete extracted text of PDF page 12 with physical lines preserved..."
+    }
   ]
 };
 ```
 
-Line indexes are zero-based within the extracted page. `highlights` point into the returned `text`, so a UI can emphasize the matching words without re-running normalization. When `truncated` is true, `lineStart`/`lineEnd` identify the parent source block for navigation, while highlight offsets remain exact for the displayed text. `stance: "context"` means the paragraph is a broad lookup hit, not strong proof; `contradiction` marks negative evidence and `mixed` marks conflicting signals.
+`sources.pages` contains each referenced page once, sorted by page number. Its `text` is the complete extracted page text with physical line breaks; it is not clipped to the excerpt. Line indexes are zero-based within that text. `highlights` point into excerpt `text`, so a UI can emphasize the matching words without re-running normalization. When `truncated` is true, `lineStart`/`lineEnd` identify the parent source block for navigation, while highlight offsets remain exact for the displayed excerpt. `stance: "context"` means the paragraph is a broad lookup hit, not strong proof; `contradiction` marks negative evidence and `mixed` marks conflicting signals.
 
 ## Multi-Answer Questions
 

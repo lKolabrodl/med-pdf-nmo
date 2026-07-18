@@ -564,3 +564,19 @@ Iteration 101 typed display-source/provenance layer: KEPT, behavior-preserving.
 - Real smoke checks: the salbutamol-dose case shows only the correct `400` source paragraph on page 48; `800/1000/200` no longer point to `8000` participants, FEV1 `1000 ml`, or `200 ml`. The relation-tuple dose case shows the selected `800 mg` recommendation block and leaves unsupported numeric distractors empty.
 - Result: dev remains `401/503 = 0.7972`; holdout remains `494/580 = 0.8517`. Case-level diff is zero on all `503` dev and `580` holdout cases.
 - Validation: `49` unit/leakage tests pass, including `13` source-context tests; `npm run typecheck`, `npm run build`, `npm run eval`, and `npm run eval:holdout` pass.
+
+Iteration 102 singular primary source and natural clipping: KEPT, behavior-preserving.
+
+- Public API: low-level `predict()` and high-level `answerQuestion()` now return `source: { page, text } | null`, projected from the primary localized context, which prefers selected-answer evidence and falls back to question search. The detailed `sources` structure remains unchanged and available.
+- Boundaries: when a long source must be clipped, the presentation layer first keeps the complete sentence containing the match, then includes the paragraph start/end when that edge is nearby and still fits the configured limit. It falls back to bounded character clipping only when a single natural segment cannot fit.
+- Isolation: `source` is built after calibration, selection, and confidence; it is excluded from high-level `raw`. With `includeSources: false`, it is `null`. No scorer text, score, threshold, or selection rule changed.
+- Result vs iteration 101: dev unchanged at `401/503 = 0.7972`; holdout unchanged at `494/580 = 0.8517`. Exact selected-answer delta is zero across all `503` dev and `580` holdout cases.
+- Validation: `50` unit/leakage tests pass, including `14` source-context tests; `npm run typecheck`, `npm run build`, `npm run eval`, and `npm run eval:holdout` pass. Holdout remains above the `0.80` gate.
+
+Iteration 103 full referenced-page text in sources: KEPT, behavior-preserving.
+
+- Public API: `sources.pages` now returns `{ page, text }[]` for every page referenced by `sources.question` or `sources.answers[].excerpts`.
+- Payload control: referenced page numbers are deduplicated and sorted, so the complete page text is returned once rather than copied into every excerpt. Physical line breaks from extracted `page.lines` are preserved. With `includeSources: false`, `sources.pages` is empty.
+- Isolation: the page payload is assembled after calibration, selection, and confidence from text already held in the PDF extraction result. No scorer, score, threshold, or selection rule changed.
+- Result vs iteration 102: dev unchanged at `401/503 = 0.7972`; holdout unchanged at `494/580 = 0.8517` and remains above the `0.80` gate.
+- Validation: `50` unit/leakage tests pass, including `14` source-context tests; `npm run typecheck`, `npm run build`, `npm run eval`, and `npm run eval:holdout` pass. A built-package smoke test confirms that the short primary `source.text` and complete `sources.pages[].text` differ as intended.

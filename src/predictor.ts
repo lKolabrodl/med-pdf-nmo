@@ -4177,6 +4177,9 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
           excerptsPerAnswer: options.sourcePassagesPerAnswer,
         },
       });
+  const source = sources.question
+    ? { page: sources.question.page, text: sources.question.text }
+    : null;
   const evidence = calibrated
     .flatMap((item) => item.evidence.map((evidenceItem) => ({ ...evidenceItem, answerId: item.answer.id, score: round4(evidenceItem.score) })))
     .sort((a, b) => b.score - a.score)
@@ -4190,6 +4193,7 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
     scores,
     rawScores,
     evidence,
+    source,
     sources,
     ...(diagnostics ? { diagnostics } : {}),
     meta: {

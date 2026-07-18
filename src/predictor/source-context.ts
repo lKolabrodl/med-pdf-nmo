@@ -308,9 +308,69 @@ function tokenHighlights(text: string, query: string, role: SourceHighlight["rol
   return highlights.sort((left, right) => left.start - right.start);
 }
 
+function paragraphRangeAt(text: string, start: number, end: number) {
+  const paragraphStart = text.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
+  const nextBreak = text.indexOf("\n", Math.max(start, end));
+  return {
+    start: paragraphStart,
+    end: nextBreak < 0 ? text.length : nextBreak,
+  };
+}
+
+function sentenceStartAt(text: string, offset: number, floor: number) {
+  const prefix = text.slice(floor, offset);
+  const boundary = /[.!?…](?:["»”')\]]*)\s+/gu;
+  let start = floor;
+  for (const match of prefix.matchAll(boundary)) start = floor + (match.index ?? 0) + match[0].length;
+  return start;
+}
+
+function sentenceEndAt(text: string, offset: number, ceiling: number) {
+  const suffix = text.slice(offset, ceiling);
+  const match = /[.!?…](?:["»”')\]]*)(?=\s|$)/u.exec(suffix);
+  return match ? offset + (match.index ?? 0) + match[0].length : ceiling;
+}
+
+function trimRange(text: string, start: number, end: number) {
+  let cleanStart = start;
+  let cleanEnd = end;
+  while (cleanStart < cleanEnd && /\s/u.test(text[cleanStart])) cleanStart += 1;
+  while (cleanEnd > cleanStart && /\s/u.test(text[cleanEnd - 1])) cleanEnd -= 1;
+  return { start: cleanStart, end: cleanEnd };
+}
+
+function renderClippedRange(text: string, start: number, end: number, hardMax: number) {
+  const clean = trimRange(text, start, end);
+  const prefix = clean.start > 0 ? "…" : "";
+  const suffix = clean.end < text.length ? "…" : "";
+  const available = Math.max(1, hardMax - prefix.length - suffix.length);
+  if (clean.end - clean.start > available) return null;
+  return {
+    text: `${prefix}${text.slice(clean.start, clean.end)}${suffix}`,
+    truncated: clean.start > 0 || clean.end < text.length,
+  };
+}
+
 function clipAroundHighlight(text: string, query: string, fallbackQuery: string, hardMax: number) {
   if (text.length <= hardMax) return { text, truncated: false };
   const highlight = exactHighlight(text, query, "answer") ?? exactHighlight(text, fallbackQuery, "answer");
+  if (highlight) {
+    const paragraph = paragraphRangeAt(text, highlight.start, highlight.end);
+    const sentence = trimRange(
+      text,
+      sentenceStartAt(text, highlight.start, paragraph.start),
+      sentenceEndAt(text, highlight.end, paragraph.end),
+    );
+    const nearbyChars = Math.max(80, Math.min(180, Math.round(hardMax * 0.16)));
+    const expanded = {
+      start: sentence.start - paragraph.start <= nearbyChars ? paragraph.start : sentence.start,
+      end: paragraph.end - sentence.end <= nearbyChars ? paragraph.end : sentence.end,
+    };
+    const natural = renderClippedRange(text, expanded.start, expanded.end, hardMax)
+      ?? renderClippedRange(text, sentence.start, sentence.end, hardMax);
+    if (natural) return natural;
+  }
+
   const center = highlight ? Math.floor((highlight.start + highlight.end) / 2) : Math.floor(text.length / 2);
   let start = Math.max(0, Math.min(text.length - hardMax, center - Math.floor(hardMax / 2)));
   let end = Math.min(text.length, start + hardMax);
@@ -431,6 +491,7 @@ export function emptyPredictionSources(answers: AnswerOption[], selected: string
       selected: selectedIds.has(answer.id),
       excerpts: [],
     })),
+    pages: [],
   };
 }
 
@@ -580,5 +641,20 @@ export function buildPredictionSources({
     questionExcerpt = anchorExcerpts[0]?.excerpt ?? null;
   }
 
-  return { question: questionExcerpt, answers: answerSources };
+  const referencedPages = new Set<number>();
+  if (questionExcerpt) referencedPages.add(questionExcerpt.page);
+  for (const answerSource of answerSources) {
+    for (const excerpt of answerSource.excerpts) referencedPages.add(excerpt.page);
+  }
+  const sourcePages = [...referencedPages]
+    .sort((left, right) => left - right)
+    .map((pageNumber) => {
+      const page = pageByNumber.get(pageNumber);
+      const text = Array.isArray(page?.lines)
+        ? page.lines.map((line: unknown) => String(line ?? "")).join("\n")
+        : String(page?.text ?? "");
+      return { page: pageNumber, text };
+    });
+
+  return { question: questionExcerpt, answers: answerSources, pages: sourcePages };
 }

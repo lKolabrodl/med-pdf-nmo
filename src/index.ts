@@ -5,6 +5,7 @@ import type {
   AnswerOption,
   AnswerSources,
   EvidenceItem,
+  PredictionSource,
   PredictionSources,
   PredictorInput,
   PredictorMeta,
@@ -12,6 +13,7 @@ import type {
   PredictorResult,
   SourceExcerpt,
   SourceHighlight,
+  SourcePage,
 } from "./predictor/types.js";
 
 export { predict, clearPredictorCache, setPdfJsLib };
@@ -20,6 +22,7 @@ export type {
   AnswerOption,
   AnswerSources,
   EvidenceItem,
+  PredictionSource,
   PredictionSources,
   PredictorInput,
   PredictorMeta,
@@ -27,6 +30,7 @@ export type {
   PredictorResult,
   SourceExcerpt,
   SourceHighlight,
+  SourcePage,
 };
 
 /**
@@ -108,9 +112,11 @@ export interface AnswerQuestionResult {
     raw: number;
   }>;
   /** Исходный низкоуровневый результат predictor. */
-  raw: Omit<PredictorResult, "sources">;
+  raw: Omit<PredictorResult, "source" | "sources">;
   /** Фрагменты PDF и evidence, использованные при скоринге. */
   evidence: EvidenceItem[];
+  /** Основной фрагмент исходного PDF, связанный с выбранным ответом. */
+  source: PredictionSource | null;
   /** Display-ready question context and paragraph-sized sources per variant. */
   sources: PredictionSources;
   /** Runtime-метаданные, например число страниц и признак необходимости OCR. */
@@ -163,7 +169,7 @@ export async function answerQuestion(
   const selectedAnswers = output.selected
     .map((id) => answers.find((answer) => answer.id === id))
     .filter(Boolean);
-  const { sources, ...rawOutput } = output;
+  const { source, sources, ...rawOutput } = output;
 
   return {
     selected: selectedAnswers.map((answer) => answer.text),
@@ -178,6 +184,7 @@ export async function answerQuestion(
     })),
     raw: rawOutput,
     evidence: output.evidence,
+    source,
     sources,
     meta: output.meta,
   };

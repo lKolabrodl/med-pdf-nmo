@@ -62,10 +62,23 @@ export type AnswerSources = {
   excerpts: SourceExcerpt[];
 };
 
+/** Full extracted text of one PDF page referenced by a source excerpt. */
+export type SourcePage = {
+  page: number;
+  text: string;
+};
+
 /** UI-oriented provenance, deliberately separate from scorer evidence. */
 export type PredictionSources = {
   question: SourceExcerpt | null;
   answers: AnswerSources[];
+  pages: SourcePage[];
+};
+
+/** Primary, display-ready citation for the prediction. */
+export type PredictionSource = {
+  page: number;
+  text: string;
 };
 
 export type PredictorMeta = {
@@ -88,6 +101,7 @@ export type PredictorResult = {
   scores: Record<string, number>;
   rawScores: Record<string, number>;
   evidence: EvidenceItem[];
+  source: PredictionSource | null;
   sources: PredictionSources;
   diagnostics?: { answerEvidence: unknown };
   meta: PredictorMeta;

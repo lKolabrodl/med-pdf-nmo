@@ -21,6 +21,7 @@ export type {
   AnswerSources,
   EvidenceItem,
   PdfInput,
+  PredictionSource,
   PredictionSources,
   PredictorMeta,
   PredictorInput,
@@ -28,4 +29,5 @@ export type {
   PredictorResult,
   SourceExcerpt,
   SourceHighlight,
+  SourcePage,
 } from "./index.js";
