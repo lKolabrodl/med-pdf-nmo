@@ -83,6 +83,7 @@ import {
   escapeRegExp,
   evidenceFromChunk,
   evidenceSnippet,
+  extractComparatorNumbers,
   expandNumberToken,
   findPhraseOccurrences,
   focusedAnswerSearchPhrases,
@@ -3190,10 +3191,8 @@ function sharedMultiCompactSpan(normalizedSegment, tokens) {
 function sharedMultiNumericComparatorMismatch(answerText, normalizedSegment) {
   const answerNumbers = extractNumbers(answerText).filter((number) => /^\d+(?:[.,]\d+)?$/u.test(number));
   if (answerNumbers.length !== 1) return false;
-  const answerNumber = answerNumbers[0].replace(",", ".");
-  const comparatorHits = [...String(normalizedSegment ?? "").matchAll(/(?:<=|<|>=|>)\s*(\d+(?:[.,]\d+)?)/gu)].map((match) =>
-    String(match[1] ?? "").replace(",", "."),
-  );
+  const answerNumber = String(Number(answerNumbers[0].replace(",", ".")));
+  const comparatorHits = extractComparatorNumbers(normalizedSegment);
   if (!comparatorHits.length) return false;
   return !comparatorHits.includes(answerNumber);
 }

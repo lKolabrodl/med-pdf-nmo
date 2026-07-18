@@ -1,87 +1,136 @@
 # Error Analysis
 
-## Current Error Counts
+## Current error counts
 
-The final iterations 96-100 result is compared with the baseline from the start of this work.
+These counts use the final deduplicated 43-PDF corpus and the frozen group split.
 
-| split | version | correct | errors | single errors | multi errors |
-| --- | --- | ---: | ---: | ---: | ---: |
-| dev | baseline | 395/503 | 108 | 55 | 53 |
-| dev | final | 401/503 | 102 | 54 | 48 |
-| holdout regression | baseline | 494/580 | 86 | 48 | 38 |
-| holdout regression | final | 494/580 | 86 | 48 | 38 |
+| split | correct | errors | single errors | multi errors |
+| --- | ---: | ---: | ---: | ---: |
+| dev | `405/523 = 0.7744` | 118 | 66 | 52 |
+| holdout regression | `458/540 = 0.8481` | 82 | 40 | 42 |
 
-The final dev error buckets are `confused_with_distractor = 72` and `multi_cardinality = 30`. Holdout remains `confused_with_distractor = 57` and `multi_cardinality = 29`. `noEvidence = 0` on both splits: the common failure is selecting the wrong relation, row, or exact set after finding a relevant area, not failing to retrieve any PDF text.
+`noEvidence = 0` on both splits. The dominant failure is not an inability to
+find PDF text; it is choosing the wrong relation, table row, recommendation
+target, or exact multi set after retrieving a relevant area.
 
-## Three Tested Theories
+## Residual diagnostic classes
 
-| theory | strongest isolated result | decision | main finding |
-| --- | ---: | --- | --- |
-| Atomic recommendation binding for single-answer questions | dev `395/503`; holdout fell as low as `492/580` | rejected | Recommendation items still contain neighboring targets/conditions; a generic item boost creates false bindings. |
-| Relation-aware numeric option-family resolver | dev `396/503`; holdout `494/580` with zero selected-set delta | retained | A number is useful only as a bounded `(subject, role, conditions, comparator, value, exact unit)` tuple. Global numeric proximity was unsafe. |
-| Source-coherent multi set decoder | dev `400/503`; holdout `494/580` with zero selected-set delta | retained | Exact set decoding is reliable for a narrow pure ordinal option family when one atomic recommendation clause explicitly encodes the whole range/list. |
+`npm run diagnostics` assigns each error to the first likely work area:
 
-Combined, the two retained theories reach dev `401/503 = 0.7972`, a gain of six exact cases, while all 580 holdout selections remain unchanged.
-
-## Residual Diagnostic Classes
-
-`npm run diagnostics` assigns each remaining error to a likely next work area:
-
-| likely next work | dev errors | holdout errors |
+| likely next work | dev | holdout regression |
 | --- | ---: | ---: |
-| option-family resolver | 29 | 21 |
-| multi set selection | 22 | 18 |
-| recommendation-block parser | 17 | 35 |
-| table/layout parser | 19 | 3 |
-| negative/exception semantics | 7 | 2 |
-| retrieval precision | 7 | 4 |
-| definition binding | 1 | 3 |
+| option-family resolver | 35 | 17 |
+| multi-set selection | 26 | 21 |
+| table/layout parser | 21 | 3 |
+| recommendation-block parser | 17 | 30 |
+| negative/exception semantics | 7 | 3 |
+| retrieval precision | 5 | 7 |
+| definition binding | 5 | 1 |
+| manual review | 2 | 0 |
 
-Multi-answer residuals show why a global threshold is unlikely to help:
+Broad evidence remains common among errors (`91` dev, `66` holdout), and flat
+retrieval evidence appears in `81` dev and `68` holdout errors. Structural
+scorers therefore need wider but still well-bounded coverage; simply increasing
+BM25 or shared-chunk weights would amplify many distractors.
 
-| cardinality failure | dev | holdout |
+## Multi-answer cardinality
+
+The minimum-two rule remains correct for this task and corpus. Every validated
+keyed multi case contains at least two expected answers. Residual errors occur
+above that lower bound in both directions:
+
+| cardinality failure | dev | holdout regression |
 | --- | ---: | ---: |
-| under-selected | 16 | 13 |
-| over-selected | 14 | 16 |
-| right count, wrong member | 18 | 9 |
+| under-selected | 14 | 15 |
+| over-selected | 17 | 16 |
+| right count, wrong member | 21 | 11 |
 
-Under- and over-selection are both common. Moving one scalar threshold trades one class for the other; new source structure is required.
+An oracle that provides only the true count, while preserving the predictor's
+raw-score order, reaches multi exact `0.7692` on dev and `0.8247` on holdout,
+versus final `0.6667` and `0.7273`. This shows useful cardinality headroom, but
+under- and over-selection are balanced enough that a scalar threshold merely
+trades one class for the other.
 
-## Main Remaining Failure Modes
+The tested train-only logistic score-shape model illustrates the risk. It raised
+train multi exact from `0.5185` to `0.5407`, yet reduced dev to `0.6218` and
+holdout to `0.6883`. No learned weights were retained. New cardinality changes
+should be driven by an explicit source list/table/recommendation structure, not
+by the document-mix prior.
+
+## Retained improvement
+
+PDF text may spell a comparator-bound value as `> 9 500`, while an option uses
+`>9500`. The general numeric matcher already treated these as equal, but the
+shared-segment comparator guard did not. Canonicalizing grouped thousands fixed
+one three-item dev list and changed no other dev/holdout selected set:
+
+- dev: `404 -> 405/523`, multi `0.6603 -> 0.6667`;
+- holdout: unchanged `458/540`, zero selected-set delta.
+
+This is the preferred improvement pattern: correct a general representation
+mismatch, keep strict relation semantics, and require an aggregate zero-regression
+check.
+
+## Main remaining failure modes
 
 ### Recommendation target and condition binding
 
-Several valid recommendations are often adjacent and share the same population, therapy, or procedure vocabulary. The rejected theory 1 confirmed that even an apparent bullet/item boundary is not enough for single answers unless the exact target, role, polarity, and subgroup condition are bound inside one clause.
+Neighboring recommendations often repeat the same population, therapy, or
+procedure vocabulary while changing the target, polarity, subgroup, or timing.
+Paragraph-level boosts are too broad. A safe resolver must bind target, role,
+conditions, and answer inside one atomic recommendation clause and abstain when
+any role is unresolved.
 
-### Numeric option families
+### Numeric and dense option families
 
-Percentages, durations, doses, ages, stages, and thresholds recur throughout the same PDF. The retained resolver is deliberately limited to dense single-answer families with an explicit relation role and one bounded source proof. The 29 remaining dev option-family errors include units, roles, or layouts that cannot yet meet those guards safely.
+Percentages, durations, doses, ages, stages, and thresholds recur throughout a
+single guideline. The bounded relation-tuple resolver covers only cases where
+subject, semantic role, conditions, comparator, value, and unit coexist in one
+proof fragment. The remaining option-family errors lack one of those bindings
+or come from flattened tables.
 
-### Exact multi-answer sets
+### Ordinary multi lists
 
-The new decoder fixes explicit ordinal ranges, but most remaining multi questions use ordinary membership lists, several sibling subtypes, or prose spread across clauses. List membership alone is not equivalent to correctness; previous broad list completion repeatedly added plausible distractors.
+The explicit ordinal-range decoder is reliable, but most remaining sets use
+nominal lists, sibling subtypes, or several clauses. A candidate's occurrence in
+the same broad paragraph is not enough: prior wide list completion added plausible
+distractors. Future work should reconstruct actual bullet/row membership from
+PDF geometry before completing a set.
 
-### Flattened tables and sibling rows
+### Flattened tables
 
-`pdfjs-dist` can preserve all words while losing the row/column relationship. Retrieval then finds the correct table but assigns a neighboring value or category. Coordinate scorers cover some clean tables, yet merged cells and line continuation remain ambiguous.
+`pdfjs-dist` can preserve words while losing row and column ownership. Coordinate
+scorers handle clean layouts, but merged cells, repeated headers, and continued
+rows still bind values to neighboring labels.
 
 ### Negation and contrast
 
-Negative questions and phrases such as `not recommended`, `except`, `without`, or an adversative clause can reverse otherwise strong lexical evidence. The new parsers explicitly split adversative clauses and check postposed negation, but this remains a smaller residual class.
+Negative questions, `except`, `not recommended`, subgroup exclusions, and
+adversative clauses can reverse otherwise strong lexical evidence. This is a
+smaller class, but unsafe broad matching is especially costly here.
 
-## Data Quality Findings
+## Data quality and leakage audit
 
-- `28-tanzilt#11` has malformed duplicate expected ids: `["A", "A"]`.
-- `41-destonia#58` and `41-destonia#61` have labels that conflict with literal PDF statements (`3-6 months` and `75%` respectively). The predictor's source-grounded answers disagree with the current keys.
-- Cross-split duplicate content makes the historical holdout optimistic; see `docs/evaluation.md`.
+- Three duplicate groups were removed. The final validator reports zero exact
+  PDF duplicates, zero likely near-duplicate group pairs, zero cross-split
+  duplicate records, and zero same-split duplicate records.
+- The malformed duplicated expected answer in `28-tanzilt#11` was corrected to
+  its actual single-answer form. Duplicate variants in two other fixtures were
+  reconstructed or removed from the source PDF.
+- `41-destonia#58` and `41-destonia#61` still appear to conflict with literal PDF
+  statements (`3-6 months` and `75%`). They remain documented rather than being
+  converted into runtime exceptions or medical hardcode.
+- The predictor does not receive case ids, PDF-group names, expected counts, or
+  labels. The historical holdout has informed many iterations, so it remains a
+  frozen regression/acceptance suite, not a blind estimate of generalization.
 
-No label was read by the predictor or converted into a runtime exception. The questionable keys are documented instead of being used as medical hardcode.
+## Recommended next experiments
 
-## Recommended Next Experiments
-
-1. Create a deduplicated, newly sealed PDF-level test split before further selection work.
-2. Extend atomic recommendation parsing with explicit grammatical target/condition roles, but keep it abstaining unless all roles resolve in one clause.
-3. Reconstruct sibling list/table boundaries from PDF coordinates and heading geometry, then validate by leave-one-PDF-out groups.
-4. Add dataset validation for duplicate expected ids, contradictory duplicate cases, and tracked-corpus completeness.
-
-Threshold-only tuning and broad recommendation/list boosts should not be revisited without new structural evidence; both have extensive measured regressions in the iteration log.
+1. Reconstruct bullet and table membership from PDF coordinates and require one
+   source-coherent set before changing multi cardinality.
+2. Extend atomic recommendation parsing with explicit grammatical target and
+   condition roles, retaining abstention when roles cross item boundaries.
+3. Add leave-one-PDF-out checks for any future learned calibrator; do not freeze
+   a model selected only by aggregate train score.
+4. Obtain a genuinely new, label-sealed PDF test set for an unbiased quality
+   estimate after runtime logic is frozen.

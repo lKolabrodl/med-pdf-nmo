@@ -580,3 +580,41 @@ Iteration 103 full referenced-page text in sources: KEPT, behavior-preserving.
 - Isolation: the page payload is assembled after calibration, selection, and confidence from text already held in the PDF extraction result. No scorer, score, threshold, or selection rule changed.
 - Result vs iteration 102: dev unchanged at `401/503 = 0.7972`; holdout unchanged at `494/580 = 0.8517` and remains above the `0.80` gate.
 - Validation: `50` unit/leakage tests pass, including `14` source-context tests; `npm run typecheck`, `npm run build`, `npm run eval`, and `npm run eval:holdout` pass. A built-package smoke test confirms that the short primary `source.text` and complete `sources.pages[].text` differ as intended.
+
+Iteration 104 corpus deduplication and frozen split: KEPT, evaluation-only.
+
+- Removed byte-identical duplicate groups `16-hb` / `18-gepatitabc`, retaining their canonical copies `05-bronhit-hron` / `04-hep-d`.
+- A second pass compared normalized extracted PDF text and found that `34-covid` was a different binary build of the same 171-page document as `09-covid`: token-set Jaccard `0.9937`, 107 normalized pages identical, and 68/70 cases exactly equal. The remaining two cases differed only by terminal punctuation in answer variants. Retained `09-covid` and removed `34-covid`.
+- Final corpus: `43` PDF groups, `2,621` parsed cases, `2,604` keyed cases (`1,754` single, `850` multi). There are zero duplicate PDF hashes, zero cross-split duplicate records, and zero repeated normalized records between different groups.
+- Added `scripts/dataset-manifest.ts` with a frozen 25/9/9 PDF-group split, aggregate PDF fingerprint, and parsed-case fingerprint including expected values. Removing/replacing a corpus PDF or silently changing a fixture now fails validation instead of reshuffling dev/holdout or changing metrics unnoticed.
+- Added `npm run dataset:validate`; it checks fingerprint, exact PDF duplicates, likely near-duplicate groups with at least ten shared normalized cases, answer/expected uniqueness, expected-to-option mapping, split isolation, and single/multi cardinality invariants.
+- Baseline on the frozen split before predictor changes: dev `404/523 = 0.7725`, single `0.8202`, multi `0.6603`; holdout regression `458/540 = 0.8481`, single `0.8964`, multi `0.7273`. The holdout gate passes.
+
+Iteration 105 comparator-bound spaced-thousands canonicalization: KEPT, dev +1, holdout zero-delta.
+
+- Problem class: PDF extraction can preserve a thousands separator (`> 9 500`) while an answer uses compact notation (`>9500`). General numeric coverage already recognized them as equal, but the stricter shared-segment comparator guard parsed only `9` after `>`, rejected the valid list member, and caused multi under-selection.
+- Change: added one shared comparator-number extractor that canonicalizes grouped integers and decimals without weakening comparator direction. Added a focused unit test for both numeric coverage and comparator extraction.
+- Targeted smoke check changed one explicit three-item PDF list from two selected answers to the complete source-supported set.
+- Aggregate result: dev `404 -> 405/523 = 0.7744`; multi exact `0.6603 -> 0.6667`; single unchanged `0.8202`. Exactly one of 523 dev selected sets changed and it was wrong-to-right. Holdout remains `458/540 = 0.8481` with zero selected-set changes across all 540 cases.
+
+Iteration 106 train-only score-shape cardinality classifier: REJECTED before runtime integration.
+
+- Theory: estimate whether a multi set should contain two or three answers from generic score-shape features (option count, current count, top-score ratios, and adjacent normalized gaps), while retaining the hard minimum of two.
+- Training used only abstract features and labels from train. The strongest regularized logistic variant improved train multi exact from `280/540 = 0.5185` to `292/540 = 0.5407`.
+- Transfer failed: the same frozen rule reduced dev multi from `0.6603` to `0.6218` and holdout multi from `0.7273` to `0.6883`. Train contains substantially more under-selection (`111`) than over-selection (`73`), while dev/holdout are balanced; the learned prior captured document-family composition rather than a stable evidence rule.
+- Decision: no classifier weights or answer-key-derived artifacts were added to runtime. Keep `multiMinAnswers = 2` and require new source structure for further cardinality changes.
+
+Iteration 107 multi minimum and corpus integrity contract: KEPT, behavior-preserving.
+
+- Explicitly documented the intentional runtime rule that a `multi` prediction contains at least two distinct answers when possible. The validated corpus independently confirms `multiMinimumExpectedAnswers = 2`; inference never reads expected cardinality.
+- Corrected three objective fixture defects found by validation: one duplicated bronchitis option, one duplicated multi expected/variant in the tonsillitis fixture (converted to its actual single-answer form), and one PDF-line-wrapped eosinophilic-esophagitis option family reconstructed from the source page.
+- README and evaluation docs now list `dataset:validate`, `eval:train`, dev, and holdout commands and distinguish the frozen regression holdout from a blind generalization estimate.
+
+Iteration 108 final 43-PDF audit: COMPLETE.
+
+- Corpus validator: `43` groups, `2,621` parsed, `2,604` keyed, `1,754` single, `850` multi; zero exact PDF duplicates, likely near-duplicate group pairs, cross-split duplicates, or same-split duplicate records; minimum keyed multi cardinality `2`.
+- Full keyed result: `1933/2604 = 0.7423`; single `1437/1754 = 0.8193`; multi exact set `496/850 = 0.5835`.
+- Train: `1070/1541 = 0.6944`; single `0.7892`; multi `0.5185`; 17 unkeyed cases skipped.
+- Dev: `405/523 = 0.7744`; single `0.8202`; multi `0.6667`; one wrong-to-right selected-set change versus the post-dedup baseline.
+- Holdout regression: `458/540 = 0.8481`; single `0.8964`; multi `0.7273`; zero selected-set changes versus baseline; acceptance gate `>= 0.80` passes.
+- Final commands passed: `npm run dataset:validate`, `npm test` (`51` passed, `2,621` eval fixtures intentionally skipped), `npm run typecheck`, `npm run build`, `npm run eval:train`, `npm run eval`, `npm run eval:holdout`, `npm run diagnostics`, and `npm pack --dry-run` (`82` package files, about `809.4 kB`).

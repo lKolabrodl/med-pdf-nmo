@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeForSearch, tokenize } from "../src/normalize.js";
+import { extractComparatorNumbers, numberCoverage } from "../src/predictor/text-utils.js";
 
 describe("normalize", () => {
   it("aligns Greek letter symbols and Russian letter names", () => {
@@ -15,5 +16,12 @@ describe("normalize", () => {
     );
 
     expect(tokens).not.toContain("151");
+  });
+
+  it("canonicalizes spaced thousands in numeric and comparator matching", () => {
+    const source = "количество нейтрофилов в крови > 9 500/мкл";
+
+    expect(numberCoverage(">9500/мкл", source)).toBe(1);
+    expect(extractComparatorNumbers(source)).toEqual(["9500"]);
   });
 });

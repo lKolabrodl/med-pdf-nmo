@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
+import { DATASET_GROUPS, FROZEN_SPLIT_GROUPS } from "./dataset-manifest.js";
 
 export async function loadDataset(rootDir = process.cwd()) {
   const testDir = path.join(rootDir, "__test__");
@@ -82,7 +83,25 @@ function evaluateExpression(node, file) {
   throw new Error(`Unsupported literal in ${file.fileName}: ${node.getText(file).slice(0, 120)}`);
 }
 
-export function groupSplit(groups, { seed = 20260509, holdoutRatio = 0.2, devRatio = 0.2 } = {}) {
+export function groupSplit(groups, { seed = 20260509, holdoutRatio = 0.2, devRatio = 0.2, frozen = true } = {}) {
+  if (frozen) {
+    const actual = [...groups].sort((a, b) => a.localeCompare(b, "en"));
+    const missing = DATASET_GROUPS.filter((group) => !actual.includes(group));
+    const unexpected = actual.filter((group) => !DATASET_GROUPS.includes(group));
+    if (missing.length || unexpected.length) {
+      throw new Error(
+        `Dataset groups differ from the frozen split manifest. Missing: ${missing.join(", ") || "none"}; ` +
+          `unexpected: ${unexpected.join(", ") || "none"}. Run npm run dataset:validate before updating the manifest intentionally.`,
+      );
+    }
+    return {
+      train: new Set(FROZEN_SPLIT_GROUPS.train),
+      dev: new Set(FROZEN_SPLIT_GROUPS.dev),
+      holdout: new Set(FROZEN_SPLIT_GROUPS.holdout),
+      orderedGroups: [...FROZEN_SPLIT_GROUPS.holdout, ...FROZEN_SPLIT_GROUPS.dev, ...FROZEN_SPLIT_GROUPS.train],
+    };
+  }
+
   const shuffled = [...groups].sort((a, b) => seededScore(a, seed) - seededScore(b, seed));
   const holdoutCount = Math.max(1, Math.round(shuffled.length * holdoutRatio));
   const devCount = Math.max(1, Math.round(shuffled.length * devRatio));

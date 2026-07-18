@@ -378,6 +378,26 @@ export function numberCoverage(answer, text) {
 }
 
 /**
+ * Extracts values that are explicitly bound to a comparison sign.
+ *
+ * PDF text commonly keeps a thousands separator (`9 500`), while an answer
+ * option uses the compact spelling (`9500`).  Treating the first spelling as
+ * the value `9` makes otherwise strict comparator checks reject valid source
+ * evidence.  This helper canonicalizes both grouped integers and decimals.
+ */
+export function extractComparatorNumbers(text) {
+  const normalized = normalizeForSearch(text);
+  const matches = normalized.matchAll(/(?:<=|>=|<|>)\s*(\d{1,3}(?:\s+\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)/gu);
+  return [...matches].map((match) => canonicalNumber(match[1] ?? "")).filter(Boolean);
+}
+
+function canonicalNumber(value) {
+  const compact = String(value ?? "").replace(/\s+/gu, "").replace(",", ".");
+  const numeric = Number(compact);
+  return Number.isFinite(numeric) ? String(numeric) : compact;
+}
+
+/**
  * Возвращает числа из текста и добавляет типичный OCR-вариант, когда одно число
  * разорвано пробелом (`9 00 мг` вместо `900 мг`). Склейка ограничена короткими
  * группами цифр, чтобы не превращать обычные перечисления в произвольные числа.

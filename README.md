@@ -22,15 +22,18 @@ The runtime is fully local and non-LLM. It does not use ChatGPT, OpenAI, Anthrop
 
 ## Current Accuracy
 
-These numbers come from the local keyed validation corpus. They are not a guarantee for every new PDF, but they are the current reference quality after the final test run.
+These numbers come from the deduplicated local corpus: 43 PDF groups and 2,604 keyed cases. They are not a guarantee for a new PDF, but they are the current reference quality after the final full run.
 
 | Dataset | Exact accuracy | Single-answer | Multi-answer exact set |
 | --- | ---: | ---: | ---: |
-| All keyed cases | `73.53%` (`2069/2814`) | `81.17%` (`1573/1938`) | `56.62%` (`496/876`) |
-| Holdout split | `83.79%` (`486/580`) | `87.39%` | `72.92%` |
-| Dev split | `77.14%` (`388/503`) | `83.09%` | `63.64%` |
+| All keyed cases | `74.23%` (`1933/2604`) | `81.93%` (`1437/1754`) | `58.35%` (`496/850`) |
+| Train split | `69.44%` (`1070/1541`) | `78.92%` | `51.85%` |
+| Dev split | `77.44%` (`405/523`) | `82.02%` | `66.67%` |
+| Frozen holdout regression | `84.81%` (`458/540`) | `89.64%` | `72.73%` |
 
 For `single`, only one exact selected answer is counted as correct. For `multi`, the selected set must exactly match the full expected set, so the metric is naturally stricter.
+
+The accepted comparator-number improvement changed exactly one dev set from wrong to correct (`404 -> 405/523`) and changed zero holdout sets. The frozen holdout passes the `0.80` command gate, but it has informed historical iterations and should be treated as a regression suite rather than a blind estimate of generalization.
 
 ## Installation
 
@@ -299,6 +302,14 @@ const result = await answerQuestion(pdfBuffer, {
 
 `selectedIds` will contain all selected answer IDs.
 
+In `multi` mode the selector intentionally returns at least two distinct answers
+when at least two variants are available. This lower-bound prior is part of the
+task contract: a multi-answer question normally requires more than one choice,
+all keyed multi cases in the validated local corpus contain at least two correct
+answers, and keeping the guard improves exact pass rate. The predictor still
+estimates whether additional answers should be included from PDF evidence; it
+does not read the expected cardinality or an answer key during inference.
+
 ## Low-Level Exports
 
 ```js
@@ -354,15 +365,17 @@ Build outputs:
 ## Development Checks
 
 ```bash
+npm run dataset:validate
 npm test
 npm run typecheck
 npm run build
 npm pack --dry-run
+npm run eval:train
 npm run eval
 npm run eval:holdout
 ```
 
-`npm run eval` and `npm run eval:holdout` are development-only quality checks. They read local test PDFs and answer keys to calculate accuracy.
+`npm run dataset:validate` verifies the frozen corpus fingerprint, duplicate PDFs/case groups, split isolation, label integrity, and the multi-answer lower bound. The eval commands are development-only quality checks; they read local PDFs and answer keys to calculate accuracy. `npm run eval:holdout` exits non-zero below `0.80` exact accuracy.
 
 The runtime package API does not read eval files, split files, answer keys, or test fixtures during inference.
 

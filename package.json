@@ -63,10 +63,12 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "predict": "tsx src/cli.ts",
+    "dataset:validate": "tsx scripts/validate-dataset.ts",
     "diagnostics": "tsx scripts/diagnostics.ts",
     "features:export": "tsx scripts/export-features.ts",
     "calibrator:experiment": "tsx scripts/calibrator-experiment.ts",
     "eval": "tsx scripts/eval.ts --split dev",
+    "eval:train": "tsx scripts/eval.ts --split train",
     "eval:holdout": "tsx scripts/eval.ts --split holdout"
   },
   "dependencies": {

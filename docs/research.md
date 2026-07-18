@@ -6,15 +6,15 @@ Runtime inference is JavaScript/Node.js only. It does not use LLMs, transformer 
 
 ## Data found
 
-The current local corpus has 46 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
+The current deduplicated local corpus has 43 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
 
-Current parsed cases: 2,831, including 17 unkeyed cases that are skipped by exact eval.
+Current parsed cases: 2,621, including 17 unkeyed cases that are skipped by exact eval.
 
-- answer-keyed cases: 2,814
-- single-answer answer-keyed cases: 1,938
-- multi-answer answer-keyed cases: 876
+- answer-keyed cases: 2,604
+- single-answer answer-keyed cases: 1,754
+- multi-answer answer-keyed cases: 850
 
-Reproducibility caveat: only five group case files are tracked by Git; 41 corpus groups are local/ignored. The current metrics therefore require the local workspace dataset.
+Reproducibility caveat: only five group case files are tracked by Git; 38 corpus groups are local/ignored. The current metrics therefore require the local workspace dataset and its manifest fingerprints.
 
 ## Approaches considered
 
@@ -49,7 +49,7 @@ Broad variants were intentionally rejected. Global number proximity crossed unit
 
 ## Evaluation Integrity Finding
 
-The deterministic split is group-wise by directory, but not content-deduplicated. A corpus audit found an identical train/holdout PDF-question group pair, train/dev question duplication, and 138 exact normalized records with counterparts across split boundaries. In addition, historical holdout labels informed more than 95 iterations. The current `0.8517` holdout score is therefore a regression/acceptance result, not a blind generalization estimate.
+The earlier deterministic split was group-wise by directory but not content-deduplicated. The audit found two byte-identical pairs and one near-identical COVID pair. All three duplicates are now removed, the split is frozen in a manifest, and validation reports zero repeated normalized records between groups or splits. Historical holdout labels still informed more than 100 iterations, so the current holdout remains a regression/acceptance result rather than a blind generalization estimate.
 
 ## Display Source / Provenance Research
 
@@ -98,7 +98,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-The best current algorithm reaches dev exact accuracy `401/503 = 0.7972` and holdout-regression exact accuracy `494/580 = 0.8517`, passing the command-level `0.80` acceptance target. Relative to the iteration-95 baseline, dev gains six exact cases and holdout has zero selected-set changes. Future work should prioritize a newly sealed deduplicated split, then recommendation target/condition parsing and deeper table/list reconstruction.
+On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `405/523 = 0.7744` and holdout-regression exact accuracy `458/540 = 0.8481`, passing the command-level `0.80` acceptance target. Relative to the post-dedup baseline, comparator-bound spaced-thousands canonicalization gains one exact dev case and changes zero holdout selected sets. Future work should prioritize a newly label-sealed external split, recommendation target/condition parsing, and deeper table/list reconstruction.
 
 ## Feature Calibrator Research Guardrails
 
@@ -112,7 +112,7 @@ The next non-LLM research direction is a small frozen feature calibrator. To avo
 - Any learned coefficients must be validated by group split by PDF and a leave-PDF-out sanity check before being frozen into runtime.
 - Holdout labels are for final reporting only, not for coefficient selection.
 
-Current dev diagnostic export:
+Historical pre-dedup dev diagnostic export (must be regenerated before reuse):
 
 - baseline exact: `363/473 = 0.7674`
 - single exact: `0.8328`
@@ -123,7 +123,7 @@ Current dev diagnostic export:
 
 The oracle result means cardinality calibration is useful but not sufficient; the remaining gap also needs better structural evidence for tables, lists, and recommendation rows.
 
-Train/dev/holdout feature files are now available under `.cache/features/`. They are generated artifacts for local analysis and are not package runtime assets.
+Historical train/dev/holdout feature files remain under `.cache/features/`. They are generated local artifacts, not runtime assets, and their old split composition means they must be regenerated before another calibrator experiment.
 
 ## First Calibrator Experiment
 
@@ -132,10 +132,42 @@ Train/dev/holdout feature files are now available under `.cache/features/`. They
 - replacing the selector with model probabilities;
 - keeping baseline selections and using the model only as a conservative multi-answer post-corrector.
 
-Current result:
+Historical result on the old pre-dedup feature artifacts:
 
 - full selector replacement remains worse than baseline on dev and holdout;
 - after enabling the current fixed structural rules, the best dev-selected post-corrector no longer improves dev (`363/473 = 0.7674`);
 - the same dev-selected strategy is slightly better on train (`1108/1597`) but weaker on holdout report-only (`454/550`), so it is still not stable enough to freeze into runtime.
 
 Decision: keep the experiment script, reject the learned selector for now. The next calibrator attempt needs either richer structural features or leave-PDF-out stability checks before any runtime integration.
+
+## July 2026 corpus and cardinality audit
+
+The local corpus was deduplicated before new predictor work. Two duplicate PDFs
+were byte-identical; a third COVID pair used different PDF binaries but had the
+same 171-page content (`0.9937` normalized token-set Jaccard) and equivalent case
+fixtures. The canonical corpus now has 43 PDF groups and no repeated normalized
+case records between groups. A tracked manifest freezes the PDF-group split and
+both PDF/case fingerprints; validation also rejects likely near-duplicate
+groups when at least ten normalized cases recur between the pair.
+
+Fresh exact-set baselines on the frozen split showed the same cardinality shape
+on dev and holdout: both under- and over-selection are common. An oracle that
+supplies only the true `K` while preserving raw-score rank reaches multi exact
+`0.7692` on dev and `0.8247` on holdout, versus baseline `0.6603` and `0.7273`.
+There is therefore real cardinality headroom, but it cannot be recovered by a
+single global threshold.
+
+A train-only logistic boundary model over abstract score-shape features confirmed
+the transfer risk. Its best train result improved multi exact from `0.5185` to
+`0.5407`, but dev fell to `0.6218` and holdout to `0.6883`. The model learned the
+train document mix (more under-selection than over-selection), not a stable PDF
+relation. No weights were added to runtime. The hard `multiMinAnswers = 2` prior
+remains because it matches the task semantics and every validated keyed multi
+case, while any answer beyond two still requires runtime evidence.
+
+The retained predictor change instead fixes a source-representation mismatch:
+comparator-bound grouped thousands such as `> 9 500` are canonicalized to the
+same value as `>9500`. It changes exactly one dev selected set, wrong-to-right,
+and changes zero holdout sets. This supports the current research direction:
+prefer narrow source-structure corrections with abstention over broad statistical
+cardinality priors.
