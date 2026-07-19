@@ -70,34 +70,39 @@ npm run predict -- --input request.json
 | split | exact | single | multi exact set | macro by PDF |
 | --- | ---: | ---: | ---: | ---: |
 | train | `1070/1541 = 0.6944` | `790/1001 = 0.7892` | `280/540 = 0.5185` | `0.7008` |
-| dev | `405/523 = 0.7744` | `301/367 = 0.8202` | `104/156 = 0.6667` | `0.7838` |
+| dev | `415/523 = 0.7935` | `308/367 = 0.8392` | `107/156 = 0.6859` | `0.8011` |
 | holdout regression | `458/540 = 0.8481` | `346/386 = 0.8964` | `112/154 = 0.7273` | `0.8367` |
-| all keyed cases | `1933/2604 = 0.7423` | `1437/1754 = 0.8193` | `496/850 = 0.5835` | — |
+| all keyed cases | `1943/2604 = 0.7462` | `1444/1754 = 0.8233` | `499/850 = 0.5871` | — |
 
-The predictor baseline after deduplication but before the retained numeric change
-was dev `404/523 = 0.7725` and holdout `458/540 = 0.8481`. Canonicalizing
-comparator-bound grouped thousands changes exactly one dev selected set from
-wrong to right:
+The fresh iteration-109 baseline, reproduced after the full 108-iteration audit,
+was dev `405/523 = 0.7744` and holdout `458/540 = 0.8481`. Four narrowly gated
+source-structure changes add ten exact dev cases. Every dev selection change is
+wrong-to-right; the frozen holdout has no selected-set churn:
 
 | split | baseline | final | selected-set changes | net exact |
 | --- | ---: | ---: | ---: | ---: |
-| dev | `404/523` | `405/523` | `1/523` | `+1` |
+| dev | `405/523` | `415/523` | `10/523` | `+10` |
 | holdout regression | `458/540` | `458/540` | `0/540` | `0` |
+
+The retained changes are format-general rather than case-specific: bounded
+sibling-bullet membership (`+5`), whole-interval relation tuples (`+3`), and
+clause-local counted-object tuples (`+2`). A fifth exact-negation-pair prototype
+was exact-neutral and is disabled by default.
 
 Final dev summary:
 
 ```json
 {
   "total": 523,
-  "correct": 405,
-  "exactAccuracy": 0.7744,
-  "singleAccuracy": 0.8202,
-  "multiExactAccuracy": 0.6667,
-  "macroAccuracyByPdf": 0.7838,
+  "correct": 415,
+  "exactAccuracy": 0.7935,
+  "singleAccuracy": 0.8392,
+  "multiExactAccuracy": 0.6859,
+  "macroAccuracyByPdf": 0.8011,
   "noEvidence": 0,
   "errorBuckets": {
-    "confused_with_distractor": 87,
-    "multi_cardinality": 31
+    "confused_with_distractor": 78,
+    "multi_cardinality": 30
   }
 }
 ```

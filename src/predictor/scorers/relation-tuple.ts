@@ -28,6 +28,8 @@ type NumericFamilyMember = {
   variableTuples: Array<{ number: string; unit: string }>;
   valueKey: string;
   unitClass: string;
+  intervalKey?: string;
+  intervalUnit?: string;
 };
 
 type NumericFamily = {
@@ -66,6 +68,61 @@ const UNIT_PATTERNS: Array<[string, RegExp]> = [
 const SKELETON_IGNORES = new Set(
   uniqueTokens("мкг мг грамм миллилитр ме процент стадия степень место менее более ниже выше от до ровно").filter(Boolean),
 );
+
+type CanonicalInterval = {
+  key: string;
+  endpoints: string[];
+  unit: string;
+  start: number;
+  end: number;
+};
+
+const NUMBER_ATOM_SOURCE = String.raw`\d+(?:\.\d+)?`;
+
+function canonicalNumber(value: string) {
+  const normalized = value.replace(/^0+(?=\d)/u, "").replace(/\.0+$/u, "").replace(/(\.\d*?)0+$/u, "$1");
+  return normalized || "0";
+}
+
+/**
+ * Canonicalizes an interval as one value. In particular, endpoint numbers that
+ * merely coexist in a clause do not satisfy an interval option.
+ */
+export function canonicalIntervalTuples(text: string): CanonicalInterval[] {
+  const clean = normalizeText(text);
+  const intervals: CanonicalInterval[] = [];
+  const fromTo = new RegExp(
+    `(?:^|\\s)\u043e\u0442\\s+(${NUMBER_ATOM_SOURCE})\\s*(%?)\\s*(?:-\\s*(${NUMBER_ATOM_SOURCE})\\s*(%?)\\s*)?\u0434\u043e\\s+(${NUMBER_ATOM_SOURCE})\\s*(%?)`,
+    "gu",
+  );
+
+  for (const match of clean.matchAll(fromTo)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    const endpoints = [match[1], match[3], match[5]].filter(Boolean).map(canonicalNumber);
+    const unit = [match[2], match[4], match[6]].some((marker) => marker === "%")
+      ? "percent"
+      : canonicalUnitAfter(clean, end, endpoints.at(-1) ?? "");
+    intervals.push({ key: endpoints.join(".."), endpoints, unit, start, end });
+  }
+
+  const direct = new RegExp(`(${NUMBER_ATOM_SOURCE})\\s*(%?)\\s*-\\s*(${NUMBER_ATOM_SOURCE})\\s*(%?)`, "gu");
+  for (const match of clean.matchAll(direct)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (intervals.some((interval) => start >= interval.start && end <= interval.end)) continue;
+    const endpoints = [match[1], match[3]].map(canonicalNumber);
+    const unit = match[2] === "%" || match[4] === "%" ? "percent" : canonicalUnitAfter(clean, end, endpoints[1]);
+    intervals.push({ key: endpoints.join(".."), endpoints, unit, start, end });
+  }
+
+  return intervals
+    .sort((left, right) => left.start - right.start)
+    .filter(
+      (interval, index, all) =>
+        all.findIndex((candidate) => candidate.key === interval.key && candidate.unit === interval.unit) === index,
+    );
+}
 
 function strictNumbers(text: string) {
   return (normalizeText(text).match(/\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?%?/gu) ?? []).map((value) => value.replace(/^0+(?=\d)/u, ""));
@@ -115,7 +172,37 @@ function unitClass(text: string) {
   return UNIT_PATTERNS.find(([, pattern]) => pattern.test(clean))?.[0] ?? "scalar";
 }
 
-function buildNumericFamily(answers: AnswerOption[]): NumericFamily | null {
+function buildIntervalFamily(answers: AnswerOption[]): NumericFamily | null {
+  if (answers.length < 3) return null;
+  const parsed = answers.map((answer) => canonicalIntervalTuples(answer.text));
+  if (parsed.some((intervals) => intervals.length !== 1)) return null;
+  if (new Set(answers.map((answer) => familySkeleton(answer.text))).size > 1) return null;
+  const intervalUnits = new Set(parsed.map((intervals) => intervals[0].unit));
+  if (intervalUnits.size > 1) return null;
+  const intervalKeys = parsed.map((intervals) => intervals[0].key);
+  if (new Set(intervalKeys).size !== answers.length) return null;
+
+  const members = answers.map((answer, index) => {
+    const interval = parsed[index][0];
+    return {
+      answer,
+      allNumbers: interval.endpoints,
+      variableNumbers: [interval.key],
+      variableTuples: [{ number: interval.key, unit: interval.unit }],
+      valueKey: interval.key,
+      unitClass: interval.unit,
+      intervalKey: interval.key,
+      intervalUnit: interval.unit,
+    };
+  });
+  return { members, allFamilyNumbers: new Set(members.flatMap((member) => member.allNumbers)) };
+}
+
+function buildNumericFamily(answers: AnswerOption[], enableIntervalFamilies = false): NumericFamily | null {
+  if (enableIntervalFamilies) {
+    const intervalFamily = buildIntervalFamily(answers);
+    if (intervalFamily) return intervalFamily;
+  }
   if (answers.length < 3) return null;
   const seenText = new Set<string>();
   const numberSets = answers.map((answer) => {
@@ -345,6 +432,12 @@ function memberMatchesScope(
   comparator: string | null,
   requiredUnit: string,
 ) {
+  if (member.intervalKey) {
+    const unit = member.intervalUnit === "scalar" ? requiredUnit : member.intervalUnit;
+    return canonicalIntervalTuples(scope).some(
+      (candidate) => candidate.key === member.intervalKey && (unit === "scalar" || candidate.unit === unit),
+    );
+  }
   const sourceTuples = numericTuples(scope);
   if (
     !member.variableTuples.every((tuple) => {
@@ -388,14 +481,16 @@ export function resolveRelationTuple({
   question,
   answers,
   fragments,
+  enableIntervalFamilies = true,
 }: {
   mode: string;
   question: string;
   answers: AnswerOption[];
   fragments: RelationFragment[];
+  enableIntervalFamilies?: boolean;
 }) {
   if (mode !== "single" || negativeOrAmbiguousQuestion(question)) return null;
-  const family = buildNumericFamily(answers);
+  const family = buildNumericFamily(answers, enableIntervalFamilies);
   if (!family) return null;
   const inferredRole = family.members[0]?.unitClass === "stage" && /(?:характер|соответств|относ|явля)/u.test(normalizeText(question)) ? "ordinal_stage" : null;
   const role = detectRelationRole(question) ?? inferredRole;
@@ -414,7 +509,13 @@ export function resolveRelationTuple({
       if (!conditionsCompatible(scope.conditionText, requiredConditions)) continue;
       const matching = family.members.filter((member) => memberMatchesScope(member, scope.valueText, role, comparator, requiredUnit));
       if (matching.length !== 1) continue;
-      proofs.push({ answerId: matching[0].answer.id, page: fragment.page, text: fragment.text, role });
+      proofs.push({
+        answerId: matching[0].answer.id,
+        page: fragment.page,
+        text: fragment.text,
+        role,
+        interval: Boolean(matching[0].intervalKey),
+      });
     }
   }
 
@@ -425,7 +526,14 @@ export function resolveRelationTuple({
 
 export function applySingleRelationTupleResolver(
   answerScores: AnswerScore[],
-  context: { mode: string; pages: any[]; topQuestionPages?: Set<unknown>; question: string; answers: AnswerOption[] },
+  context: {
+    mode: string;
+    pages: any[];
+    topQuestionPages?: Set<unknown>;
+    question: string;
+    answers: AnswerOption[];
+    enableIntervalFamilies?: boolean;
+  },
 ) {
   if (context.mode !== "single") return answerScores;
   const fragments = buildRelationTupleFragments(context.pages, context.topQuestionPages);
@@ -441,7 +549,9 @@ export function applySingleRelationTupleResolver(
     (top?.evidence ?? []).some((item) => trustedKinds.has(item.kind) && (item.score ?? 0) >= 12);
   const rawGap = maxRaw - target.raw;
   const rawRatio = target.raw / Math.max(0.001, maxRaw);
-  const mayOverride = target.raw >= maxRaw || (!trustedTop && rawGap <= 12 && rawRatio >= 0.55);
+  const gapLimit = resolved.interval ? 20 : 12;
+  const ratioFloor = resolved.interval ? 0.5 : 0.55;
+  const mayOverride = target.raw >= maxRaw || (!trustedTop && rawGap <= gapLimit && rawRatio >= ratioFloor);
   if (!mayOverride) return answerScores;
   return answerScores.map((item) => {
     if (item.answer.id !== resolved.answerId) return item;
@@ -454,8 +564,8 @@ export function applySingleRelationTupleResolver(
           answerId: item.answer.id,
           page: resolved.page,
           text: resolved.text,
-          score: 18,
-          kind: "relation_tuple_segment",
+          score: resolved.interval ? 19 : 18,
+          kind: resolved.interval ? "interval_relation_tuple_segment" : "relation_tuple_segment",
         },
       ],
     };

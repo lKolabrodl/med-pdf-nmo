@@ -98,7 +98,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `405/523 = 0.7744` and holdout-regression exact accuracy `458/540 = 0.8481`, passing the command-level `0.80` acceptance target. Relative to the post-dedup baseline, comparator-bound spaced-thousands canonicalization gains one exact dev case and changes zero holdout selected sets. Future work should prioritize a newly label-sealed external split, recommendation target/condition parsing, and deeper table/list reconstruction.
+On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `415/523 = 0.7935` and holdout-regression exact accuracy `458/540 = 0.8481`, passing the command-level `0.80` acceptance target. Relative to the fresh iteration-109 baseline, the July structural round gains ten exact dev cases and changes zero holdout selected sets. Future work should prioritize a newly label-sealed external split, recommendation target/condition parsing, and deeper table/list reconstruction.
 
 ## Feature Calibrator Research Guardrails
 
@@ -171,3 +171,48 @@ same value as `>9500`. It changes exactly one dev selected set, wrong-to-right,
 and changes zero holdout sets. This supports the current research direction:
 prefer narrow source-structure corrections with abstention over broad statistical
 cardinality priors.
+
+## July 2026 follow-up hypotheses after the full iteration audit
+
+All 108 earlier iterations were reviewed before selecting the next experiments.
+The new work deliberately avoids the approaches that already failed to transfer:
+global multi thresholds, score-distribution cardinality models, broad
+recommendation windows, page-section routing, and unconstrained list completion.
+
+Five remaining representation gaps are testable without medical hardcode:
+
+1. A sequence of bullet items with short labels preserves sibling-category
+   boundaries even when paragraph extraction is flat. Multi answers found under
+   the target label should not be mixed with members under adjacent labels.
+2. The same structure can be read in reverse for single questions: a description
+   in a bullet body can identify the corresponding short option label, provided
+   competing labels occur in sibling bullets and the match is unique.
+3. Numeric relation code currently treats some written intervals as two unrelated
+   endpoints. A canonical interval object can unify hyphenated and `from ... to`
+   spellings while retaining units and subject/role binding.
+4. Count questions still use a relatively broad local window. A source clause
+   that explicitly binds one number to the counted object is a safer proof than
+   proximity to any count cue on the page.
+5. Dense option families sometimes differ only by negation. Comparing the
+   positive/negative members against the polarity of one bounded source clause
+   can resolve the pair without adding domain facts.
+
+Each hypothesis is designed to abstain when its structural proof is ambiguous.
+Dev remains the iteration signal; the historically observed frozen holdout is a
+compatibility report and acceptance gate, not a blind model-selection set.
+
+### Results of the five-hypothesis round
+
+| hypothesis | decision | exact effect |
+| --- | --- | ---: |
+| H1 source-coherent multi sibling bullets | kept | dev `+3`, holdout `0` |
+| H2 inverse sibling-label binding | kept | dev `+2`, holdout `0` |
+| H3 canonical whole-interval tuples | kept | dev `+3`, holdout `0` |
+| H4 clause-local counted-object tuples | kept | dev `+2`, holdout `0` |
+| H5 exact negation-pair polarity | disabled | dev `0`, holdout `0` |
+
+The retained rules change ten of 523 dev selected sets, all wrong-to-right, and
+none of 540 holdout sets. They contain no fixture ids, PDF names, page numbers,
+answer text, or medical facts. The result supports the earlier conclusion that
+bounded source relations transfer more safely than global score-shape or broad
+proximity rules.

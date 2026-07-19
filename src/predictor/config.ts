@@ -24,7 +24,12 @@ export const DEFAULT_CONFIG = {
   optionFamilyComparatorGuard: true,
   optionFamilyCompactComboGuard: true,
   relationTupleResolver: true,
+  intervalRelationTupleResolver: true,
+  clauseLocalCountTupleResolver: true,
+  negationPairClauseResolver: false,
   explicitOrdinalRangeSetDecoder: true,
+  siblingListMultiResolver: true,
+  siblingListSingleResolver: true,
   topQuestionChunks: 28,
   evidenceLimit: 8,
 };

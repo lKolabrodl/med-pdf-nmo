@@ -43,7 +43,10 @@ import {
 } from "./predictor/scorers/recommendation-item.js";
 import { optionFamilyCompactComboAdjustment, optionFamilyComparatorAdjustment } from "./predictor/scorers/option-family.js";
 import { applySingleRelationTupleResolver } from "./predictor/scorers/relation-tuple.js";
+import { applyClauseLocalCountTupleResolver } from "./predictor/scorers/count-tuple.js";
+import { applyNegationPairClauseResolver } from "./predictor/scorers/negation-pair.js";
 import { applyExplicitOrdinalRangeSetScores, resolveExplicitOrdinalRangeSet } from "./predictor/scorers/multi-set.js";
+import { resolveSiblingList } from "./predictor/scorers/sibling-list.js";
 import {
   clinicalCourseCueAdjustment,
   contrastCueMismatchAdjustment,
@@ -3848,6 +3851,7 @@ function scoreAnswer(context) {
   const classificationCode = bestClassificationCodeSupport(context);
   const exactShortLabelRow = bestExactShortLabelRowSupport(context);
   const shortLabelRow = bestShortLabelRowSupport(context);
+  const siblingList = context.siblingListResolution?.get(context.answer.id) ?? { adjustment: 0, evidence: null };
   const answerTokens = context.answerTokens;
   const numbers = extractNumbers(context.answer.text);
   const answerPhraseFound = phrase?.kind === "answer_window" || phrase?.kind === "answer_after_question" || phrase?.kind === "question_answer_phrase";
@@ -3930,6 +3934,8 @@ function scoreAnswer(context) {
     (classificationCode?.score ?? 0) * 1.15 +
     (exactShortLabelRow?.score ?? 0) * 1.2 +
     (shortLabelRow?.score ?? 0) * 1.15 +
+    (siblingList.evidence?.score ?? 0) * 1.15 +
+    siblingList.adjustment +
     (answerPhraseFound ? 0.35 : 0) +
     (numbers.length ? numberSpecificity(context.answer.text) * 0.35 : 0) +
     Math.min(0.35, answerTokens.length * 0.015);
@@ -4012,6 +4018,7 @@ function scoreAnswer(context) {
     classificationCode,
     exactShortLabelRow,
     shortLabelRow,
+    siblingList.evidence,
   ].filter(Boolean);
   const definitionCompletion = definitionCompletionAdjustment(context, evidence);
   raw += definitionCompletion.adjustment;
@@ -4092,6 +4099,15 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
     mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
       ? buildCoordinateTableMembershipsByPage(runtime.pdfText.pages, topQuestionPages)
       : null;
+  const siblingListResolution = resolveSiblingList({
+    mode,
+    pages: runtime.pdfText.pages,
+    question,
+    answers,
+    focusTokens,
+    enableMultiMembership: config.siblingListMultiResolver,
+    enableSingleInverse: config.siblingListSingleResolver,
+  });
 
   let answerScores = answers.map((answer) => {
     const answerTokens = uniqueTokens(answer.text);
@@ -4119,6 +4135,7 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
       coordinateTableGroupsByPage,
       coordinateMultiCellRowsByPage,
       coordinateTableMembershipsByPage,
+      siblingListResolution,
     });
     return {
       answer,
@@ -4154,6 +4171,26 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
       topQuestionPages,
       question,
       answers,
+      enableIntervalFamilies: config.intervalRelationTupleResolver,
+    });
+  }
+  if (config.clauseLocalCountTupleResolver) {
+    answerScores = applyClauseLocalCountTupleResolver(answerScores, {
+      mode,
+      pages: runtime.pdfText.pages,
+      topQuestionPages,
+      question,
+      answers,
+    });
+  }
+  if (config.negationPairClauseResolver) {
+    answerScores = applyNegationPairClauseResolver(answerScores, {
+      mode,
+      pages: runtime.pdfText.pages,
+      topQuestionPages,
+      question,
+      answers,
+      focusTokens,
     });
   }
 

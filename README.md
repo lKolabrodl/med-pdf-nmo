@@ -26,14 +26,14 @@ These numbers come from the deduplicated local corpus: 43 PDF groups and 2,604 k
 
 | Dataset | Exact accuracy | Single-answer | Multi-answer exact set |
 | --- | ---: | ---: | ---: |
-| All keyed cases | `74.23%` (`1933/2604`) | `81.93%` (`1437/1754`) | `58.35%` (`496/850`) |
+| All keyed cases | `74.62%` (`1943/2604`) | `82.33%` (`1444/1754`) | `58.71%` (`499/850`) |
 | Train split | `69.44%` (`1070/1541`) | `78.92%` | `51.85%` |
-| Dev split | `77.44%` (`405/523`) | `82.02%` | `66.67%` |
+| Dev split | `79.35%` (`415/523`) | `83.92%` | `68.59%` |
 | Frozen holdout regression | `84.81%` (`458/540`) | `89.64%` | `72.73%` |
 
 For `single`, only one exact selected answer is counted as correct. For `multi`, the selected set must exactly match the full expected set, so the metric is naturally stricter.
 
-The accepted comparator-number improvement changed exactly one dev set from wrong to correct (`404 -> 405/523`) and changed zero holdout sets. The frozen holdout passes the `0.80` command gate, but it has informed historical iterations and should be treated as a regression suite rather than a blind estimate of generalization.
+The latest source-structure round changed exactly ten dev sets from wrong to correct (`405 -> 415/523`) and changed zero holdout sets. The frozen holdout passes the `0.80` command gate, but it has informed historical iterations and should be treated as a regression suite rather than a blind estimate of generalization.
 
 ## Installation
 

@@ -618,3 +618,96 @@ Iteration 108 final 43-PDF audit: COMPLETE.
 - Dev: `405/523 = 0.7744`; single `0.8202`; multi `0.6667`; one wrong-to-right selected-set change versus the post-dedup baseline.
 - Holdout regression: `458/540 = 0.8481`; single `0.8964`; multi `0.7273`; zero selected-set changes versus baseline; acceptance gate `>= 0.80` passes.
 - Final commands passed: `npm run dataset:validate`, `npm test` (`51` passed, `2,621` eval fixtures intentionally skipped), `npm run typecheck`, `npm run build`, `npm run eval:train`, `npm run eval`, `npm run eval:holdout`, `npm run diagnostics`, and `npm pack --dry-run` (`82` package files, about `809.4 kB`).
+
+Iteration 109 fresh baseline and five-hypothesis plan (2026-07-19): BASELINE.
+
+- Read all prior iteration notes before proposing changes. The rejected broad-list, broad-recommendation, global cardinality, section-routing, and train-only score-shape experiments are treated as negative evidence and will not be repeated under new names.
+- Corpus integrity still passes: `43` groups, `2,621` parsed cases, `2,604` keyed cases, no duplicate PDF groups or cross-split duplicate records.
+- Fresh baseline: dev `405/523 = 0.7744` (single `0.8202`, multi exact `0.6667`); frozen holdout regression `458/540 = 0.8481` (single `0.8964`, multi exact `0.7273`). Both exactly reproduce iteration 108.
+- Residual diagnostics: dev has `118` errors (`66` single, `52` multi); holdout regression has `82` errors (`40` single, `42` multi). Dev work buckets are option-family `35`, multi-set `26`, table/layout `21`, recommendation `17`, negative/exception `7`, definition `5`, and retrieval precision `5`.
+- H1 — source-coherent multi sibling-list membership: when a question names one bullet label/category, answer members from that exact bullet body should be lifted while members found only under sibling labels should not be merged into the set. This directly addresses the documented flattened sibling-list failure without changing global cardinality thresholds.
+- H2 — inverse single sibling-list binding: when answer options are short category labels and the question describes one bullet body, bind the description back to that bullet's label and abstain unless competing options map to sibling labels in the same cluster.
+- H3 — interval relation tuples: canonicalize `X-Y`, `X% - Y%`, and `от X до Y` as one bounded interval value so population/rate/duration questions can distinguish whole ranges rather than unrelated endpoint numbers.
+- H4 — clause-local count tuple: replace broad count windows with an additional high-confidence resolver that requires the counted object, count cue, and one unique numeric option in one sentence/tightly bounded line pair.
+- H5 — negation-paired option-family contrast: for options whose lexical skeleton differs only by explicit negation, use the polarity of one bounded source clause to prefer the matching member and penalize the opposite member; abstain when both polarities occur or the skeleton is not unique.
+- Validation policy for this round: implement one hypothesis at a time, run focused tests and full dev eval after every predictor change, record rejected variants too, and run holdout only for dev-safe candidates. No case id, PDF name, answer text, page number, or medical fact may enter runtime logic.
+
+Iteration 110 H1 source-coherent multi sibling-list membership: KEPT, dev +3, holdout zero-delta.
+
+- Added a generic physical-line parser for category bullets of the form `- short label. bounded body`. A block stops at the next physical bullet, evidence-grade/comment boundary, or section boundary and can continue across one page break while ignoring the running guideline header.
+- The multi resolver fires only with contrastive proof: the question uniquely matches one label, at least two options occur in that exact body, and at least one competing option occurs only under a sibling label in the same cluster. Isolated bullets and ambiguous members cause abstention; no global cardinality threshold changes.
+- Added three synthetic contract tests for target membership, inverse label binding infrastructure, and isolated-bullet abstention. `npm run typecheck` and all `54` focused/leakage tests pass.
+- Real smoke test over three previously failing sibling-category questions passed before aggregate evaluation.
+- Full dev result: `405 -> 408/523 = 0.7801`; multi exact `0.6667 -> 0.6859`; single unchanged `0.8202`; macro by PDF `0.7838 -> 0.7887`.
+- Case-level diff: exactly three selected sets changed, all wrong-to-right, all in one PDF group that contains four adjacent inherited-form bullets. No other one of 523 dev cases changed.
+- Holdout regression result: unchanged `458/540 = 0.8481`, single `0.8964`, multi `0.7273`; all 540 selected sets are byte-for-byte equivalent at the case level. Acceptance gate still passes.
+- Decision: keep H1. It implements the precise sibling-boundary direction proposed after iteration 77 and avoids the broad list-completion regressions from iterations 67, 74, and 84.
+
+Iteration 111 H2 inverse single sibling-list binding: KEPT, dev +2, holdout zero-delta.
+
+- Enabled the inverse direction of the same bounded sibling-list parser: when the answers are short labels and the question describes a bullet body, map the description back to its unique sibling label.
+- The resolver removes body tokens shared by sibling entries, requires at least two answer labels to map to distinct bullets in one cluster, and accepts only one uniquely best body match. It abstains when two bodies support the question; a real cranial-dystonia smoke case exercised that ambiguity guard and was intentionally left unchanged.
+- Focused validation: all three synthetic sibling-list contracts and `npm run typecheck` pass. Of three real single-answer smoke cases, the two source-unambiguous cases changed to the source-bound labels; the source-ambiguous case remained unresolved rather than being forced.
+- Full dev result: `408 -> 410/523 = 0.7839`; single `0.8202 -> 0.8256`; multi exact unchanged `0.6859`; macro by PDF `0.7887 -> 0.7919`.
+- Case-level diff against H1: exactly two of 523 selected sets changed, both wrong-to-right (`41-destonia#1` and `41-destonia#14`); the other 521 sets are identical.
+- Holdout regression result: unchanged `458/540 = 0.8481`, single `0.8964`, multi `0.7273`; all 540 selected sets are identical to H1. Acceptance gate still passes.
+- Decision: keep H2. The combined H1+H2 gain over the fresh iteration-109 baseline is five exact dev cases with zero holdout churn.
+
+Iteration 112 H3 canonical interval relation tuples: KEPT, dev +3, holdout zero-delta.
+
+- Added an interval-family path to the existing bounded relation-tuple resolver. It canonicalizes direct ranges (`X-Y`), explicit ranges (`from X to Y` / Russian `ot X do Y`), decimal commas, inherited percent/unit markers, and nested lower-bound notation such as `from X-Y to Z` as one ordered value.
+- Safety contract: at least three single-answer options must form one lexical family; every option must contain exactly one unique interval with the same unit class; one bounded role scope must contain the exact whole interval. Two unrelated endpoint mentions cannot satisfy an interval option.
+- Kept the ordinary numeric tuple path unchanged. The interval-specific override can bridge a raw gap up to `20` (versus `12` for ordinary tuples) only when there is no conflicting trusted structural winner; its evidence kind is separately registered as `interval_relation_tuple_segment`.
+- Focused validation: `15` relation-tuple tests pass, including child/adult scope separation, mixed interval notation, nested ranges, and endpoint-only abstention. Both real population-range smoke cases pass.
+- Full dev result: `410 -> 413/523 = 0.7897`; single `0.8256 -> 0.8338`; multi exact unchanged `0.6859`; macro by PDF `0.7919 -> 0.7980`.
+- Case-level diff against H2: exactly three of 523 selected sets changed and all three were wrong-to-right: two population prevalence ranges and one explicit age interval. The other 520 sets are identical.
+- Holdout regression result: unchanged `458/540 = 0.8481`, with zero selected-set changes across all 540 cases. Acceptance gate still passes.
+- Decision: keep H3. Combined gain over the iteration-109 baseline is eight exact dev cases with no frozen-holdout churn.
+
+Iteration 113 H4 clause-local count tuple: KEPT, dev +2, holdout zero-delta.
+
+- Added a set-level count resolver for single-answer families of at least three distinct pure integers from `0` through `12`. Percentages, ranges, doses, units, comparators, and variants such as `2 or more` remain outside this path.
+- The resolver maps Russian number words to digit options, requires a count predicate and at least two counted-object token matches in one sentence or tightly bounded two-line fragment, and requires exactly one candidate option value in that fragment.
+- Counted-object matching has its own grammar stoplist rather than the general retrieval stoplist because nouns such as `group`, `stage`, and `class` are essential heads here. A bounded compound rule permits head matching such as `group` to `serogroup`; it does not add domain facts.
+- Safeguards: digit boundaries prevent `2` from matching `200-240`; conflicting fragments that resolve different values cause global abstention; a trusted structural winner cannot be overridden; ordinary broad `count_relation_segment` behavior was not widened.
+- Focused validation: `4` synthetic count-tuple contracts, `npm run typecheck`, and two real smoke cases pass.
+- Full dev result: `413 -> 415/523 = 0.7935`; single `0.8338 -> 0.8392`; multi exact unchanged `0.6859`; macro by PDF `0.7980 -> 0.8011`.
+- Case-level diff against H3: exactly two wrong-to-right changes (the source phrases state `four serogroups` and `conducted in two stages`); all other 521 selected sets are identical.
+- Holdout regression result: unchanged `458/540 = 0.8481`; all 540 selected sets are identical to H3. Confidence changed slightly where the new structural evidence supported an already selected answer, but exact predictions did not churn.
+- Decision: keep H4. Combined dev gain over iteration 109 is ten exact cases with zero holdout selection changes.
+
+Iteration 114 H5 negation-paired option-family contrast: REJECTED / disabled, exact-neutral.
+
+- Implemented a single-answer prototype for the only supported family shape: exactly one pair of options has the same lexical skeleton after removing explicit `not`, `without`, `cannot`, or absence markers.
+- The prototype requires question focus and the shared skeleton in one bounded context, binds negation within two words of the shared predicate, splits adversative clauses, ignores unrelated negation, and abstains if focus-compatible fragments disagree on polarity.
+- Four synthetic contracts pass: negative selection, affirmative selection, contradictory-fragment abstention, and unrelated-negation isolation. The one dev pair and an independent train pair also pass targeted smoke tests.
+- Full dev result remains `415/523 = 0.7935`; all 523 selected sets are identical to H4. Full holdout remains `458/540 = 0.8481`; all 540 selected sets are identical. Only confidence on already-correct pair cases changed slightly.
+- Corpus scan found just three exact-negation pairs across all 2,604 keyed cases, and all were already selected correctly by the H4 runtime. There is therefore no measured exact-accuracy headroom for this rule.
+- Decision: keep the isolated implementation and tests as a documented prototype, but set `negationPairClauseResolver: false` by default. An accuracy-neutral confidence perturbation is not retained as a runtime improvement.
+
+Iteration 115 final five-hypothesis audit: COMPLETE.
+
+- Final retained runtime is H1-H4; H5 remains disabled. No case id, group/PDF name,
+  page number, answer text, medical fact, expected count, label, or split artifact is
+  present in the runtime rules.
+- Baseline-to-final dev result: `405 -> 415/523`, exact accuracy `0.7744 ->
+  0.7935` (`+10` exact; `+1.91` percentage points). Single improves `301 ->
+  308/367` (`0.8202 -> 0.8392`) and multi exact set improves `104 -> 107/156`
+  (`0.6667 -> 0.6859`). Macro by PDF improves `0.7838 -> 0.8011`.
+- Case-level audit against the frozen iteration-109 baseline: exactly ten of 523
+  dev selected sets changed and all ten are wrong-to-right. Train aggregate is
+  unchanged at `1070/1541 = 0.6944`. Holdout is unchanged at `458/540 = 0.8481`,
+  with all 540 selected sets identical; the `0.80` acceptance gate passes by
+  `0.0481`.
+- Full keyed result: `1943/2604 = 0.7462`, up from `1933/2604 = 0.7423`;
+  single `1444/1754 = 0.8233`, multi exact set `499/850 = 0.5871`.
+- Final residual diagnostics: dev has `108` errors (`59` single, `49` multi), down
+  from `118`; holdout remains `82`. Dev's largest work buckets are option-family
+  `30`, multi-set selection `23`, table/layout `21`, and recommendation parsing
+  `17`.
+- Final validation passed: `npm run dataset:validate`; `npm test` (`64` focused
+  tests passed, `2,621` corpus fixtures intentionally skipped); `npm run
+  typecheck`; `npm run build`; `npm run eval:train`; `npm run eval`; `npm run
+  eval:holdout`; `npm run diagnostics`; and `npm pack --dry-run` (`88` package
+  entries). A real `npm run predict -- ...` smoke selected `C` for the source-backed
+  two-stage oral-rehydration count question.

@@ -6,7 +6,7 @@ These counts use the final deduplicated 43-PDF corpus and the frozen group split
 
 | split | correct | errors | single errors | multi errors |
 | --- | ---: | ---: | ---: | ---: |
-| dev | `405/523 = 0.7744` | 118 | 66 | 52 |
+| dev | `415/523 = 0.7935` | 108 | 59 | 49 |
 | holdout regression | `458/540 = 0.8481` | 82 | 40 | 42 |
 
 `noEvidence = 0` on both splits. The dominant failure is not an inability to
@@ -19,17 +19,17 @@ target, or exact multi set after retrieving a relevant area.
 
 | likely next work | dev | holdout regression |
 | --- | ---: | ---: |
-| option-family resolver | 35 | 17 |
-| multi-set selection | 26 | 21 |
+| option-family resolver | 30 | 17 |
+| multi-set selection | 23 | 21 |
 | table/layout parser | 21 | 3 |
 | recommendation-block parser | 17 | 30 |
-| negative/exception semantics | 7 | 3 |
-| retrieval precision | 5 | 7 |
+| negative/exception semantics | 6 | 3 |
+| retrieval precision | 4 | 7 |
 | definition binding | 5 | 1 |
 | manual review | 2 | 0 |
 
-Broad evidence remains common among errors (`91` dev, `66` holdout), and flat
-retrieval evidence appears in `81` dev and `68` holdout errors. Structural
+Broad evidence remains common among errors (`83` dev, `66` holdout), and flat
+retrieval evidence appears in `73` dev and `68` holdout errors. Structural
 scorers therefore need wider but still well-bounded coverage; simply increasing
 BM25 or shared-chunk weights would amplify many distractors.
 
@@ -42,12 +42,12 @@ above that lower bound in both directions:
 | cardinality failure | dev | holdout regression |
 | --- | ---: | ---: |
 | under-selected | 14 | 15 |
-| over-selected | 17 | 16 |
-| right count, wrong member | 21 | 11 |
+| over-selected | 16 | 16 |
+| right count, wrong member | 19 | 11 |
 
 An oracle that provides only the true count, while preserving the predictor's
-raw-score order, reaches multi exact `0.7692` on dev and `0.8247` on holdout,
-versus final `0.6667` and `0.7273`. This shows useful cardinality headroom, but
+raw-score order, reaches multi exact `0.7885` on dev and `0.8247` on holdout,
+versus final `0.6859` and `0.7273`. This shows useful cardinality headroom, but
 under- and over-selection are balanced enough that a scalar threshold merely
 trades one class for the other.
 
@@ -59,13 +59,20 @@ by the document-mix prior.
 
 ## Retained improvement
 
-PDF text may spell a comparator-bound value as `> 9 500`, while an option uses
-`>9500`. The general numeric matcher already treated these as equal, but the
-shared-segment comparator guard did not. Canonicalizing grouped thousands fixed
-one three-item dev list and changed no other dev/holdout selected set:
+Four source-structure changes were retained after separate aggregate evaluations:
 
-- dev: `404 -> 405/523`, multi `0.6603 -> 0.6667`;
-- holdout: unchanged `458/540`, zero selected-set delta.
+- bounded sibling bullets add three exact multi sets and two inverse-label single
+  answers;
+- whole-interval tuples add three single answers without accepting unrelated
+  endpoint mentions;
+- clause-local counted-object tuples add two single answers while rejecting
+  ranges, doses, percentages, and conflicting fragments;
+- all ten dev selection changes are wrong-to-right; holdout has zero selected-set
+  changes across all four retained steps.
+
+The fifth experiment, exact negation-pair polarity, found only three eligible
+families in the entire keyed corpus and changed no exact selection. It remains
+disabled instead of retaining an accuracy-neutral confidence perturbation.
 
 This is the preferred improvement pattern: correct a general representation
 mismatch, keep strict relation semantics, and require an aggregate zero-regression
@@ -91,11 +98,12 @@ or come from flattened tables.
 
 ### Ordinary multi lists
 
-The explicit ordinal-range decoder is reliable, but most remaining sets use
-nominal lists, sibling subtypes, or several clauses. A candidate's occurrence in
-the same broad paragraph is not enough: prior wide list completion added plausible
-distractors. Future work should reconstruct actual bullet/row membership from
-PDF geometry before completing a set.
+The explicit ordinal-range decoder and the new short-label sibling-bullet parser
+are reliable, but most remaining sets use unlabeled nominal lists, nested bullets,
+or several clauses. A candidate's occurrence in the same broad paragraph is not
+enough: prior wide list completion added plausible distractors. Future work should
+reconstruct more actual bullet/row membership from PDF geometry before completing
+a set.
 
 ### Flattened tables
 
@@ -107,7 +115,9 @@ rows still bind values to neighboring labels.
 
 Negative questions, `except`, `not recommended`, subgroup exclusions, and
 adversative clauses can reverse otherwise strong lexical evidence. This is a
-smaller class, but unsafe broad matching is especially costly here.
+smaller class, but unsafe broad matching is especially costly here. Exact paired
+options are too rare to provide current headroom; a future rule needs a broader
+yet still clause-bound representation rather than a global polarity boost.
 
 ## Data quality and leakage audit
 
@@ -126,8 +136,8 @@ smaller class, but unsafe broad matching is especially costly here.
 
 ## Recommended next experiments
 
-1. Reconstruct bullet and table membership from PDF coordinates and require one
-   source-coherent set before changing multi cardinality.
+1. Extend source-coherent membership to nested/unlabeled bullets and difficult
+   table geometry, retaining sibling-boundary and ambiguity abstention.
 2. Extend atomic recommendation parsing with explicit grammatical target and
    condition roles, retaining abstention when roles cross item boundaries.
 3. Add leave-one-PDF-out checks for any future learned calibrator; do not freeze
