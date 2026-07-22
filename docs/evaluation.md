@@ -4,16 +4,16 @@
 
 The deduplicated local corpus contains 45 PDF groups under
 `__test__/NN-name/` and 2,701 parsed cases. Exact metrics exclude 17 cases with
-`expected: []`, leaving 2,684 keyed cases: 1,823 single-answer and 861
+`expected: []`, leaving 2,684 keyed cases: 1,824 single-answer and 860
 multi-answer cases.
 
 | split | PDF groups | parsed | keyed | single | multi |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| train | 25 | 1,558 | 1,541 | 1,001 | 540 |
+| train | 25 | 1,558 | 1,541 | 1,002 | 539 |
 | dev | 9 | 523 | 523 | 367 | 156 |
 | holdout regression | 9 | 540 | 540 | 386 | 154 |
 | external transfer | 2 | 80 | 80 | 69 | 11 |
-| total | 45 | 2,701 | 2,684 | 1,823 | 861 |
+| total | 45 | 2,701 | 2,684 | 1,824 | 860 |
 
 Each group contains `doc.pdf` and `cases.test.ts`. Runtime receives only the PDF,
 question, answer variants, and mode. Expected labels are read only by development
@@ -46,7 +46,7 @@ directory is added or removed.
 The manifest also stores two integrity hashes:
 
 - PDF fingerprint: `cb29ea46952100dcde5c4e51c9734795996bf9c1c6d302f13763713608481497`;
-- parsed-case fingerprint, including expected values: `1030ee32b346580ef8e805431c41631f43fad254ad3ee94bb0bdabd6aaecfa89`.
+- parsed-case fingerprint, including expected values: `3517fb694ec83e33c1d143e8a9acedc6d79c7a9a72b1d64b1d87f7c4e79a5cbb`.
 
 An intentional corpus change requires an explicit manifest update; silent PDF,
 question, variant, or label changes fail `npm run dataset:validate`.
@@ -74,11 +74,11 @@ npm run predict -- --input request.json
 
 | split | exact | single | multi exact set | macro by PDF |
 | --- | ---: | ---: | ---: | ---: |
-| train | `1069/1541 = 0.6937` | `790/1001 = 0.7892` | `279/540 = 0.5167` | `0.6999` |
+| train | `1072/1541 = 0.6957` | `791/1002 = 0.7894` | `281/539 = 0.5213` | `0.7018` |
 | dev | `415/523 = 0.7935` | `308/367 = 0.8392` | `107/156 = 0.6859` | `0.8011` |
 | holdout regression | `459/540 = 0.8500` | `347/386 = 0.8990` | `112/154 = 0.7273` | `0.8383` |
 | external transfer | `64/80 = 0.8000` | `61/69 = 0.8841` | `3/11 = 0.2727` | `0.7800` |
-| all keyed cases | `2007/2684 = 0.7478` | `1506/1823 = 0.8261` | `501/861 = 0.5819` | — |
+| all keyed cases | `2010/2684 = 0.7489` | `1507/1824 = 0.8262` | `503/860 = 0.5849` | — |
 
 The predictor was frozen before the two current external groups were added.
 Their first recorded result is therefore a clean baseline for this commit:
@@ -117,8 +117,8 @@ Final holdout-regression summary:
   "macroAccuracyByPdf": 0.8383,
   "noEvidence": 0,
   "errorBuckets": {
-    "confused_with_distractor": 49,
-    "multi_cardinality": 32
+    "confused_with_distractor": 48,
+    "multi_cardinality": 33
   }
 }
 ```

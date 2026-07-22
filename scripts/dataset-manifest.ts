@@ -1,4 +1,4 @@
-export const DATASET_MANIFEST_VERSION = 4;
+export const DATASET_MANIFEST_VERSION = 5;
 
 /**
  * SHA-256 over sorted `<group>:<pdf-sha256>` rows for the deduplicated local corpus.
@@ -8,7 +8,7 @@ export const DATASET_MANIFEST_VERSION = 4;
 export const DATASET_PDF_FINGERPRINT = "cb29ea46952100dcde5c4e51c9734795996bf9c1c6d302f13763713608481497";
 
 /** SHA-256 over stable parsed case tuples, including expected values. */
-export const DATASET_CASE_FINGERPRINT = "1030ee32b346580ef8e805431c41631f43fad254ad3ee94bb0bdabd6aaecfa89";
+export const DATASET_CASE_FINGERPRINT = "3517fb694ec83e33c1d143e8a9acedc6d79c7a9a72b1d64b1d87f7c4e79a5cbb";
 
 /**
  * Frozen PDF-level split for the deduplicated local corpus.

@@ -845,3 +845,30 @@ Iteration 123 current external corpus replacement: BASELINE / EVALUATION-ONLY.
   `2,701` corpus fixtures intentionally skipped), `npm run typecheck`,
   `npm run eval:external`, `npm run eval:holdout`, external/all-split
   diagnostics, and `npm run pdf:audit`.
+
+Iteration 124 PDF-grounded label audit: COMPLETE / DATASET-ONLY.
+
+- Screened all `676` predictor/fixture mismatches present at the start of the
+  audit across all 45 PDFs, then manually reviewed the `160` strongest
+  source-overlap candidates. Complex lists and tables were rendered before a
+  label decision. Predictor output was never accepted as ground truth by itself.
+- Corrected six unambiguous fixtures: methyl-bromide neurotoxicity; the
+  complicated-bronchitis antibiotic row; the complete elevated-metabolite set
+  for 3-HMG-CoA lyase deficiency; the complete endometrial-biopsy indication
+  list; the complete peptic-ulcer pain-radiation list; and the pachychoroid set.
+  The last correction confirms that the predictor over-selects the option about
+  dilation of the choriocapillaris/Sattler layer; the PDF says those layers are
+  thinned. Detailed page evidence is in `docs/label-audit.md`.
+- Left ambiguous fixtures unchanged. In particular, `40-deficit#1` has an
+  internal PDF contradiction between the narrative and the diagram on the same
+  page, so it cannot support a safe label rewrite.
+- No runtime or predictor code changed. Manifest version `5` now records 2,684
+  keyed cases (`1,824` single and `860` multi) with case fingerprint
+  `3517fb694ec83e33c1d143e8a9acedc6d79c7a9a72b1d64b1d87f7c4e79a5cbb`.
+- Final metrics: train `1072/1541 = 0.6957` (`+3` exact labels versus the prior
+  corpus), dev unchanged at `415/523 = 0.7935`, holdout unchanged at
+  `459/540 = 0.8500`, and external unchanged at `64/80 = 0.8000`. The holdout
+  acceptance gate passes.
+- Validation passed: `npm run dataset:validate`; `npm test` (`83` focused tests
+  passed, `2,701` corpus fixtures skipped); `npm run typecheck`; all four eval
+  commands; and regenerated all-split diagnostics (`674` residual exact errors).

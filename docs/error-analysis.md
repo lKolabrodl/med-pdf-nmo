@@ -149,25 +149,25 @@ yet still clause-bound representation rather than a global polarity boost.
 ## Cross-PDF top 10 failure signatures (all 45 PDFs)
 
 The final audit joins train, dev, holdout, and external: all 2,684 keyed
-questions and 677 exact errors. The signatures below overlap; they describe
+questions and 674 exact errors. The signatures below overlap; they describe
 mechanisms, so one error can belong to several rows.
 
 | rank | failure signature | errors | interpretation |
 | ---: | --- | ---: | --- |
-| 1 | only broad-window evidence | 554 | the right area is retrieved, but no bounded row/clause relation is proved |
-| 2 | flat text retrieval dominates | 520 | page text loses list/table ownership |
-| 3 | multi exact membership/cardinality | 360 | 140 under-selected, 111 over-selected, 109 wrong members at the same count |
+| 1 | only broad-window evidence | 551 | the right area is retrieved, but no bounded row/clause relation is proved |
+| 2 | flat text retrieval dominates | 517 | page text loses list/table ownership |
+| 3 | multi exact membership/cardinality | 357 | 141 under-selected, 108 over-selected, 108 wrong members at the same count |
 | 4 | wrong top option in single mode | 317 | a nearby distractor receives stronger lexical overlap |
-| 5 | dense option family | 232 | options share most tokens and differ by one role, condition, or component |
+| 5 | dense option family | 230 | options share most tokens and differ by one role, condition, or component |
 | 6 | negative/exception wording | 220 | polarity or exclusion scope is attached to the wrong clause |
-| 7 | numeric option family | 218 | values recur elsewhere without subject/row binding |
+| 7 | numeric option family | 217 | values recur elsewhere without subject/row binding |
 | 8 | recommendation/treatment proposition | 147 | target, population, quantifier, and condition are mixed across items |
-| 9 | shared evidence among multi options | 141 | several choices point to one broad paragraph instead of distinct list members |
+| 9 | shared evidence among multi options | 140 | several choices point to one broad paragraph instead of distinct list members |
 | 10 | table/scale ownership | 72 | labels and values survive extraction but row/column association does not |
 
-An exclusive work-bucket view of the same 677 errors is: multi-set `184`, dense
-option-family `182`, recommendation `146`, table/layout `82`, retrieval precision
-`41`, negative/exception `27`, definition `11`, and manual/other `4`. This is why
+An exclusive work-bucket view of the same 674 errors is: multi-set `183`, dense
+option-family `180`, recommendation `146`, table/layout `82`, retrieval precision
+`40`, negative/exception `28`, definition `11`, and manual/other `4`. This is why
 global threshold tuning is unlikely to solve the corpus: most errors require a
 missing relation, not a uniformly weak score.
 
