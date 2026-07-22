@@ -22,19 +22,19 @@ The runtime is fully local and non-LLM. It does not use ChatGPT, OpenAI, Anthrop
 
 ## Current Accuracy
 
-These numbers come from the deduplicated local corpus: 44 PDF groups and 2,674 keyed cases. They are not a guarantee for a new PDF, but they are the current reference quality after the final full run.
+These numbers come from the deduplicated local corpus: 45 PDF groups and 2,684 keyed cases. They are not a guarantee for a new PDF, but they are the current reference quality after the final full run.
 
 | Dataset | Exact accuracy | Single-answer | Multi-answer exact set |
 | --- | ---: | ---: | ---: |
-| All keyed cases | `74.27%` (`1986/2674`) | `82.26%` (`1479/1798`) | `57.88%` (`507/876`) |
+| All keyed cases | `74.78%` (`2007/2684`) | `82.61%` (`1506/1823`) | `58.19%` (`501/861`) |
 | Train split | `69.37%` (`1069/1541`) | `78.92%` | `51.67%` |
 | Dev split | `79.35%` (`415/523`) | `83.92%` | `68.59%` |
 | Frozen holdout regression | `85.00%` (`459/540`) | `89.90%` | `72.73%` |
-| External transfer regression | `61.43%` (`43/70`) | `77.27%` | `34.62%` |
+| External transfer baseline | `80.00%` (`64/80`) | `88.41%` | `27.27%` |
 
 For `single`, only one exact selected answer is counted as correct. For `multi`, the selected set must exactly match the full expected set, so the metric is naturally stricter.
 
-The latest transfer round keeps dev at `415/523`, improves the frozen holdout from `458` to `459/540`, and improves the separately tracked external PDF from `27` to `43/70`. Both holdout and external labels have informed development, so they are regression/stress suites rather than blind estimates of generalization.
+The predictor was frozen before the two current external PDFs were added. Their first recorded result is `64/80`: `43/50` and `21/30` by PDF. No runtime rule was changed after reading these labels. The historical holdout remains a regression suite because its labels informed earlier development.
 
 ## Installation
 

@@ -811,3 +811,37 @@ Iteration 122 final transfer round: COMPLETE.
   diagnostics on all four splits, and `npm pack --dry-run` (`94` files,
   `852.6 kB`). A real `npm run predict -- ...` smoke selected `D` from the
   bounded negative recommendation proposition.
+
+Iteration 123 current external corpus replacement: BASELINE / EVALUATION-ONLY.
+
+- Replaced the removed external group in the active manifest with two newly
+  supplied PDFs: `48-pereferi` and `49-central-ceroz`. The established
+  train/dev/holdout group memberships are unchanged.
+- The predictor was frozen before either new label set was evaluated. First
+  results are `43/50 = 0.8600` and `21/30 = 0.7000`; combined external exact is
+  `64/80 = 0.8000`, single `61/69 = 0.8841`, and multi exact `3/11 = 0.2727`.
+  No runtime rule was changed after reading these labels.
+- Frozen holdout was rerun sequentially and remains `459/540 = 0.8500`, passing
+  the acceptance gate. The temporary parallel run was stopped after timeout;
+  only its own remaining child processes were terminated before the clean rerun.
+- Dataset manifest v4 validates 45 unique groups, 2,701 parsed cases, 2,684
+  keyed cases (`1,823` single, `861` multi), no duplicate PDFs, no likely
+  near-duplicates, and no cross- or same-split duplicate records. PDF fingerprint
+  is `cb29ea46952100dcde5c4e51c9734795996bf9c1c6d302f13763713608481497`;
+  case fingerprint is
+  `1030ee32b346580ef8e805431c41631f43fad254ad3ee94bb0bdabd6aaecfa89`.
+- External diagnostics contain 16 errors: eight single and eight multi. Five
+  multi errors over-select and three choose the wrong member at the correct
+  count; there are no external multi under-selections. This rejects a lower
+  global multi threshold as the next change.
+- The extractor audit covers 45 PDFs and 3,375 pages: clean Cyrillic `45`,
+  mojibake `0`, OCR-needed `0`, 89,173 retained lines, and 5,311
+  repeated/boilerplate-like lines (`6.0%`). Visual samples from both new PDFs
+  are legible; layout loss, not OCR, remains the relevant risk.
+- Added an evaluation-only `--group <name>` option to `scripts/eval.ts` so a new
+  PDF can be measured before it is assigned to the frozen manifest. This does
+  not alter predictor inputs, scoring, or selection.
+- Validation passed: `npm run dataset:validate`, `npm test` (`83` tests passed,
+  `2,701` corpus fixtures intentionally skipped), `npm run typecheck`,
+  `npm run eval:external`, `npm run eval:holdout`, external/all-split
+  diagnostics, and `npm run pdf:audit`.

@@ -2,13 +2,13 @@
 
 ## Current error counts
 
-These counts use the final deduplicated 44-PDF corpus and its frozen groups.
+These counts use the final deduplicated 45-PDF corpus and its frozen groups.
 
 | split | correct | errors | single errors | multi errors |
 | --- | ---: | ---: | ---: | ---: |
 | dev | `415/523 = 0.7935` | 108 | 59 | 49 |
 | holdout regression | `459/540 = 0.8500` | 81 | 39 | 42 |
-| external transfer | `43/70 = 0.6143` | 27 | 10 | 17 |
+| external transfer | `64/80 = 0.8000` | 16 | 8 | 8 |
 
 `noEvidence = 0` on all splits. The dominant failure is not an inability to
 find PDF text; it is choosing the wrong relation, table row, recommendation
@@ -146,55 +146,54 @@ yet still clause-bound representation rather than a global polarity boost.
 4. Obtain a genuinely new, label-sealed PDF test set for an unbiased quality
    estimate after runtime logic is frozen.
 
-## Cross-PDF top 10 failure signatures (all 44 PDFs)
+## Cross-PDF top 10 failure signatures (all 45 PDFs)
 
-The final audit joins train, dev, holdout, and external: all 2,674 keyed
-questions and 688 exact errors. The signatures below overlap; they describe
+The final audit joins train, dev, holdout, and external: all 2,684 keyed
+questions and 677 exact errors. The signatures below overlap; they describe
 mechanisms, so one error can belong to several rows.
 
 | rank | failure signature | errors | interpretation |
 | ---: | --- | ---: | --- |
-| 1 | only broad-window evidence | 564 | the right area is retrieved, but no bounded row/clause relation is proved |
-| 2 | flat text retrieval dominates | 528 | page text loses list/table ownership |
-| 3 | multi exact membership/cardinality | 369 | 146 under-selected, 112 over-selected, 111 wrong members at the same count |
-| 4 | wrong top option in single mode | 319 | a nearby distractor receives stronger lexical overlap |
-| 5 | dense option family | 234 | options share most tokens and differ by one role, condition, or component |
-| 6 | numeric option family | 224 | values recur elsewhere without subject/row binding |
-| 7 | negative/exception wording | 223 | polarity or exclusion scope is attached to the wrong clause |
-| 8 | recommendation/treatment proposition | 145 | target, population, quantifier, and condition are mixed across items |
+| 1 | only broad-window evidence | 554 | the right area is retrieved, but no bounded row/clause relation is proved |
+| 2 | flat text retrieval dominates | 520 | page text loses list/table ownership |
+| 3 | multi exact membership/cardinality | 360 | 140 under-selected, 111 over-selected, 109 wrong members at the same count |
+| 4 | wrong top option in single mode | 317 | a nearby distractor receives stronger lexical overlap |
+| 5 | dense option family | 232 | options share most tokens and differ by one role, condition, or component |
+| 6 | negative/exception wording | 220 | polarity or exclusion scope is attached to the wrong clause |
+| 7 | numeric option family | 218 | values recur elsewhere without subject/row binding |
+| 8 | recommendation/treatment proposition | 147 | target, population, quantifier, and condition are mixed across items |
 | 9 | shared evidence among multi options | 141 | several choices point to one broad paragraph instead of distinct list members |
-| 10 | table/scale ownership | 77 | labels and values survive extraction but row/column association does not |
+| 10 | table/scale ownership | 72 | labels and values survive extraction but row/column association does not |
 
-An exclusive work-bucket view of the same 688 errors is: multi-set `190`, dense
-option-family `183`, recommendation `144`, table/layout `87`, retrieval precision
-`42`, negative/exception `27`, definition `11`, and manual/other `4`. This is why
+An exclusive work-bucket view of the same 677 errors is: multi-set `184`, dense
+option-family `182`, recommendation `146`, table/layout `82`, retrieval precision
+`41`, negative/exception `27`, definition `11`, and manual/other `4`. This is why
 global threshold tuning is unlikely to solve the corpus: most errors require a
 missing relation, not a uniformly weak score.
 
-## Transfer-round effect and residuals
+## Current external baseline and residuals
 
-The retained structural changes correct 16 of 43 external baseline errors and
-lose none of the 27 external baseline-correct cases. They target three of the
-largest mechanisms above: labelled table/list rows (`+9`), hierarchical
-multi-membership (`+3`), and bounded recommendation propositions (`+4`).
+The current predictor was frozen before the two external PDFs were added. Their
+first exact result is `64/80 = 0.8000`: `43/50` and `21/30` by PDF. No predictor
+change was selected from these labels.
 
 Final residual errors are:
 
 - dev: 108 (`59` single, `49` multi), unchanged from iteration 115;
 - frozen holdout: 81 (`39` single, `42` multi), one fewer than baseline;
-- external transfer: 27 (`10` single, `17` multi), sixteen fewer than baseline.
+- external transfer: 16 (`8` single, `8` multi).
 
-The largest remaining gap is external multi exact accuracy (`9/26 = 0.3462`).
-Most such questions contain unlabeled/nested list membership or flattened table
-cells, where adding a third answer from a shared paragraph would repeat the
-known over-selection failure. The next safe direction is coordinate-aware
-row/list reconstruction, not a lower global multi threshold.
+The largest remaining gap is external multi exact accuracy (`3/11 = 0.2727`).
+All five external cardinality errors are over-selection, while the other three
+multi errors choose the wrong member at the correct count. This is direct
+evidence against lowering the global multi threshold. The next safe direction
+is item/row ownership and distractor exclusion inside one bounded source block.
 
 ## Cleanup findings
 
-All 44 PDFs are text-extractable and contain clean Cyrillic; none meets the OCR
-fallback threshold. The audit counts 3,334 pages, 88,010 physical lines, 4,136
-bullet lines, 3,220 numbered lines, and 1,812 word-hyphen line endings. About
+All 45 PDFs are text-extractable and contain clean Cyrillic; none meets the OCR
+fallback threshold. The audit counts 3,375 pages, 89,173 physical lines, 4,073
+bullet lines, 3,287 numbered lines, and 1,818 word-hyphen line endings. About
 6.0% of retained lines are repeated or boilerplate-like.
 
 The remaining cleanup should be structural:

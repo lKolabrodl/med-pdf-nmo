@@ -7,7 +7,7 @@ import { predict } from "../src/predictor.js";
 const TARGET = 0.8;
 
 function parseArgs(argv) {
-  const args = { split: "dev" };
+  const args: Record<string, string | boolean> = { split: "dev" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (!arg.startsWith("--")) continue;
@@ -92,11 +92,14 @@ function summarize(results, splitName, splitGroups) {
   };
 }
 
-async function evaluate(splitName) {
+async function evaluate(splitName, explicitGroup = "") {
   const root = process.cwd();
   const { groups, cases } = await loadDataset(root);
-  const splits = groupSplit(groups);
-  const selectedGroups = splits[splitName];
+  if (explicitGroup && !groups.includes(explicitGroup)) {
+    throw new Error(`Unknown PDF group "${explicitGroup}"`);
+  }
+  const splits = explicitGroup ? null : groupSplit(groups);
+  const selectedGroups = explicitGroup ? new Set([explicitGroup]) : splits[splitName];
   if (!selectedGroups) throw new Error(`Unknown split "${splitName}"`);
   const splitCases = cases.filter((testCase) => selectedGroups.has(testCase.pdfGroup));
   const skippedNoExpected = splitCases.filter((testCase) => !testCase.expectedIds.length);
@@ -130,11 +133,15 @@ async function evaluate(splitName) {
     }
   }
 
-  const summary = { ...summarize(results, splitName, selectedGroups), skippedNoExpected: skippedNoExpected.length };
+  const reportName = explicitGroup ? `group-${explicitGroup.replace(/[^a-z0-9_-]+/giu, "-")}` : splitName;
+  const summary = {
+    ...summarize(results, explicitGroup ? `group:${explicitGroup}` : splitName, selectedGroups),
+    skippedNoExpected: skippedNoExpected.length,
+  };
   const reportDir = path.join(root, ".cache", "eval");
   await fs.mkdir(reportDir, { recursive: true });
   await fs.writeFile(
-    path.join(reportDir, `${splitName}-results.json`),
+    path.join(reportDir, `${reportName}-results.json`),
     JSON.stringify(
       {
         summary,
@@ -181,11 +188,12 @@ async function evaluate(splitName) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  const explicitGroup = typeof args.group === "string" ? args.group : "";
   const splitName =
     args.split === "external" ? "external" : args.split === "holdout" ? "holdout" : args.split === "train" ? "train" : "dev";
-  const summary = await evaluate(splitName);
+  const summary = await evaluate(splitName, explicitGroup);
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
-  if (splitName === "holdout" && summary.exactAccuracy < TARGET) {
+  if (!explicitGroup && splitName === "holdout" && summary.exactAccuracy < TARGET) {
     process.stderr.write(`holdout exact accuracy ${summary.exactAccuracy} is below target ${TARGET}\n`);
     process.exit(2);
   }

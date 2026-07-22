@@ -205,15 +205,13 @@ Current selection thresholds:
 
 An offline train-only logistic cardinality experiment was not frozen into runtime. It improved the training split but regressed both PDF-grouped dev and holdout, demonstrating that score-shape priors alone do not transfer reliably between document families. Runtime therefore keeps the explicit minimum-two rule plus source/evidence-based conservative adjustments.
 
-The 2026-07-19 structural round improves dev from `405/523 = 0.7744` to
-`415/523 = 0.7935`: seven additional single answers and three exact multi sets.
-The July 22 transfer round keeps that dev result unchanged and improves the
-frozen holdout from `458/540 = 0.8481` to `459/540 = 0.8500`. On the separately
-tracked 70-case transfer PDF it improves the frozen baseline from `27/70 =
-0.3857` to `43/70 = 0.6143` through labelled rows, list hierarchy, and bounded
-recommendation propositions. The transfer labels were inspected during the
-round, so this last number is a regression/stress result rather than a blind
-generalization estimate.
+The current structural runtime reaches dev `415/523 = 0.7935` and frozen
+holdout `459/540 = 0.8500`. Two later PDFs were evaluated only after this
+predictor was frozen and establish an external baseline of `64/80 = 0.8000`.
+Their single accuracy is `61/69 = 0.8841`, while multi exact-set accuracy is only
+`3/11 = 0.2727`. This supports the architecture's emphasis on bounded source
+relations, but also shows that list/recommendation membership and distractor
+exclusion remain the main unresolved runtime problem.
 
 ## Diagnostic Feature Export
 
