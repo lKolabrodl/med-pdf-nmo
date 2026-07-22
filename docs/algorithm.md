@@ -115,6 +115,17 @@ The predictor returns machine-readable JSON:
    - `relation_tuple_segment` handles single-answer dense numeric families. It first verifies that all options share one lexical skeleton and exact unit signature, then requires one bounded source fragment to jointly support the question subject, an explicit semantic role, mandatory conditions, comparator direction, value, and unit. It abstains on negative/ambiguous questions, cross-unit evidence, missing roles, or conflicting trusted structural evidence.
    - `interval_relation_tuple_segment` extends that contract to whole ranges. It canonicalizes hyphenated and `from X to Y` forms, decimal commas, inherited units/percent signs, and nested lower-bound ranges, but never treats two unrelated endpoint mentions as proof of one interval.
    - `sibling_list_multi_segment` and `sibling_list_single_segment` reconstruct bounded physical bullets of the form `short label. body`. The forward resolver selects members only from the uniquely named sibling body; the inverse resolver maps one uniquely matching body back to its short answer label. Both require sibling contrast and abstain on isolated or ambiguous bullets.
+   - The sibling parser also accepts short stage/type/degree/class rows, reads
+     them label-to-body or body-to-label, treats ordinal zero as a real label,
+     and rejects long non-bullet rows that probably contain flattened columns.
+   - The hierarchical-list resolver binds numbered children to the nearest
+     Roman-labelled parent and requires contrast with sibling parents before it
+     changes a multi set.
+   - The recommendation-proposition resolver first retrieves one target item,
+     then compares positive/negative and universal/plain propositions. It
+     abstains for restricted `only X` propositions. A wrapped item is trusted
+     only when `page.blocks` proves one physical bullet boundary; raw lines are
+     never broadly glued across a new recommendation.
    - `clause_count_tuple_segment` handles short pure-integer answer families only when one sentence or tight line pair contains a count predicate, the counted object, and exactly one candidate value. Percentages, ranges, doses, comparators, missing objects, and conflicting count fragments are excluded.
    - `explicit_ordinal_range_set` is a set-level decoder for multi-answer questions whose options are only ordinal labels of one kind (for example, several stages or degrees). It may override ordinary thresholds only when one atomic positive recommendation clause contains the question focus, intervention target, mandatory conditions, and one unambiguous explicit range/list. Citations, evidence-grade annotations, sibling bullets, adversative clauses, negated recommendations, and conflicting coordinate-table evidence are excluded.
    - An exact-negation-pair clause resolver is implemented as an isolated prototype, but disabled by default: the full corpus contains too few eligible pairs and aggregate evaluation found no exact-selection gain.
@@ -164,6 +175,9 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/option-family.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
 - `src/predictor/scorers/relation-tuple.ts`: bounded subject/role/condition/value/unit resolver for single-answer numeric and whole-interval option families.
 - `src/predictor/scorers/sibling-list.ts`: forward multi membership and inverse single-label binding for bounded sibling bullets.
+- `src/predictor/scorers/ordinal-row-gate.ts`: rejects row-ordinal evidence when the option does not itself begin with the matching stage/type/degree/class label.
+- `src/predictor/scorers/hierarchical-list.ts`: reconstructs bounded Roman-parent / numbered-child list membership.
+- `src/predictor/scorers/recommendation-proposition.ts`: separates recommendation target lookup from polarity/quantifier comparison and uses extractor-proven physical blocks for wrapped bullets.
 - `src/predictor/scorers/count-tuple.ts`: clause-local counted-object/value resolver for short integer option families.
 - `src/predictor/scorers/negation-pair.ts`: exact paired-option polarity prototype; present for focused testing but disabled in the default config.
 - `src/predictor/scorers/multi-set.ts`: explicit ordinal range/list decoder for source-coherent multi-answer sets.
@@ -191,11 +205,15 @@ Current selection thresholds:
 
 An offline train-only logistic cardinality experiment was not frozen into runtime. It improved the training split but regressed both PDF-grouped dev and holdout, demonstrating that score-shape priors alone do not transfer reliably between document families. Runtime therefore keeps the explicit minimum-two rule plus source/evidence-based conservative adjustments.
 
-The final 2026-07-19 structural round improves dev from `405/523 = 0.7744` to
+The 2026-07-19 structural round improves dev from `405/523 = 0.7744` to
 `415/523 = 0.7935`: seven additional single answers and three exact multi sets.
-All ten dev selection changes are wrong-to-right. The frozen holdout remains
-`458/540 = 0.8481` with zero selected-set changes, so the `0.80` acceptance gate
-continues to pass without using holdout labels at inference.
+The July 22 transfer round keeps that dev result unchanged and improves the
+frozen holdout from `458/540 = 0.8481` to `459/540 = 0.8500`. On the separately
+tracked 70-case transfer PDF it improves the frozen baseline from `27/70 =
+0.3857` to `43/70 = 0.6143` through labelled rows, list hierarchy, and bounded
+recommendation propositions. The transfer labels were inspected during the
+round, so this last number is a regression/stress result rather than a blind
+generalization estimate.
 
 ## Diagnostic Feature Export
 

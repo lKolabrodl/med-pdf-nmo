@@ -3,7 +3,8 @@
 // It runs the real extractor (src/pdf.ts) on every __test__/NN/doc.pdf and reports:
 //   - whether the extracted text is clean Cyrillic or mojibake;
 //   - repeated header/footer/boilerplate lines (lines that appear on many pages);
-//   - whether the current stripLikelyBoilerplate patterns actually match anything.
+//   - extraction/layout signals that can be lost when pages become flat text;
+//   - whether the current stripLikelyBoilerplate patterns leave useful cleanup work.
 // No predictor calls, no answer-key reads. Nothing here changes runtime.
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -27,10 +28,13 @@ const CLEAN_PATTERNS: Array<[string, RegExp]> = [
   ["appendix_ref", /^приложение\s+[а-я0-9]|см\.\s+приложение/i],
 ];
 
-// The mojibake forms hard-coded in the current stripLikelyBoilerplate.
-const MOJIBAKE_PATTERNS: Array<[string, RegExp]> = [
-  ["moji_page", /^СЃСЂР°РЅРёС†Р°/],
-  ["moji_disuria", /disuria\.ru/],
+const MOJIBAKE = /(?:Р[\u0080-\u00ff]|С[\u0080-\u00ff]){2,}|\ufffd/u;
+
+const STRUCTURE_PATTERNS: Array<[string, RegExp]> = [
+  ["bullet", /^\s*[-\u2010-\u2015\u2022\u25aa\u25e6*]\s+/u],
+  ["numbered", /^\s*(?:\d+(?:\.\d+)*|[ivx]{1,8}|[а-яa-z])[.)]\s+/iu],
+  ["hyphenated_line_end", /[а-яё]-$/iu],
+  ["replacement_character", /\ufffd/u],
 ];
 
 async function main() {
@@ -46,8 +50,21 @@ async function main() {
   let cleanPdfs = 0;
   let mojibakePdfs = 0;
   const cleanHits: Record<string, number> = {};
-  const mojiHits = { moji_page: 0, moji_disuria: 0 };
-  const perPdf: Array<{ group: string; pages: number; lines: number; boiler: number; top: string[] }> = [];
+  const structureHits: Record<string, number> = {};
+  let totalPages = 0;
+  let totalChars = 0;
+  let emptyPages = 0;
+  let ocrNeededPdfs = 0;
+  const perPdf: Array<{
+    group: string;
+    pages: number;
+    lines: number;
+    chars: number;
+    emptyPages: number;
+    boiler: number;
+    structure: Record<string, number>;
+    top: string[];
+  }> = [];
   // line text (short) -> { total occurrences, set of PDFs it appears in }
   const globalLines = new Map<string, { count: number; pdfs: Set<string> }>();
 
@@ -62,21 +79,29 @@ async function main() {
       continue;
     }
     const pages = extracted.pages;
+    if (extracted.ocrNeeded) ocrNeededPdfs += 1;
     const allText = pages.map((p: any) => p.text).join("\n");
     // cleanliness: real Cyrillic "клиническ" vs mojibake "РєР»РёРЅРёС‡РµСЃРєРё"
     const cleanCyr = /клиническ|рекомендац|пациент/i.test(allText);
-    const mojiCyr = /РєР»РёРЅРёС‡/.test(allText) || /Рѕ/.test(allText);
+    const mojiCyr = MOJIBAKE.test(allText);
     if (cleanCyr && !mojiCyr) cleanPdfs += 1;
     if (mojiCyr) mojibakePdfs += 1;
 
     // line frequency across pages
     const lineCount = new Map<string, number>();
     let pdfLines = 0;
+    const pdfStructure: Record<string, number> = {};
     for (const p of pages) {
+      if (!normalizeForAudit(p.text)) emptyPages += 1;
       for (const raw of p.lines) {
         const n = norm(raw);
         if (!n) continue;
         pdfLines += 1;
+        for (const [name, re] of STRUCTURE_PATTERNS) {
+          if (!re.test(raw)) continue;
+          structureHits[name] = (structureHits[name] ?? 0) + 1;
+          pdfStructure[name] = (pdfStructure[name] ?? 0) + 1;
+        }
         lineCount.set(n, (lineCount.get(n) ?? 0) + 1);
         if (n.length >= 12 && n.length <= 90) {
           const key = n.slice(0, 80);
@@ -97,7 +122,6 @@ async function main() {
       if (isPattern) {
         for (const [name, re] of CLEAN_PATTERNS) if (re.test(line)) cleanHits[name] = (cleanHits[name] ?? 0) + count;
       }
-      for (const [name, re] of MOJIBAKE_PATTERNS) if (re.test(line)) (mojiHits as any)[name] += count;
       if (isRepeated || isPattern) {
         boiler += count;
         if (isRepeated) repeated.push([line, count]);
@@ -105,22 +129,27 @@ async function main() {
     }
     repeated.sort((a, b) => b[1] - a[1]);
     totalLines += pdfLines;
+    totalPages += pages.length;
+    totalChars += allText.length;
     totalBoilerplate += boiler;
     perPdf.push({
       group,
       pages: pages.length,
       lines: pdfLines,
+      chars: allText.length,
+      emptyPages: pages.filter((page: any) => !normalizeForAudit(page.text)).length,
       boiler,
+      structure: pdfStructure,
       top: repeated.slice(0, 3).map(([l, c]) => `${c}x ${l.slice(0, 70)}`),
     });
   }
 
   console.log("=== cleanliness ===");
   console.log(`clean-Cyrillic PDFs: ${cleanPdfs} | mojibake PDFs: ${mojibakePdfs} | total: ${perPdf.length}`);
-  console.log("\n=== current stripLikelyBoilerplate (mojibake regex) match counts ===");
-  console.log(JSON.stringify(mojiHits), "<- if ~0, the current boilerplate stripper never fires");
-  console.log("\n=== clean boilerplate pattern hits (what we COULD strip) ===");
+  console.log("\n=== residual boilerplate pattern hits ===");
   console.log(JSON.stringify(cleanHits, null, 0));
+  console.log("\n=== extraction and layout signals ===");
+  console.log(JSON.stringify({ pages: totalPages, chars: totalChars, emptyPages, ocrNeededPdfs, ...structureHits }, null, 0));
   console.log(`\n=== noise totals ===`);
   console.log(`total lines: ${totalLines} | repeated/boilerplate lines: ${totalBoilerplate} = ${(totalBoilerplate / Math.max(1, totalLines) * 100).toFixed(1)}%`);
   console.log("\n=== cross-PDF repeated lines (appear in many PDFs = generic boilerplate) ===");
@@ -137,6 +166,10 @@ async function main() {
     console.log(`\n${p.group} (${p.pages}p, ${p.lines} lines, ${(p.boiler / p.lines * 100).toFixed(0)}% repeated):`);
     for (const t of p.top) console.log(`   ${t}`);
   }
+}
+
+function normalizeForAudit(value: unknown) {
+  return String(value ?? "").replace(/\s+/gu, "").trim();
 }
 
 main().catch((e) => {

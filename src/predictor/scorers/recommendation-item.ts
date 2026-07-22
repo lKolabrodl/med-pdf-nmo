@@ -67,11 +67,15 @@ function startsBullet(line) {
   return /^\s*[•*\-]\s*/u.test(String(line ?? ""));
 }
 
+function startsRecommendationBullet(line) {
+  return /^\s*[•\uF0B7*\-]\s*/u.test(String(line ?? ""));
+}
+
 function recommendationLineStart(line) {
   if (isPageNumberOnly(line)) return false;
   const normalized = normalizeForSearch(line);
   return (
-    startsBullet(line) ||
+    startsRecommendationBullet(line) ||
     containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") ||
     containsNormalizedPhrase(normalized, "\u043f\u0435\u0440\u0432\u043e\u0439 \u043b\u0438\u043d\u0438\u0438")
   );
@@ -79,7 +83,7 @@ function recommendationLineStart(line) {
 
 function recommendationBoundaryLine(line, isFirstLine) {
   if (isPageNumberOnly(line)) return true;
-  if (!isFirstLine && startsBullet(line)) return true;
+  if (!isFirstLine && startsRecommendationBullet(line)) return true;
   const normalized = normalizeForSearch(line);
   return (
     /^e\s*o?k\b/iu.test(normalized) ||
@@ -106,7 +110,7 @@ function collectRecommendationSegment(pages, pageIndex, lineIndex) {
     }
     if (lines.length >= 12) break;
     const nextPage = pages[currentPageIndex + 1];
-    if (!nextPage?.lines?.length || startsBullet(nextPage.lines[0])) break;
+    if (!nextPage?.lines?.length || startsRecommendationBullet(nextPage.lines[0])) break;
   }
   return lines.join(" ");
 }

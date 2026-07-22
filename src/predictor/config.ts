@@ -30,6 +30,8 @@ export const DEFAULT_CONFIG = {
   explicitOrdinalRangeSetDecoder: true,
   siblingListMultiResolver: true,
   siblingListSingleResolver: true,
+  hierarchicalListResolver: true,
+  recommendationPropositionResolver: true,
   topQuestionChunks: 28,
   evidenceLimit: 8,
 };

@@ -22,18 +22,19 @@ The runtime is fully local and non-LLM. It does not use ChatGPT, OpenAI, Anthrop
 
 ## Current Accuracy
 
-These numbers come from the deduplicated local corpus: 43 PDF groups and 2,604 keyed cases. They are not a guarantee for a new PDF, but they are the current reference quality after the final full run.
+These numbers come from the deduplicated local corpus: 44 PDF groups and 2,674 keyed cases. They are not a guarantee for a new PDF, but they are the current reference quality after the final full run.
 
 | Dataset | Exact accuracy | Single-answer | Multi-answer exact set |
 | --- | ---: | ---: | ---: |
-| All keyed cases | `74.62%` (`1943/2604`) | `82.33%` (`1444/1754`) | `58.71%` (`499/850`) |
-| Train split | `69.44%` (`1070/1541`) | `78.92%` | `51.85%` |
+| All keyed cases | `74.27%` (`1986/2674`) | `82.26%` (`1479/1798`) | `57.88%` (`507/876`) |
+| Train split | `69.37%` (`1069/1541`) | `78.92%` | `51.67%` |
 | Dev split | `79.35%` (`415/523`) | `83.92%` | `68.59%` |
-| Frozen holdout regression | `84.81%` (`458/540`) | `89.64%` | `72.73%` |
+| Frozen holdout regression | `85.00%` (`459/540`) | `89.90%` | `72.73%` |
+| External transfer regression | `61.43%` (`43/70`) | `77.27%` | `34.62%` |
 
 For `single`, only one exact selected answer is counted as correct. For `multi`, the selected set must exactly match the full expected set, so the metric is naturally stricter.
 
-The latest source-structure round changed exactly ten dev sets from wrong to correct (`405 -> 415/523`) and changed zero holdout sets. The frozen holdout passes the `0.80` command gate, but it has informed historical iterations and should be treated as a regression suite rather than a blind estimate of generalization.
+The latest transfer round keeps dev at `415/523`, improves the frozen holdout from `458` to `459/540`, and improves the separately tracked external PDF from `27` to `43/70`. Both holdout and external labels have informed development, so they are regression/stress suites rather than blind estimates of generalization.
 
 ## Installation
 

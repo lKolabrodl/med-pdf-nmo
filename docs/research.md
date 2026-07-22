@@ -6,15 +6,15 @@ Runtime inference is JavaScript/Node.js only. It does not use LLMs, transformer 
 
 ## Data found
 
-The current deduplicated local corpus has 43 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
+The current deduplicated local corpus has 44 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
 
-Current parsed cases: 2,621, including 17 unkeyed cases that are skipped by exact eval.
+Current parsed cases: 2,691, including 17 unkeyed cases that are skipped by exact eval.
 
-- answer-keyed cases: 2,604
-- single-answer answer-keyed cases: 1,754
-- multi-answer answer-keyed cases: 850
+- answer-keyed cases: 2,674
+- single-answer answer-keyed cases: 1,798
+- multi-answer answer-keyed cases: 876
 
-Reproducibility caveat: only five group case files are tracked by Git; 38 corpus groups are local/ignored. The current metrics therefore require the local workspace dataset and its manifest fingerprints.
+Reproducibility caveat: only five group case files are tracked by Git; most corpus groups are local/ignored. The current metrics therefore require the local workspace dataset and its manifest fingerprints.
 
 ## Approaches considered
 
@@ -98,7 +98,7 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `415/523 = 0.7935` and holdout-regression exact accuracy `458/540 = 0.8481`, passing the command-level `0.80` acceptance target. Relative to the fresh iteration-109 baseline, the July structural round gains ten exact dev cases and changes zero holdout selected sets. Future work should prioritize a newly label-sealed external split, recommendation target/condition parsing, and deeper table/list reconstruction.
+On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `415/523 = 0.7935` and holdout-regression exact accuracy `459/540 = 0.8500`, passing the command-level `0.80` acceptance target. The separately tracked transfer PDF reaches `43/70 = 0.6143` after its labels were used for this structural round. Future work should prioritize a newly label-sealed external split and deeper coordinate-aware table/list reconstruction.
 
 ## Feature Calibrator Research Guardrails
 
@@ -216,3 +216,105 @@ none of 540 holdout sets. They contain no fixture ids, PDF names, page numbers,
 answer text, or medical facts. The result supports the earlier conclusion that
 bounded source relations transfer more safely than global score-shape or broad
 proximity rules.
+
+## July 22, 2026 transfer and PDF-structure audit
+
+### Lessons from the earlier 115 iterations
+
+The successful iterations share one property: they reconstruct a bounded source
+relation before changing an answer score. Examples are comparator-preserving
+number normalization, coordinate rows, sibling bullets, whole-interval tuples,
+and clause-local count tuples. The rejected experiments also form a consistent
+group: wide list completion, page/section routing, broad recommendation windows,
+global multi thresholds, a train-only score-shape cardinality model, and broad
+exact-answer boosts all mixed neighboring facts or learned the current PDF mix.
+
+The practical rule for the new round is therefore: improve representation first,
+require sibling/row contrast, and abstain when a physical line appears to contain
+several flattened columns. A higher retrieval weight without a relation parser is
+not a plausible fix for the dominant errors.
+
+### Comparable non-LLM document parsing approaches
+
+The implementation remains JavaScript-only, but two mature document parsers
+confirm the chosen architecture. Camelot's documented Stream parser groups words
+into rows by vertical overlap and infers columns from horizontal text ranges;
+its Network parser instead builds and prunes bounding-box alignments before
+growing a table. GROBID's full-text pipeline explicitly segments headings,
+paragraphs, list items/markers, and tables rather than treating a PDF as one bag
+of words. These are structural lessons, not runtime dependencies: Camelot is
+Python-based and GROBID is Java-based, so neither was added to this Node runtime.
+See [Camelot: How It Works](https://camelot-py.readthedocs.io/en/stable/user/how-it-works.html)
+and [GROBID full-text model](https://grobid.readthedocs.io/en/latest/training/fulltext/).
+
+The local implementation uses the coordinates and physical lines already
+returned by PDF.js, then reconstructs only structures that can be proved from
+adjacent labels, bullets, and numbering. No transformer, LLM, embedding service,
+or external inference dependency is used.
+
+### All-PDF extraction audit
+
+`npx tsx scripts/pdf-noise.ts` ran the real extractor over all 44 available PDFs:
+
+- 3,334 pages, about 5.31 million extracted characters, and 88,010 retained
+  physical lines;
+- all 44 PDFs contain clean Cyrillic text; no mojibake and no PDF met the
+  extractor's `ocrNeeded` threshold;
+- 4,136 bullet lines and 3,220 numbered lines confirm that list hierarchy is a
+  first-class signal, not an edge case;
+- 1,812 physical lines end in a word hyphen. Search normalization already joins
+  ordinary line-break hyphenation, while intra-item splits such as `Гры жа` need a
+  separate conservative document-lexicon repair if pursued later;
+- 5,288 retained lines (6.0%) are repeated or generic boilerplate. The largest
+  residual classes are evidence-grade annotations (2,652), registry/drug-table
+  boilerplate (528), appendix references (450), and running guideline headers
+  (448). One document has 27% repeated registry-table fragments; most other
+  high-noise PDFs are around 7-9%;
+- 689 page objects are empty after intentional removal of table-of-contents,
+  bibliography, and bounded metadata-appendix spans. This is not an OCR failure.
+
+Blindly deleting all residual noise would be unsafe. Evidence-grade lines are
+useful item boundaries, appendix references can route to clinical algorithms,
+and registry text can be the subject of a real question. The safer cleanup work
+is layout-aware: remove only headers/footers repeated at the same page edge,
+preserve grade lines as metadata boundaries rather than answer evidence, and keep
+physical list markers available to structural scorers. The audit also found that
+the historical scoring-text joiner recognizes a mojibake bullet spelling while
+the presentation block builder recognizes the real `•`; changing that broad
+legacy representation was not mixed into this focused predictor round.
+
+### July 22 transfer experiments
+
+The new 70-case PDF exposed a substantially different layout mix: the frozen
+iteration-115 predictor scored only `27/70 = 0.3857`, despite remaining at
+`0.7935` dev and `0.8481` holdout. This made it a useful transfer stress set.
+Its labels were then used for error analysis, so it is now development-like and
+must not be reported as an unseen holdout.
+
+Five representation hypotheses were tested:
+
+1. Gate row-ordinal evidence by the option's own leading label. Kept as a
+   neutral safety rule and dependency of later scorers.
+2. Narrow degree windows further. Rejected: exact-neutral, with no improvement
+   in row ownership.
+3. Read labelled classification rows in both directions. Kept: nine external
+   exact corrections and no dev regression.
+4. Reconstruct Roman-parent / numbered-child list hierarchy. Kept: three
+   external exact multi-set corrections and no dev regression.
+5. Compare one atomic recommendation's target, polarity, and quantifier. Kept
+   after requiring extractor-proven physical blocks for wrapped bullets and
+   abstaining on restricted X/Y conditions: four external corrections.
+
+The final transfer score is `43/70 = 0.6143`, sixteen exact cases above baseline
+with no baseline-correct case lost. Frozen dev remains `415/523`; frozen holdout
+improves from `458/540` to `459/540` through the generic Word-bullet boundary
+repair.
+
+The cleanup conclusion is deliberately conservative. All PDFs already contain
+usable text, so OCR or aggressive character cleanup is not the bottleneck.
+Retaining both `page.lines` and `page.blocks` is more valuable than collapsing
+them into one string: lines preserve exact physical boundaries, while blocks
+provide proof for wrapped list items. A future cleanup pass should prioritize
+coordinate-stable repeated headers/footers and conservative document-internal
+repair of split words; it should not globally delete evidence grades, appendix
+references, registry text, or every repeated line.

@@ -64,4 +64,114 @@ describe("sibling-list resolver", () => {
     const source = pages(["- Наследственная форма. Альфа-синдром и Бета-синдром."]);
     expect(buildSiblingListBlocks(source)).toEqual([]);
   });
+
+  it("maps a numbered classification row to its unique description", () => {
+    const source = pages([
+      "Состояние I степени: первый ограниченный признак.",
+      "Состояние II степени: второй характерный признак.",
+      "Состояние III степени: третий распространенный признак.",
+    ]);
+    const answers = [
+      { id: "A", text: "первый ограниченный признак" },
+      { id: "B", text: "второй характерный признак" },
+      { id: "C", text: "третий распространенный признак" },
+    ];
+    const resolved = resolveSiblingList({
+      mode: "single",
+      pages: source,
+      question: "Дайте характеристику состояния II степени",
+      answers,
+      enableSingleInverse: true,
+    });
+
+    expect([...resolved.keys()]).toEqual(["B"]);
+    expect(resolved.get("B")?.evidence?.kind).toBe("sibling_list_body");
+  });
+
+  it("canonicalizes roman source labels and digit answer labels", () => {
+    const source = pages([
+      "Тип I - первый отличительный признак.",
+      "Тип II - второй отличительный признак.",
+      "Тип III - третий отличительный признак.",
+    ]);
+    const answers = [
+      { id: "A", text: "1 тип" },
+      { id: "B", text: "2 тип" },
+      { id: "C", text: "3 тип" },
+    ];
+    const resolved = resolveSiblingList({
+      mode: "single",
+      pages: source,
+      question: "Описание содержит второй отличительный признак. Какой это тип?",
+      answers,
+      focusTokens: uniqueTokens("второй отличительный признак"),
+      enableSingleInverse: true,
+    });
+
+    expect([...resolved.keys()]).toEqual(["B"]);
+    expect(resolved.get("B")?.evidence?.kind).toBe("sibling_list_label");
+  });
+
+  it("keeps qualitative degree descriptions inside their labelled bullets", () => {
+    const source = pages([
+      "• легкая степень (редкий слабый признак);",
+      "• средняя степень тяжести (устойчивый выраженный признак);",
+      "• тяжелая степень (осложненный распространенный признак).",
+    ]);
+    const answers = [
+      { id: "A", text: "редкий слабый признак" },
+      { id: "B", text: "устойчивый выраженный признак" },
+      { id: "C", text: "осложненный распространенный признак" },
+    ];
+    const resolved = resolveSiblingList({
+      mode: "single",
+      pages: source,
+      question: "Дайте характеристику средней степени тяжести",
+      answers,
+      enableSingleInverse: true,
+    });
+
+    expect([...resolved.keys()]).toEqual(["B"]);
+  });
+
+  it("expands an explicit plus-reference only for the queried target row", () => {
+    const source = pages([
+      "Тип I - первый базовый признак.",
+      "Тип II - второй базовый признак.",
+      "Тип III - первый и второй базовые признаки вместе.",
+      "Тип IV: тип III + дополнительный отдельный признак.",
+    ]);
+    const answers = [
+      { id: "A", text: "первый базовый признак" },
+      { id: "B", text: "второй базовый признак" },
+      { id: "C", text: "первый и второй базовые признаки вместе, дополнительный отдельный признак" },
+    ];
+    const resolved = resolveSiblingList({
+      mode: "single",
+      pages: source,
+      question: "Дайте характеристику типа IV",
+      answers,
+      enableSingleInverse: true,
+    });
+
+    expect([...resolved.keys()]).toEqual(["C"]);
+  });
+
+  it("does not let stage zero match a different stage", () => {
+    const resolved = resolveSiblingList({
+      mode: "single",
+      pages: pages([
+        "СТАДИЯ 0 Нет изменений в контрольной области.",
+        "СТАДИЯ II Выраженные изменения в контрольной области.",
+      ]),
+      question: "Согласно классификации, стадия II характеризуется",
+      answers: [
+        { id: "A", text: "отсутствием изменений в контрольной области" },
+        { id: "B", text: "выраженными изменениями в контрольной области" },
+      ],
+      enableSingleInverse: true,
+    });
+
+    expect([...resolved.keys()]).not.toContain("A");
+  });
 });

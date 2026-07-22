@@ -1,14 +1,14 @@
-export const DATASET_MANIFEST_VERSION = 2;
+export const DATASET_MANIFEST_VERSION = 3;
 
 /**
  * SHA-256 over sorted `<group>:<pdf-sha256>` rows for the deduplicated local corpus.
  * The individual corpus files remain local, but this fingerprint prevents silent
  * replacement/addition/removal from changing evaluation composition.
  */
-export const DATASET_PDF_FINGERPRINT = "688b55d1d015fa0fbbed8b32d080cdee554917d1924b6e6e144c589145cb7345";
+export const DATASET_PDF_FINGERPRINT = "60e869b04c600de3b91fcdef2ea9cec5b95dd4b4050970eccf05970d86d218d9";
 
 /** SHA-256 over stable parsed case tuples, including expected values. */
-export const DATASET_CASE_FINGERPRINT = "4df47c865fd6714faa2e037110b93bfda51b3399aded4ecc4ecb311c09badb47";
+export const DATASET_CASE_FINGERPRINT = "15821469ea6766b4a9b2c41d2b07f20c027cf5e04670592941b408e8274604d6";
 
 /**
  * Frozen PDF-level split for the deduplicated local corpus.
@@ -63,8 +63,14 @@ export const FROZEN_SPLIT_GROUPS = {
     "43-anomali",
     "44-girshprunga",
   ],
+  // Added after the original split was repeatedly inspected. Keep this newer
+  // PDF separate so its baseline and later regression result stay visible.
+  external: ["47-grizha"],
 } as const;
 
-export const DATASET_GROUPS = [...FROZEN_SPLIT_GROUPS.train, ...FROZEN_SPLIT_GROUPS.dev, ...FROZEN_SPLIT_GROUPS.holdout].sort(
-  (left, right) => left.localeCompare(right, "en"),
-);
+export const DATASET_GROUPS = [
+  ...FROZEN_SPLIT_GROUPS.train,
+  ...FROZEN_SPLIT_GROUPS.dev,
+  ...FROZEN_SPLIT_GROUPS.holdout,
+  ...FROZEN_SPLIT_GROUPS.external,
+].sort((left, right) => left.localeCompare(right, "en"));

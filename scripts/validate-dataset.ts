@@ -35,7 +35,7 @@ async function main() {
   const { groups, cases } = await loadDataset(root);
   const splits = groupSplit(groups);
   const splitByGroup = new Map<string, string>();
-  for (const split of ["train", "dev", "holdout"] as const) {
+  for (const split of ["train", "dev", "holdout", "external"] as const) {
     for (const group of splits[split]) splitByGroup.set(group, split);
   }
 

@@ -2,9 +2,9 @@
 
 ## Dataset
 
-The deduplicated local corpus contains 43 PDF groups under
-`__test__/NN-name/` and 2,621 parsed cases. Exact metrics exclude 17 cases with
-`expected: []`, leaving 2,604 keyed cases: 1,754 single-answer and 850
+The deduplicated local corpus contains 44 PDF groups under
+`__test__/NN-name/` and 2,691 parsed cases. Exact metrics exclude 17 cases with
+`expected: []`, leaving 2,674 keyed cases: 1,798 single-answer and 876
 multi-answer cases.
 
 | split | PDF groups | parsed | keyed | single | multi |
@@ -12,7 +12,8 @@ multi-answer cases.
 | train | 25 | 1,558 | 1,541 | 1,001 | 540 |
 | dev | 9 | 523 | 523 | 367 | 156 |
 | holdout regression | 9 | 540 | 540 | 386 | 154 |
-| total | 43 | 2,621 | 2,604 | 1,754 | 850 |
+| external transfer | 1 | 70 | 70 | 44 | 26 |
+| total | 44 | 2,691 | 2,674 | 1,798 | 876 |
 
 Each group contains `doc.pdf` and `cases.test.ts`. Runtime receives only the PDF,
 question, answer variants, and mode. Expected labels are read only by development
@@ -39,12 +40,13 @@ directory is added or removed.
 
 - dev: `07-hron`, `08-ask`, `15-toxic`, `25-shigez`, `28-tanzilt`, `31-hbs`, `32-gemor`, `41-destonia`, `42-skvoz`
 - holdout regression: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `19-gepatitc`, `23-nimana`, `33-aorta`, `43-anomali`, `44-girshprunga`
+- external transfer: `47-grizha`
 - train: `01-toksic-galogen`, `02-metanol-glikol`, `03-chadlv`, `04-hep-d`, `05-bronhit-hron`, `09-covid`, `10-LPP`, `12-nos`, `13-pisha`, `20-hron`, `21-citovirus`, `22-eozif`, `24-kalit`, `26-blevota`, `27-cistit`, `29-tpank`, `30-heart`, `35-cron`, `36-anrid`, `37-bazal`, `38-katarakta`, `39-glaurova`, `40-deficit`, `45-botulizm`, `46-yazva`
 
 The manifest also stores two integrity hashes:
 
-- PDF fingerprint: `688b55d1d015fa0fbbed8b32d080cdee554917d1924b6e6e144c589145cb7345`;
-- parsed-case fingerprint, including expected values: `4df47c865fd6714faa2e037110b93bfda51b3399aded4ecc4ecb311c09badb47`.
+- PDF fingerprint: `60e869b04c600de3b91fcdef2ea9cec5b95dd4b4050970eccf05970d86d218d9`;
+- parsed-case fingerprint, including expected values: `15821469ea6766b4a9b2c41d2b07f20c027cf5e04670592941b408e8274604d6`.
 
 An intentional corpus change requires an explicit manifest update; silent PDF,
 question, variant, or label changes fail `npm run dataset:validate`.
@@ -59,7 +61,9 @@ npm run build
 npm run eval:train
 npm run eval
 npm run eval:holdout
+npm run eval:external
 npm run diagnostics
+npm run pdf:audit
 npm run predict -- --input request.json
 ```
 
@@ -69,25 +73,36 @@ npm run predict -- --input request.json
 
 | split | exact | single | multi exact set | macro by PDF |
 | --- | ---: | ---: | ---: | ---: |
-| train | `1070/1541 = 0.6944` | `790/1001 = 0.7892` | `280/540 = 0.5185` | `0.7008` |
+| train | `1069/1541 = 0.6937` | `790/1001 = 0.7892` | `279/540 = 0.5167` | `0.6999` |
 | dev | `415/523 = 0.7935` | `308/367 = 0.8392` | `107/156 = 0.6859` | `0.8011` |
-| holdout regression | `458/540 = 0.8481` | `346/386 = 0.8964` | `112/154 = 0.7273` | `0.8367` |
-| all keyed cases | `1943/2604 = 0.7462` | `1444/1754 = 0.8233` | `499/850 = 0.5871` | — |
+| holdout regression | `459/540 = 0.8500` | `347/386 = 0.8990` | `112/154 = 0.7273` | `0.8383` |
+| external transfer | `43/70 = 0.6143` | `34/44 = 0.7727` | `9/26 = 0.3462` | `0.6143` |
+| all keyed cases | `1986/2674 = 0.7427` | `1479/1798 = 0.8226` | `507/876 = 0.5788` | — |
 
-The fresh iteration-109 baseline, reproduced after the full 108-iteration audit,
-was dev `405/523 = 0.7744` and holdout `458/540 = 0.8481`. Four narrowly gated
-source-structure changes add ten exact dev cases. Every dev selection change is
-wrong-to-right; the frozen holdout has no selected-set churn:
+The earlier July 19 structural round (iterations 109–115) moved dev from
+`405/523` to `415/523` through ten wrong-to-right changes while holdout remained
+exactly `458/540`. The table below isolates the later July 22 transfer round and
+uses iteration 115 plus the recorded external prediction as one matched
+44-PDF baseline.
 
-| split | baseline | final | selected-set changes | net exact |
+| split | July 22 baseline | final | selected-set changes | net exact |
 | --- | ---: | ---: | ---: | ---: |
-| dev | `405/523` | `415/523` | `10/523` | `+10` |
-| holdout regression | `458/540` | `458/540` | `0/540` | `0` |
+| train | `1070/1541` | `1069/1541` | `6/1541` | `-1` |
+| dev | `415/523` | `415/523` | `0/523` | `0` |
+| holdout regression | `458/540` | `459/540` | `2/540` | `+1` |
+| external transfer | `27/70` | `43/70` | `17/70` | `+16` |
+| all 44 PDFs | `1970/2674` | `1986/2674` | `25/2674` | `+16` |
 
-The retained changes are format-general rather than case-specific: bounded
-sibling-bullet membership (`+5`), whole-interval relation tuples (`+3`), and
-clause-local counted-object tuples (`+2`). A fifth exact-negation-pair prototype
-was exact-neutral and is disabled by default.
+The 25 changed sets comprise 19 wrong-to-right, three right-to-wrong, and three
+wrong-to-different-wrong changes. The new rules were not tuned after the final
+train audit; its six changes are reported as an independent post-selection
+check.
+
+The July 22 additions are format-general rather than case-specific: labelled
+classification rows (`+9` external), Roman-parent/numbered-child hierarchy
+(`+3`), and physical-block-bound recommendation propositions (`+4`). The
+ordinal-row gate is exact-neutral but prevents false structural bonuses. A
+strict degree-window experiment was exact-neutral and removed.
 
 Final dev summary:
 
@@ -112,18 +127,37 @@ Final holdout-regression summary:
 ```json
 {
   "total": 540,
-  "correct": 458,
-  "exactAccuracy": 0.8481,
-  "singleAccuracy": 0.8964,
+  "correct": 459,
+  "exactAccuracy": 0.85,
+  "singleAccuracy": 0.899,
   "multiExactAccuracy": 0.7273,
-  "macroAccuracyByPdf": 0.8367,
+  "macroAccuracyByPdf": 0.8383,
   "noEvidence": 0,
   "errorBuckets": {
-    "confused_with_distractor": 51,
-    "multi_cardinality": 31
+    "confused_with_distractor": 49,
+    "multi_cardinality": 32
   }
 }
 ```
+
+External-transfer summary:
+
+```json
+{
+  "total": 70,
+  "correct": 43,
+  "exactAccuracy": 0.6143,
+  "singleAccuracy": 0.7727,
+  "multiExactAccuracy": 0.3462,
+  "macroAccuracyByPdf": 0.6143,
+  "noEvidence": 0
+}
+```
+
+`47-grizha` was new when its `27/70` baseline was recorded. Its labels were then
+used for diagnostics and hypothesis selection, so the final `43/70` is an
+exploratory transfer/regression result, not a blind estimate. The original
+holdout likewise remains a repeatedly inspected frozen acceptance suite.
 
 ## Multi-answer contract
 

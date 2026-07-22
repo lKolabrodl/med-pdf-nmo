@@ -60,16 +60,18 @@
     "build:browser": "esbuild src/browser.ts --bundle --format=iife --global-name=MedPdfNmo --outfile=dist/med-pdf-nmo.browser.js --platform=browser --target=es2020 --legal-comments=none",
     "build:browser:esm": "esbuild src/browser.ts --bundle --format=esm --outfile=dist/med-pdf-nmo.browser.mjs --platform=browser --target=es2020 --legal-comments=none",
     "prepare": "npm run build",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=2",
     "typecheck": "tsc --noEmit",
     "predict": "tsx src/cli.ts",
     "dataset:validate": "tsx scripts/validate-dataset.ts",
+    "pdf:audit": "tsx scripts/pdf-noise.ts",
     "diagnostics": "tsx scripts/diagnostics.ts",
     "features:export": "tsx scripts/export-features.ts",
     "calibrator:experiment": "tsx scripts/calibrator-experiment.ts",
     "eval": "tsx scripts/eval.ts --split dev",
     "eval:train": "tsx scripts/eval.ts --split train",
-    "eval:holdout": "tsx scripts/eval.ts --split holdout"
+    "eval:holdout": "tsx scripts/eval.ts --split holdout",
+    "eval:external": "tsx scripts/eval.ts --split external"
   },
   "dependencies": {
     "pdfjs-dist": "^5.7.284"

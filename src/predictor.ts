@@ -47,6 +47,9 @@ import { applyClauseLocalCountTupleResolver } from "./predictor/scorers/count-tu
 import { applyNegationPairClauseResolver } from "./predictor/scorers/negation-pair.js";
 import { applyExplicitOrdinalRangeSetScores, resolveExplicitOrdinalRangeSet } from "./predictor/scorers/multi-set.js";
 import { resolveSiblingList } from "./predictor/scorers/sibling-list.js";
+import { answerOrdinalRowApplicable } from "./predictor/scorers/ordinal-row-gate.js";
+import { resolveHierarchicalList } from "./predictor/scorers/hierarchical-list.js";
+import { resolveRecommendationProposition } from "./predictor/scorers/recommendation-proposition.js";
 import {
   clinicalCourseCueAdjustment,
   contrastCueMismatchAdjustment,
@@ -3741,9 +3744,10 @@ function orderedFocusPairHits(focusTokens, documentTokens) {
   return hits;
 }
 
-function bestAnswerOrdinalRowSupport({ mode, pages, topQuestionPages, answer, answerTokens, focusTokens }) {
+function bestAnswerOrdinalRowSupport({ mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
   const label = answerOrdinalLabel(answer.text);
   if (!label) return null;
+  if (!answerOrdinalRowApplicable({ question, answerText: answer.text, label })) return null;
   const specificTokens = specificAnswerOrdinalFocusTokens(focusTokens, answerTokens);
   if (specificTokens.length < 2) return null;
   let best = null;
@@ -4043,6 +4047,23 @@ function scoreAnswer(context) {
   return { raw, evidence };
 }
 
+function mergeStructuralResolutions(...resolutions) {
+  const merged = new Map();
+  for (const resolution of resolutions) {
+    for (const [answerId, item] of resolution ?? []) {
+      const previous = merged.get(answerId) ?? { adjustment: 0, evidence: null };
+      merged.set(answerId, {
+        adjustment: previous.adjustment + (item.adjustment ?? 0),
+        evidence:
+          !previous.evidence || (item.evidence?.score ?? -Infinity) > previous.evidence.score
+            ? item.evidence ?? previous.evidence
+            : previous.evidence,
+      });
+    }
+  }
+  return merged;
+}
+
 /**
  * Запускает локальный non-LLM predictor для выбора ответа.
  *
@@ -4099,7 +4120,7 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
     mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
       ? buildCoordinateTableMembershipsByPage(runtime.pdfText.pages, topQuestionPages)
       : null;
-  const siblingListResolution = resolveSiblingList({
+  const boundedSiblingListResolution = resolveSiblingList({
     mode,
     pages: runtime.pdfText.pages,
     question,
@@ -4108,6 +4129,17 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
     enableMultiMembership: config.siblingListMultiResolver,
     enableSingleInverse: config.siblingListSingleResolver,
   });
+  const hierarchicalListResolution = config.hierarchicalListResolver
+    ? resolveHierarchicalList({ mode, pages: runtime.pdfText.pages, question, answers })
+    : new Map();
+  const recommendationPropositionResolution = config.recommendationPropositionResolver
+    ? resolveRecommendationProposition({ mode, pages: runtime.pdfText.pages, question, answers })
+    : new Map();
+  const siblingListResolution = mergeStructuralResolutions(
+    boundedSiblingListResolution,
+    hierarchicalListResolution,
+    recommendationPropositionResolution,
+  );
 
   let answerScores = answers.map((answer) => {
     const answerTokens = uniqueTokens(answer.text);

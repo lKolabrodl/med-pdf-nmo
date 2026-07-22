@@ -181,7 +181,8 @@ async function evaluate(splitName) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const splitName = args.split === "holdout" ? "holdout" : args.split === "train" ? "train" : "dev";
+  const splitName =
+    args.split === "external" ? "external" : args.split === "holdout" ? "holdout" : args.split === "train" ? "train" : "dev";
   const summary = await evaluate(splitName);
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
   if (splitName === "holdout" && summary.exactAccuracy < TARGET) {

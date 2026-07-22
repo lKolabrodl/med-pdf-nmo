@@ -98,7 +98,13 @@ export function groupSplit(groups, { seed = 20260509, holdoutRatio = 0.2, devRat
       train: new Set(FROZEN_SPLIT_GROUPS.train),
       dev: new Set(FROZEN_SPLIT_GROUPS.dev),
       holdout: new Set(FROZEN_SPLIT_GROUPS.holdout),
-      orderedGroups: [...FROZEN_SPLIT_GROUPS.holdout, ...FROZEN_SPLIT_GROUPS.dev, ...FROZEN_SPLIT_GROUPS.train],
+      external: new Set(FROZEN_SPLIT_GROUPS.external),
+      orderedGroups: [
+        ...FROZEN_SPLIT_GROUPS.external,
+        ...FROZEN_SPLIT_GROUPS.holdout,
+        ...FROZEN_SPLIT_GROUPS.dev,
+        ...FROZEN_SPLIT_GROUPS.train,
+      ],
     };
   }
 
@@ -108,7 +114,7 @@ export function groupSplit(groups, { seed = 20260509, holdoutRatio = 0.2, devRat
   const holdout = new Set(shuffled.slice(0, holdoutCount));
   const dev = new Set(shuffled.slice(holdoutCount, holdoutCount + devCount));
   const train = new Set(shuffled.slice(holdoutCount + devCount));
-  return { train, dev, holdout, orderedGroups: shuffled };
+  return { train, dev, holdout, external: new Set(), orderedGroups: shuffled };
 }
 
 function seededScore(value, seed) {

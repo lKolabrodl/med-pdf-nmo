@@ -711,3 +711,103 @@ Iteration 115 final five-hypothesis audit: COMPLETE.
   eval:holdout`; `npm run diagnostics`; and `npm pack --dry-run` (`88` package
   entries). A real `npm run predict -- ...` smoke selected `C` for the source-backed
   two-stage oral-rehydration count question.
+
+Iteration 116 external transfer split and all-PDF audit: KEPT, evaluation-only.
+
+- Added the previously unmanifested `47-grizha` PDF as a separate `external`
+  group without moving any train/dev/holdout group. The manifest now covers 44
+  unique PDFs and 2,674 keyed cases. Its labels were inspected during this
+  round, so it is an exploratory transfer/regression set, not a blind holdout.
+- Fresh iteration-115 reproduction: dev `415/523 = 0.7935`, holdout
+  `458/540 = 0.8481`, and external baseline `27/70 = 0.3857` (single
+  `21/44`, multi exact `6/26`).
+- The real extractor audited all 44 PDFs: 3,334 pages, 5,307,078 characters,
+  88,010 physical lines, 0 mojibake PDFs, and 0 PDFs requiring OCR. Residual
+  repeated/boilerplate text is 5,288 lines (`6.0%`), but most of it must be
+  retained as structural boundaries rather than deleted globally.
+- Added `npm run eval:external` and `npm run pdf:audit` so this analysis is
+  reproducible without exposing labels to runtime.
+
+Iteration 117 H1 answer-ordinal row gate: KEPT as a safety dependency.
+
+- Restricted the large `answer_ordinal_row` bonus to options whose own text
+  begins with the matching stage/type/degree/class label. Incidental later
+  ordinals no longer impersonate row identities; count questions are excluded.
+- Added subtype support (`1A`, `1B`) and synthetic contracts. Aggregate exact
+  accuracy is neutral by itself, but the gate prevents a false ordinal bonus
+  from overriding the later proposition resolver.
+
+Iteration 118 H2 strict degree windows: REJECTED, exact-neutral.
+
+- Tested stricter sentence/line boundaries for questions about degree labels.
+  External exact accuracy did not improve; one wrong option merely changed to a
+  different wrong option because the underlying flattened window still mixed
+  adjacent rows.
+- Removed the experiment completely. Degree failures require row ownership, not
+  another proximity-window threshold.
+
+Iteration 119 H3 bidirectional labelled classification rows: KEPT.
+
+- Extended the sibling parser from ordinary bullets to physical rows such as
+  `Тип I — ...`, `СТАДИЯ II ...`, and qualitative light/medium/severe degree
+  entries. It supports label-to-body and body-to-label lookup and one explicit
+  parent-row `+` inheritance relation.
+- Long non-bullet rows (`>600` characters) are rejected as probable flattened
+  multi-column tables. Stage/type zero is preserved as a real ordinal rather
+  than falling back to a generic label.
+- Dev remains `415/523` with no net selected-set change; external improves by
+  nine exact cases. The absence of dev churn is intentional: the new resolver
+  fires only with sibling contrast.
+
+Iteration 120 H4 Roman-parent / numbered-child hierarchy: KEPT.
+
+- Added a physical-list resolver for structures where a Roman-labelled parent
+  owns subsequent numbered children. It requires a uniquely matched parent,
+  exact/distinctive child evidence, and contrast against sibling parents.
+- Three external multi sets change wrong-to-right. Dev remains `415/523` with
+  no selected-set change.
+
+Iteration 121 H5 atomic recommendation propositions: KEPT after safety rewrite.
+
+- Added target retrieval separate from polarity/quantifier comparison for
+  single-answer recommendation families. Russian word-form variation uses a
+  soft rare-token anchor; restricted propositions (`only for X`) defer to the
+  lexical scorers because quantifiers alone cannot distinguish X from Y.
+- Line-only atomic segments retain the old conservative continuation contract.
+  Wrapped recommendations are accepted only when `page.blocks` proves that the
+  physical bullet and continuation belong to one item. This prevents the old
+  cross-bullet merge while recovering real wrapped recommendations.
+- Added recognition of Word's private-use bullet `U+F0B7` only to the ordinary
+  recommendation-item parser. Keeping it out of atomic multi-set parsing avoids
+  two dev cardinality regressions.
+- Four external single answers change wrong-to-right. The same layout repair
+  changes one frozen-holdout answer wrong-to-right and no holdout answer
+  right-to-wrong.
+
+Iteration 122 final transfer round: COMPLETE.
+
+- Final dev: `415/523 = 0.7935`, identical to iteration 115; single `0.8392`,
+  multi exact `0.6859`, macro by PDF `0.8011`.
+- Final frozen holdout: `459/540 = 0.8500`, up from `458/540`; single
+  `347/386 = 0.8990`, multi exact `112/154 = 0.7273`, macro `0.8383`.
+- Final external transfer: `43/70 = 0.6143`, up from `27/70 = 0.3857`;
+  single `34/44 = 0.7727`, multi exact `9/26 = 0.3462`. Case-level comparison
+  has 16 wrong-to-right changes, 0 right-to-wrong changes, and one
+  wrong-to-different-wrong change.
+- Final post-selection train audit: `1069/1541 = 0.6937`, one exact multi set
+  below iteration 115 (`279/540` instead of `280/540`); single remains
+  `790/1001`. Six train sets change: two wrong-to-right, three right-to-wrong,
+  and one wrong-to-different-wrong. This signal was recorded after the rules
+  were frozen and was not used for further tuning. Across all 44 PDFs the
+  matched baseline-to-final comparison is `1970 -> 1986/2674` (`+16` exact;
+  `1479/1798` single, `507/876` multi exact).
+- No fixture id, PDF/group name, page number, medical fact, expected answer, or
+  split artifact was added to runtime. H2 was removed; H1, H3, H4, and the
+  safety-rewritten H5 were retained because aggregate transfer improved without
+  reducing dev or holdout exact accuracy.
+- Final validation passed: `npm test` (`83` focused/leakage tests, `2,691`
+  corpus fixtures intentionally skipped), `npm run typecheck`, `npm run build`,
+  `npm run dataset:validate`, `npm run pdf:audit`, all four eval commands,
+  diagnostics on all four splits, and `npm pack --dry-run` (`94` files,
+  `852.6 kB`). A real `npm run predict -- ...` smoke selected `D` from the
+  bounded negative recommendation proposition.
