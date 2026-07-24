@@ -1,4 +1,5 @@
 import type { PredictorConfig } from "./config.js";
+import type { PdfJsModule } from "../pdf.js";
 
 /** Поддерживаемые режимы вопроса. */
 export type AnswerMode = "single" | "multi";
@@ -25,6 +26,12 @@ export type AnswerScore = {
   evidence: EvidenceItem[];
   score?: number;
   relative?: number;
+};
+
+/** Answer score после калибровки, переданный в selection/result layers. */
+export type CalibratedAnswerScore = AnswerScore & {
+  score: number;
+  relative: number;
 };
 
 /** Character range inside a presentation source excerpt. */
@@ -93,6 +100,19 @@ export type PredictorMeta = {
   };
 };
 
+export type AnswerEvidenceDiagnostics = {
+  evidenceCount: number;
+  uniqueEvidencePages: number;
+  bestEvidenceScore: number;
+  kindCounts: Record<string, number>;
+  kindBestScores: Record<string, number>;
+  refs: Array<{
+    page: number;
+    kind: string;
+    score: number;
+  }>;
+};
+
 /** Stable low-level result returned by predict(). */
 export type PredictorResult = {
   selected: string[];
@@ -103,7 +123,9 @@ export type PredictorResult = {
   evidence: EvidenceItem[];
   source: PredictionSource | null;
   sources: PredictionSources;
-  diagnostics?: { answerEvidence: unknown };
+  diagnostics?: {
+    answerEvidence: Record<string, AnswerEvidenceDiagnostics>;
+  };
   meta: PredictorMeta;
 };
 
@@ -126,7 +148,7 @@ export type PredictorInput = {
 
 /** Low-level runtime and presentation options accepted by predict(). */
 export type PredictorOptions = Partial<PredictorConfig> & {
-  pdfjsLib?: any;
+  pdfjsLib?: PdfJsModule;
   pdfVerbosity?: number;
   diagnostics?: boolean;
   includeSources?: boolean;

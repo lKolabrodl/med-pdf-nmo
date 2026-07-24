@@ -1,6 +1,104 @@
 import { normalizeForSearch, normalizeText } from "./normalize.js";
 
-let configuredPdfJs: any = null;
+export type PdfTextItem = {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PdfTextLine = {
+  text: string;
+  y: number;
+  items: PdfTextItem[];
+};
+
+export type PdfPage = {
+  page: number;
+  text: string;
+  lines: string[];
+  blocks: PdfTextBlock[];
+  lineItems: PdfTextLine[];
+  normalized: string;
+  charLength: number;
+};
+
+/** Минимальная страница для scorer-ов, работающих только с физическими строками. */
+export type PdfLinePage = {
+  page: number;
+  lines: string[];
+  text?: string;
+  blocks?: PdfTextBlock[];
+  lineItems?: PdfTextLine[];
+  normalized?: string;
+  charLength?: number;
+};
+
+export type PdfAbbreviation = {
+  abbr: string;
+  expansion: string;
+  page: number;
+};
+
+export type ExtractedPdfText = {
+  pdfId: string;
+  cacheVersion: number;
+  pageCount: number;
+  extractedAt: string;
+  pages: PdfPage[];
+  abbreviations: PdfAbbreviation[];
+  ocrNeeded: boolean;
+};
+
+export type PdfExtractionOptions = {
+  cacheKey?: string;
+  pdfjsLib?: PdfJsModule;
+  pdfVerbosity?: number;
+};
+
+type PdfJsTextItem = {
+  str?: string;
+  transform?: number[];
+  width?: number;
+  height?: number;
+  type?: string;
+  id?: string;
+};
+
+type PdfJsPage = {
+  getTextContent(options: {
+    disableCombineTextItems: boolean;
+    includeMarkedContent: boolean;
+  }): Promise<{ items: PdfJsTextItem[] }>;
+};
+
+type PdfJsDocument = {
+  numPages: number;
+  getPage(pageNumber: number): Promise<PdfJsPage>;
+};
+
+export type PdfJsModule = {
+  getDocument(options: {
+    data: Uint8Array;
+    disableWorker: boolean;
+    useSystemFonts: boolean;
+    isEvalSupported: boolean;
+    verbosity: number;
+  }): {
+    promise: Promise<PdfJsDocument>;
+  };
+  VerbosityLevel?: {
+    ERRORS?: number;
+  };
+};
+
+type PdfJsGlobal = typeof globalThis & {
+  pdfjsLib?: PdfJsModule;
+  PDFJS?: PdfJsModule;
+};
+
+let configuredPdfJs: PdfJsModule | null = null;
 
 /**
  * Настраивает модуль PDF.js, который будет использовать runtime.
@@ -10,19 +108,24 @@ let configuredPdfJs: any = null;
  *
  * @param pdfjsLib Объект модуля с методом `getDocument`.
  */
-export function setPdfJsLib(pdfjsLib: any) {
+export function setPdfJsLib(pdfjsLib: PdfJsModule) {
   configuredPdfJs = pdfjsLib;
 }
 
-async function resolvePdfJs(options: any = {}) {
+async function resolvePdfJs(
+  options: PdfExtractionOptions = {},
+): Promise<PdfJsModule> {
   if (options.pdfjsLib?.getDocument) return options.pdfjsLib;
   if (configuredPdfJs?.getDocument) return configuredPdfJs;
 
-  const fromGlobal = (globalThis as any).pdfjsLib ?? (globalThis as any).PDFJS;
+  const pdfGlobal = globalThis as PdfJsGlobal;
+  const fromGlobal = pdfGlobal.pdfjsLib ?? pdfGlobal.PDFJS;
   if (fromGlobal?.getDocument) return fromGlobal;
 
   try {
-    return await import("pdfjs-dist/legacy/build/pdf.mjs");
+    return (await import(
+      "pdfjs-dist/legacy/build/pdf.mjs"
+    )) as unknown as PdfJsModule;
   } catch {
     throw new Error(
       "PDF.js is not available. In the browser, include pdf.js before this library or call setPdfJsLib(pdfjsLib).",
@@ -30,12 +133,15 @@ async function resolvePdfJs(options: any = {}) {
   }
 }
 
-function pdfVerbosity(pdfjs: any, options: any = {}) {
+function pdfVerbosity(
+  pdfjs: PdfJsModule,
+  options: PdfExtractionOptions = {},
+) {
   if (typeof options.pdfVerbosity === "number") return options.pdfVerbosity;
   return pdfjs.VerbosityLevel?.ERRORS ?? 0;
 }
 
-async function toUint8Array(input: any): Promise<Uint8Array> {
+async function toUint8Array(input: unknown): Promise<Uint8Array> {
   if (input instanceof Uint8Array) {
     return new Uint8Array(input.buffer.slice(input.byteOffset, input.byteOffset + input.byteLength));
   }
@@ -54,31 +160,38 @@ async function toUint8Array(input: any): Promise<Uint8Array> {
     return new Uint8Array(await response.arrayBuffer());
   }
 
-  if (input?.arrayBuffer && typeof input.arrayBuffer === "function") {
-    return new Uint8Array(await input.arrayBuffer());
+  if (
+    input &&
+    typeof input === "object" &&
+    "arrayBuffer" in input &&
+    typeof input.arrayBuffer === "function"
+  ) {
+    return new Uint8Array(
+      await (input as { arrayBuffer(): Promise<ArrayBuffer> }).arrayBuffer(),
+    );
   }
 
   throw new Error("PDF input must be ArrayBuffer, Uint8Array, Blob/File, or URL string.");
 }
 
-function lineKey(item: any) {
+function lineKey(item: PdfJsTextItem) {
   const [, , , , , y] = item.transform ?? [1, 0, 0, 1, 0, 0];
   return Math.round(y / 3) * 3;
 }
 
-function itemX(item: any) {
+function itemX(item: PdfJsTextItem) {
   return item.transform?.[4] ?? 0;
 }
 
-function itemY(item: any) {
+function itemY(item: PdfJsTextItem) {
   return item.transform?.[5] ?? 0;
 }
 
-function groupItemsIntoLineObjects(items: any[]) {
+function groupItemsIntoLineObjects(items: PdfJsTextItem[]): PdfTextLine[] {
   const useful = items
     .filter((item) => typeof item.str === "string" && item.str.trim())
     .sort((a, b) => itemY(b) - itemY(a) || itemX(a) - itemX(b));
-  const groups: any[] = [];
+  const groups: Array<{ key: number; items: PdfJsTextItem[] }> = [];
   for (const item of useful) {
     const key = lineKey(item);
     let group = groups.find((candidate) => Math.abs(candidate.key - key) <= 2);
@@ -92,17 +205,17 @@ function groupItemsIntoLineObjects(items: any[]) {
   groups.sort((a, b) => b.key - a.key);
   return groups
     .map((group) => {
-      const sortedItems = group.items.sort((a: any, b: any) => itemX(a) - itemX(b));
+      const sortedItems = group.items.sort((a, b) => itemX(a) - itemX(b));
       const text = sortedItems
-        .map((item: any) => item.str.trim())
+        .map((item) => item.str!.trim())
         .join(" ")
         .replace(/\s+/g, " ")
         .trim();
       return {
         text,
         y: group.key,
-        items: sortedItems.map((item: any) => ({
-          text: item.str.trim(),
+        items: sortedItems.map((item) => ({
+          text: item.str!.trim(),
           x: itemX(item),
           y: itemY(item),
           width: item.width ?? 0,
@@ -123,9 +236,9 @@ function groupItemsIntoLineObjects(items: any[]) {
  * конкретному документу: колонтитул "страница N из M", бегущий заголовок
  * "клинические рекомендации - <название> - <годы>" и строки-ссылки.
  */
-function stripLikelyBoilerplate(lines: any[]) {
+function stripLikelyBoilerplate(lines: PdfTextLine[]): PdfTextLine[] {
   return lines.filter((line) => {
-    const text = typeof line === "string" ? line : line.text;
+    const text = line.text;
     if (!normalizeForSearch(text)) return false;
     const clean = normalizeText(text);
     if (/^страниц[аы]\s+\d+\s+из\s+\d+\b/.test(clean)) return false;
@@ -194,15 +307,15 @@ const ABBREVIATION_PARENTHETICAL = /\s*\([^)]{1,160}\)/gu;
 const ABBREVIATION_TRAILING_PARENTHETICAL = /\s*\([^)]*$/u;
 
 /** Плоский индекс всех строк документа: {p: индекс страницы, l: индекс строки в странице}. */
-function buildFlatLineIndex(pages: any[]) {
+function buildFlatLineIndex(pages: PdfPage[]) {
   const flat: Array<{ p: number; l: number }> = [];
   pages.forEach((page, p) => page.lines.forEach((_: string, l: number) => flat.push({ p, l })));
   return flat;
 }
 
-function rebuildPage(page: any) {
+function rebuildPage(page: PdfPage) {
   const lines: string[] = [];
-  const lineItems: any[] = [];
+  const lineItems: PdfTextLine[] = [];
   for (let index = 0; index < page.lines.length; index += 1) {
     const line = String(page.lines[index] ?? "").trim();
     if (!normalizeForSearch(line)) continue;
@@ -222,7 +335,12 @@ function rebuildPage(page: any) {
  * Каждый вызов должен получать свежий flat-индекс, потому что предыдущее
  * удаление меняет page.lines.
  */
-function removeFlatLineSpan(pages: any[], flat: Array<{ p: number; l: number }>, start: number, end: number) {
+function removeFlatLineSpan(
+  pages: PdfPage[],
+  flat: Array<{ p: number; l: number }>,
+  start: number,
+  end: number,
+) {
   const removeByPage = new Map<number, Set<number>>();
   for (let i = start; i < end; i += 1) {
     const f = flat[i];
@@ -232,7 +350,7 @@ function removeFlatLineSpan(pages: any[], flat: Array<{ p: number; l: number }>,
   for (const [p, removed] of removeByPage) {
     const page = pages[p];
     page.lines = page.lines.filter((_: string, idx: number) => !removed.has(idx));
-    page.lineItems = page.lineItems.filter((_: any, idx: number) => !removed.has(idx));
+    page.lineItems = page.lineItems.filter((_, idx) => !removed.has(idx));
     rebuildPage(page);
   }
 }
@@ -251,7 +369,7 @@ function removeFlatLineSpan(pages: any[], flat: Array<{ p: number; l: number }>,
  * реальные заголовки тела и не может быть ответом. Тело идет ПОСЛЕ оглавления и
  * выносок не имеет, поэтому контент не страдает.
  */
-function removeTableOfContents(pages: any[]) {
+function removeTableOfContents(pages: PdfPage[]) {
   const flat = buildFlatLineIndex(pages);
   if (!flat.length) return;
   const lineRaw = (f: { p: number; l: number }) => pages[f.p].lines[f.l];
@@ -286,7 +404,7 @@ function removeTableOfContents(pages: any[]) {
  * сохраняются. Берется последнее вхождение заголовка (чтобы не спутать с
  * пунктом оглавления) и только в последней части документа.
  */
-function removeBibliographySection(pages: any[]) {
+function removeBibliographySection(pages: PdfPage[]) {
   const flat = buildFlatLineIndex(pages);
   if (!flat.length) return;
   const lineText = (f: { p: number; l: number }) => normalizeText(pages[f.p].lines[f.l]);
@@ -335,7 +453,11 @@ function appendixRank(t: string): number {
  * позволяет убрать одно приложение изолированно (например, только А3),
  * сохранив соседние.
  */
-function removeMetadataAppendices(pages: any[], fromRank: number, toRank: number) {
+function removeMetadataAppendices(
+  pages: PdfPage[],
+  fromRank: number,
+  toRank: number,
+) {
   const flat = buildFlatLineIndex(pages);
   if (!flat.length) return;
   const lineText = (f: { p: number; l: number }) => normalizeText(pages[f.p].lines[f.l]);
@@ -367,7 +489,7 @@ function removeMetadataAppendices(pages: any[], fromRank: number, toRank: number
  * только плотный блок из >=2 заголовков приложений в первых 15% — настоящие
  * приложения тела лежат в последней части и не затрагиваются.
  */
-function removeFrontMatterAppendixList(pages: any[]) {
+function removeFrontMatterAppendixList(pages: PdfPage[]) {
   const flat = buildFlatLineIndex(pages);
   if (!flat.length) return;
   const limit = Math.max(1, Math.floor(flat.length * 0.15));
@@ -482,7 +604,7 @@ function dedupeAbbreviations(items: Array<{ abbr: string; expansion: string; pag
  * Поэтому здесь сохраняется только общая пара `аббревиатура -> расшифровка`, а шум вида
  * `(Код АТХ: A02BC01)` удаляется из строки до построения чанков и BM25.
  */
-function extractAndCleanAbbreviationLists(pages: any[]) {
+function extractAndCleanAbbreviationLists(pages: PdfPage[]) {
   const abbreviations: Array<{ abbr: string; expansion: string; page: number }> = [];
   const touchedPages = new Set<number>();
 
@@ -542,7 +664,10 @@ function extractAndCleanAbbreviationLists(pages: any[]) {
  * @param options Необязательный `cacheKey`, явно переданный `pdfjsLib` и уровень логирования PDF.js.
  * @returns Текст страниц и метаданные, которые использует predictor.
  */
-export async function extractPdfText(pdfInput: any, options: any = {}) {
+export async function extractPdfText(
+  pdfInput: unknown,
+  options: PdfExtractionOptions = {},
+): Promise<ExtractedPdfText> {
   const pdfjs = await resolvePdfJs(options);
   const data = await toUint8Array(pdfInput);
   const loadingTask = pdfjs.getDocument({
@@ -553,7 +678,7 @@ export async function extractPdfText(pdfInput: any, options: any = {}) {
     verbosity: pdfVerbosity(pdfjs, options),
   });
   const pdf = await loadingTask.promise;
-  const pages: any[] = [];
+  const pages: PdfPage[] = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);

@@ -1,4 +1,5 @@
 import { extractNumbers, normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import {
   answerSearchPhrases,
@@ -126,7 +127,7 @@ function parseStructuredLabel(text: string) {
   return null;
 }
 
-function flattenLines(pages: any[]): FlatLine[] {
+function flattenLines(pages: PdfLinePage[]): FlatLine[] {
   const lines: FlatLine[] = [];
   let flatIndex = 0;
   for (const page of pages ?? []) {
@@ -143,7 +144,9 @@ function flattenLines(pages: any[]): FlatLine[] {
  * A block ends at the next physical bullet, preserving sibling boundaries even
  * across a page break. Recommendation bullets are deliberately excluded.
  */
-export function buildSiblingListBlocks(pages: any[]): SiblingBlock[][] {
+export function buildSiblingListBlocks(
+  pages: PdfLinePage[],
+): SiblingBlock[][] {
   const lines = flattenLines(pages);
   const blocks: SiblingBlock[] = [];
 
@@ -539,7 +542,7 @@ export function resolveSiblingList({
   enableSingleInverse = false,
 }: {
   mode: string;
-  pages: any[];
+  pages: PdfLinePage[];
   question: string;
   answers: AnswerOption[];
   focusTokens?: string[];

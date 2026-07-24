@@ -1,6 +1,25 @@
+import type { BM25Index, BM25SearchResult } from "../bm25.js";
+import type { PdfChunk } from "../chunk.js";
+import type { ExtractedPdfText, PdfPage } from "../pdf.js";
 import type { PredictorConfig } from "./config.js";
 import type { PdfRuntime } from "./runtime.js";
 import type { AnswerMode, AnswerOption, AnswerScore, EvidenceItem } from "./types.js";
+
+export type QuestionIntent = {
+  negative: boolean;
+  exception: boolean;
+  numeric: boolean;
+  listLike: boolean;
+};
+
+export type ContextSegment = {
+  page: number;
+  text: string;
+  normalized?: string;
+  [key: string]: unknown;
+};
+
+export type TableContextByPage = Map<number, unknown[]> | null;
 
 /**
  * Общий неизменяемый контекст одного вопроса. Тяжелые структуры PDF строятся
@@ -14,24 +33,19 @@ export type PredictionContext = {
   answers: AnswerOption[];
   questionTokens: string[];
   focusTokens: string[];
-  intent: {
-    negative: boolean;
-    exception: boolean;
-    numeric: boolean;
-    listLike: boolean;
-  };
-  anchorSegments: any[];
-  sectionSegments: any[];
-  topQuestionMatches: any[];
+  intent: QuestionIntent;
+  anchorSegments: ContextSegment[];
+  sectionSegments: ContextSegment[];
+  topQuestionMatches: BM25SearchResult<PdfChunk>[];
   topQuestionPages: Set<number>;
-  rowSegments: any[];
-  boundedListSegments: any[];
-  visualTableColumnTargetsByPage: any;
-  coordinateTableRowsByPage: any;
-  coordinateRelationalRowsByPage: any;
-  coordinateTableGroupsByPage: any;
-  coordinateMultiCellRowsByPage: any;
-  coordinateTableMembershipsByPage: any;
+  rowSegments: ContextSegment[];
+  boundedListSegments: ContextSegment[];
+  visualTableColumnTargetsByPage: TableContextByPage;
+  coordinateTableRowsByPage: TableContextByPage;
+  coordinateRelationalRowsByPage: TableContextByPage;
+  coordinateTableGroupsByPage: TableContextByPage;
+  coordinateMultiCellRowsByPage: TableContextByPage;
+  coordinateTableMembershipsByPage: TableContextByPage;
 };
 
 export type StructuralResolutionItem = {
@@ -42,10 +56,10 @@ export type StructuralResolutionItem = {
 export type StructuralResolution = Map<string, StructuralResolutionItem>;
 
 export type AnswerScoringContext = PredictionContext & {
-  pages: any[];
-  pdfText: any;
-  chunks: any[];
-  index: any;
+  pages: PdfPage[];
+  pdfText: ExtractedPdfText;
+  chunks: PdfChunk[];
+  index: BM25Index<PdfChunk>;
   answer: AnswerOption;
   answerTokens: string[];
   siblingListResolution: StructuralResolution;

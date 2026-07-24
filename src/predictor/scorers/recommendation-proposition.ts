@@ -1,6 +1,10 @@
 import { normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
-import { buildAtomicRecommendationSegments } from "./recommendation-item.js";
+import {
+  buildAtomicRecommendationSegments,
+  type RecommendationSegment,
+} from "./recommendation-item.js";
 import { strictSoftCoverage, tokenHitCount } from "../text-utils.js";
 
 type AnswerOption = { id: string; text: string };
@@ -103,8 +107,10 @@ function optionCompatibility(source: Proposition, answer: Proposition) {
   return score;
 }
 
-function physicalRecommendationBlockSegments(pages: any[]) {
-  const segments: Array<{ page: number; text: string; normalized: string }> = [];
+function physicalRecommendationBlockSegments(
+  pages: PdfLinePage[],
+): RecommendationSegment[] {
+  const segments: RecommendationSegment[] = [];
   for (const page of pages ?? []) {
     for (const block of page.blocks ?? []) {
       const text = String(block?.text ?? "").replace(/\s+/gu, " ").trim();
@@ -128,7 +134,7 @@ export function resolveRecommendationProposition({
   answers,
 }: {
   mode: string;
-  pages: any[];
+  pages: PdfLinePage[];
   question: string;
   answers: AnswerOption[];
 }): RecommendationPropositionResolution {
@@ -163,7 +169,7 @@ export function resolveRecommendationProposition({
   const discriminativeTokens = rareQuestionTokens.length ? rareQuestionTokens : qTokens;
 
   const segmentCandidates = segments
-    .map((segment: any) => {
+    .map((segment) => {
       const tokens = uniqueTokens(segment.text);
       const hits = tokenHitCount(qTokens, tokens);
       const coverage = strictSoftCoverage(qTokens, tokens);

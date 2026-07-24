@@ -1,4 +1,5 @@
 import { normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { tokenizeNormalized } from "../text-utils.js";
 import type { AnswerScore } from "../types.js";
 import { buildRelationTupleFragments } from "./relation-tuple.js";
@@ -138,7 +139,13 @@ export function resolveClauseLocalCountTuple({
 
 export function applyClauseLocalCountTupleResolver(
   answerScores: AnswerScore[],
-  context: { mode: string; pages: any[]; topQuestionPages?: Set<unknown>; question: string; answers: AnswerOption[] },
+  context: {
+    mode: string;
+    pages: PdfLinePage[];
+    topQuestionPages?: Set<number>;
+    question: string;
+    answers: AnswerOption[];
+  },
 ) {
   if (context.mode !== "single") return answerScores;
   const proof = resolveClauseLocalCountTuple({

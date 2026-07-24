@@ -98,6 +98,31 @@ confidence.
 The refactor therefore leaves all exact metrics unchanged. The holdout command
 continues to exit zero at `0.8519`, above the required `0.80` threshold.
 
+## Technical-debt refactor zero-delta verification
+
+The second architecture stage removed the shared `legacy.ts`, split its
+behavior-frozen scorers into thematic modules, replaced the monolithic
+post-scoring method with nine ordered processor classes, and strengthened
+runtime/controller types. No score, threshold, gate, or evidence order was
+intentionally changed.
+
+The same pre-stage artifacts were compared with the final artifacts using the
+strict comparator:
+
+| split | cases compared | changed behavior | exact accuracy |
+| --- | ---: | ---: | ---: |
+| train | `1541` | `0` | `0.6970` |
+| dev | `523` | `0` | `0.7935` |
+| holdout regression | `540` | `0` | `0.8519` |
+| external transfer | `150` | `0` | `0.8600` |
+| total | `2754` | `0` | `0.7545` |
+
+For every case, the selected set, selected-id order, raw scores, calibrated
+scores, and confidence remain identical. Dataset fingerprints and split
+membership are unchanged. OCR fallback was deliberately excluded because it
+would change PDF runtime behavior and requires a separate functional
+evaluation.
+
 Before this runtime round, the existing predictor scored train `1072/1541`,
 dev `415/523`, holdout `459/540`, and external `109/150`. The newly added
 `50-dr-gepatit` group was measured at `45/70` before any rule was selected from

@@ -15,6 +15,13 @@ type PageBlock = {
   lineEnd: number;
 };
 
+type SourcePageInput = {
+  page: number;
+  text: string;
+  lines?: string[];
+  blocks?: PageBlock[];
+};
+
 type PreparedWindow = {
   start: number;
   end: number;
@@ -25,14 +32,17 @@ type PreparedWindow = {
 };
 
 type PreparedPage = {
-  page: any;
+  page: SourcePageInput;
   blocks: PageBlock[];
   windows: PreparedWindow[];
 };
 
 type QuestionAnchor = {
-  chunk?: { page?: unknown; text?: unknown };
-  score?: unknown;
+  chunk?: {
+    page?: number;
+    text?: string;
+  };
+  score?: number;
 };
 
 type SourceContextOptions = {
@@ -67,10 +77,10 @@ function round4(value: unknown) {
   return Math.round((Number.isFinite(numeric) ? numeric : 0) * 10000) / 10000;
 }
 
-function blocksForPage(page: any): PageBlock[] {
+function blocksForPage(page: SourcePageInput): PageBlock[] {
   if (Array.isArray(page?.blocks) && page.blocks.length) {
     return page.blocks
-      .map((block: any) => ({
+      .map((block) => ({
         text: String(block?.text ?? "").trim(),
         lineStart: Number(block?.lineStart ?? 0),
         lineEnd: Number(block?.lineEnd ?? block?.lineStart ?? 0),
@@ -85,7 +95,7 @@ function blocksForPage(page: any): PageBlock[] {
   return textBlocks.map((text, index) => ({ text, lineStart: index, lineEnd: index }));
 }
 
-function preparePage(page: any): PreparedPage {
+function preparePage(page: SourcePageInput): PreparedPage {
   if (page && typeof page === "object" && preparedPageCache.has(page)) return preparedPageCache.get(page)!;
   const blocks = blocksForPage(page);
   const windows: PreparedWindow[] = [];
@@ -505,7 +515,7 @@ export function buildPredictionSources({
   questionAnchors = [],
   options = {},
 }: {
-  pages: any[];
+  pages: SourcePageInput[];
   question: string;
   answers: AnswerOption[];
   selected: string[];

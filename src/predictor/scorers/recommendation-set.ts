@@ -1,4 +1,5 @@
 import { normalizeForSearch, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { buildAtomicRecommendationSegments } from "./recommendation-item.js";
 import { containsNormalizedPhrase, strictSoftCoverage, tokenizeNormalized, tokenHitCount } from "../text-utils.js";
@@ -122,7 +123,7 @@ export function resolveRepeatedRecommendationSet({
   answers,
 }: {
   mode: string;
-  pages: any[];
+  pages: PdfLinePage[];
   question: string;
   answers: AnswerOption[];
 }): RepeatedRecommendationSetResolution {

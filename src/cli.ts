@@ -2,17 +2,27 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { predict } from "./predictor.js";
+import type { AnswerOption, PredictorInput } from "./predictor/types.js";
 
-function parseArgs(argv) {
-  const args: Record<string, any> = {};
+type CliArgs = Record<
+  string,
+  string | string[] | boolean | undefined
+>;
+
+function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = {};
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (!arg.startsWith("--")) continue;
     const key = arg.slice(2);
     const next = argv[i + 1];
     if (key === "answer") {
-      args.answer ??= [];
-      args.answer.push(next);
+      if (typeof next !== "string") {
+        throw new Error("--answer requires an ID=text value");
+      }
+      const answers = Array.isArray(args.answer) ? args.answer : [];
+      answers.push(next);
+      args.answer = answers;
       i += 1;
     } else if (next && !next.startsWith("--")) {
       args[key] = next;
@@ -24,14 +34,14 @@ function parseArgs(argv) {
   return args;
 }
 
-function parseAnswers(args) {
-  if (args.answers) {
+function parseAnswers(args: CliArgs): Array<AnswerOption | string> {
+  if (typeof args.answers === "string") {
     const parsed = JSON.parse(args.answers);
     if (!Array.isArray(parsed)) throw new Error("--answers must be a JSON array");
-    return parsed;
+    return parsed as Array<AnswerOption | string>;
   }
 
-  if (args.answer?.length) {
+  if (Array.isArray(args.answer) && args.answer.length) {
     return args.answer.map((value, index) => {
       const separator = value.indexOf("=");
       if (separator > 0) {
@@ -44,22 +54,29 @@ function parseAnswers(args) {
   throw new Error("Provide --answers JSON or one or more --answer ID=text arguments");
 }
 
-async function readInput(args) {
-  if (args.input) {
+async function readInput(args: CliArgs): Promise<PredictorInput> {
+  if (typeof args.input === "string") {
     const inputPath = path.resolve(args.input);
     const raw = await fs.readFile(inputPath, "utf8");
-    return JSON.parse(raw.replace(/^\uFEFF/, ""));
+    return JSON.parse(raw.replace(/^\uFEFF/, "")) as PredictorInput;
   }
 
   return {
-    pdfPath: args.pdf ?? args.pdfPath,
-    question: args.question,
+    pdfPath:
+      typeof args.pdf === "string"
+        ? args.pdf
+        : typeof args.pdfPath === "string"
+          ? args.pdfPath
+          : undefined,
+    question: typeof args.question === "string" ? args.question : undefined,
     answers: parseAnswers(args),
-    mode: args.mode ?? "single",
+    mode: typeof args.mode === "string" ? args.mode : "single",
   };
 }
 
-async function attachLocalPdfData(input) {
+async function attachLocalPdfData(
+  input: PredictorInput,
+): Promise<PredictorInput> {
   if (input.pdfData || input.pdfBuffer || input.pdf || input.file || input.blob || input.pdfUrl || input.url || !input.pdfPath) return input;
   const absolutePath = path.resolve(input.pdfPath);
   return {
@@ -88,7 +105,8 @@ async function main() {
   process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack || error.message}\n`);
+main().catch((error: unknown) => {
+  const failure = error instanceof Error ? error : new Error(String(error));
+  process.stderr.write(`${failure.stack || failure.message}\n`);
   process.exit(1);
 });

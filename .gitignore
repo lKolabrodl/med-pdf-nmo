@@ -20,6 +20,7 @@ __test__/*
 !__test__/ordinal-row-gate.test.ts
 !__test__/hierarchical-list.test.ts
 !__test__/recommendation-proposition.test.ts
+!__test__/predictor-architecture.test.ts
 !__test__/01-toksic-galogen/
 !__test__/01-toksic-galogen/**
 !__test__/02-metanol-glikol/

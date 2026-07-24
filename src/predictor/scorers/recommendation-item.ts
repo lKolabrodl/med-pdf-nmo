@@ -1,4 +1,5 @@
 import { extractNumbers, normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { answerSearchPhrases, betterEvidence, containsNormalizedPhrase, numberCoverage, strictSoftCoverage, tokenizeNormalized, tokenHitCount } from "../text-utils.js";
 
@@ -196,8 +197,16 @@ function atomicRecommendationBoundary(line, isFirstLine) {
  * В отличие от широких 12/22-строчных окон, эти сегменты не захватывают
  * комментарий и соседний пункт, поэтому пригодны для однозначного single-bind.
  */
-export function buildAtomicRecommendationSegments(pages) {
-  const segments = [];
+export type RecommendationSegment = {
+  page: number;
+  text: string;
+  normalized: string;
+};
+
+export function buildAtomicRecommendationSegments(
+  pages: PdfLinePage[],
+): RecommendationSegment[] {
+  const segments: RecommendationSegment[] = [];
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
     const page = pages[pageIndex];
     const pageLines = page.lines ?? [];

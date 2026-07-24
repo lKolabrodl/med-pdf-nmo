@@ -1,4 +1,19 @@
 import { normalizeForSearch, tokenize } from "./normalize.js";
+import type { ExtractedPdfText } from "./pdf.js";
+
+export type PdfChunkKind = "body" | "line" | "line_pair" | "list" | "heading";
+
+export type PdfChunk = {
+  id: number;
+  page: number;
+  kind: PdfChunkKind;
+  text: string;
+  normalized: string;
+  tokens: string[];
+  rawTokens: string[];
+};
+
+type PdfChunkDraft = Omit<PdfChunk, "id">;
 
 function splitSentences(text) {
   const normalized = String(text ?? "")
@@ -26,8 +41,11 @@ function tokenCount(text) {
  * @param options Настройки размера чанка и перекрытия предложений.
  * @returns Поисковые чанки с нормализованным текстом и токенами.
  */
-export function buildChunks(pdfText, { targetTokens = 95, overlapSentences = 2 } = {}) {
-  const chunks = [];
+export function buildChunks(
+  pdfText: ExtractedPdfText,
+  { targetTokens = 95, overlapSentences = 2 } = {},
+): PdfChunk[] {
+  const chunks: PdfChunkDraft[] = [];
 
   for (const page of pdfText.pages) {
     const sentences = splitSentences(page.text);
@@ -73,7 +91,11 @@ export function buildChunks(pdfText, { targetTokens = 95, overlapSentences = 2 }
     .map((chunk, index) => ({ ...chunk, id: index }));
 }
 
-function makeChunk(page, text, kind = "body") {
+function makeChunk(
+  page: number,
+  text: string,
+  kind: PdfChunkKind = "body",
+): PdfChunkDraft {
   return {
     page,
     kind,

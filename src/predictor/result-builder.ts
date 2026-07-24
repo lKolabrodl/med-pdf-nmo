@@ -1,7 +1,12 @@
 import type { PredictionContext } from "./contracts.js";
 import { round4 } from "./selection.js";
 import { SourceContextBuilder } from "./source-context.js";
-import type { PredictorOptions, PredictorResult } from "./types.js";
+import type {
+  AnswerEvidenceDiagnostics,
+  CalibratedAnswerScore,
+  PredictorOptions,
+  PredictorResult,
+} from "./types.js";
 
 /**
  * Собирает стабильный публичный результат после завершения scoring и selection.
@@ -18,7 +23,7 @@ export class PredictionResultBuilder {
   }: {
     context: PredictionContext;
     options: PredictorOptions;
-    calibrated: any[];
+    calibrated: CalibratedAnswerScore[];
     selected: string[];
     confidence: number;
   }): PredictorResult {
@@ -80,12 +85,14 @@ export class PredictionResultBuilder {
     };
   }
 
-  private buildAnswerEvidenceDiagnostics(calibrated) {
+  private buildAnswerEvidenceDiagnostics(
+    calibrated: CalibratedAnswerScore[],
+  ): Record<string, AnswerEvidenceDiagnostics> {
     return Object.fromEntries(
       calibrated.map((item) => {
-        const kindCounts = {};
-        const kindBestScores = {};
-        const pages = new Set();
+        const kindCounts: Record<string, number> = {};
+        const kindBestScores: Record<string, number> = {};
+        const pages = new Set<number>();
         let bestEvidenceScore = 0;
 
         for (const evidenceItem of item.evidence ?? []) {

@@ -87,8 +87,16 @@ src/
     ├── pipelines/
     │   ├── structural-resolver-pipeline.ts
     │   ├── answer-scoring-pipeline.ts
-    │   └── score-adjustment-pipeline.ts
-    ├── scorers/                     чистые специализированные scorer-модули
+    │   ├── score-adjustment-pipeline.ts
+    │   └── score-adjustment-processors.ts
+    ├── scorers/
+    │   ├── answer-score.ts          композиция per-answer scorer-ов
+    │   ├── classification.ts        тип и структура вопроса
+    │   ├── clinical-feature.ts      клинические признаки
+    │   ├── definition.ts            термины и определения
+    │   ├── list-evidence.ts         списки и их локальный контекст
+    │   ├── multi-support.ts         поддержка multi-наборов
+    │   └── ...                      остальные узкие scorer-модули
     ├── selection.ts                 калибровка и single/multi selection
     ├── confidence-calculator.ts     confidence без изменения selection
     ├── result-builder.ts            сборка публичного результата
@@ -140,7 +148,7 @@ flowchart LR
 | `PredictionContextBuilder` | Общие токены, intent, top pages, строки, списки и модели таблиц | Нет request-state |
 | `StructuralResolverPipeline` | Document-level решения, работающие сразу с набором вариантов | Нет |
 | `AnswerScoringPipeline` | Один и тот же per-answer scoring contract и исходный порядок ответов | Injected `scoreAnswer` |
-| `ScoreAdjustmentPipeline` | Фиксированный порядок set-level и post-scoring правил | Injected legacy adapters |
+| `ScoreAdjustmentPipeline` | Последовательный запуск set-level и post-scoring правил | Injected ordered processors |
 | `AnswerSelector` | Калибровка raw score и single/multi selection | Нет |
 | `ConfidenceCalculator` | Оценка уверенности уже выбранного ответа или набора | Нет |
 | `PredictionResultBuilder` | Стабильный `PredictorResult`, diagnostics и provenance | `SourceContextBuilder` |
@@ -171,8 +179,9 @@ dependency injection. Нормализация, поиск, scorer-эврист�
 `src/predictor.ts` только связывает реализации:
 
 - создает `PdfRuntimeStore`;
-- передает legacy-функции через явные adapters;
+- передает scorer-функции через типизированные зависимости;
 - создает три pipeline-класса;
+- явно собирает упорядоченный список post-scoring processor-ов;
 - создает selector, confidence calculator и result builder;
 - собирает из них `PredictorEngine`.
 
@@ -250,8 +259,9 @@ Runtime-код не использует глобальный DI-контейн�
 
 Эти списки намеренно не заменены автоматическим plugin discovery: для
 воспроизводимости порядок виден в коде и проверяется case-level regression.
-`ScoreAdjustmentProcessor` в `contracts.ts` задает форму для дальнейшего
-выделения правил, но текущим источником истины остается явный метод `apply()`.
+Каждая корректировка реализует `ScoreAdjustmentProcessor` из `contracts.ts`.
+`ScoreAdjustmentPipeline` только последовательно вызывает переданный список, а
+источником истины для порядка остается composition root `src/predictor.ts`.
 
 ## Границы зависимостей
 
@@ -319,17 +329,25 @@ Resolver подходит, когда решение требует сравни
 `SourceContextBuilder`/`PredictionResultBuilder`. Она не должна попадать в
 scoring, selection или confidence.
 
-### Дальнейшее выделение legacy scorer-ов
+### Границы тематических scorer-модулей
 
-`src/predictor/scorers/legacy.ts` содержит поведенчески замороженные функции,
-оставшиеся после декомпозиции старого `predictor.ts`. Их нужно переносить
-небольшими тематическими группами:
+Общего `legacy.ts` больше нет. Поведенчески замороженная логика разделена по
+назначению:
 
-1. переместить одну связанную группу без переписывания логики;
-2. сохранить сигнатуры, порядок evidence и числовые операции;
-3. выполнить unit/type/build проверки;
-4. сравнить все eval artifacts через strict zero-delta;
-5. только после этого переносить следующую группу.
+- `clinical-feature.ts` — признаки, симптомы и клинические характеристики;
+- `classification.ts` — распознавание типа вопроса и структуры вариантов;
+- `search-support.ts` — общая лексическая и condition-aware поисковая поддержка;
+- `list-evidence.ts` — построение и оценка локальных списков;
+- `definition.ts` — label/term/definition-сигналы;
+- `multi-support.ts` — совместная поддержка вариантов multi-вопроса;
+- `age-stage.ts` и `ordinal-utils.ts` — возрастные, стадийные и порядковые
+  отношения;
+- `answer-score.ts` — только фиксированный порядок per-answer scorer-ов и
+  суммирование их evidence.
+
+Новую семантику нужно добавлять в наиболее узкий тематический модуль. Если
+подходящей границы нет, создается новый модуль; `answer-score.ts` не должен
+снова становиться хранилищем реализаций.
 
 ## Проверка архитектурных изменений
 
@@ -374,18 +392,23 @@ npm run eval:external
 [`error-analysis.md`](./error-analysis.md). `npm run eval:holdout` обязан
 завершаться с кодом `0`; acceptance threshold равен `0.80`.
 
-Класс-рефактор уже проверен на всех `2 754` keyed cases: train, dev, holdout и
-external сохранили selection, порядок, raw/calibrated scores и confidence без
-единого изменения. Подробные цифры находятся в
-[`evaluation.md`](./evaluation.md#controller-refactor-zero-delta-verification).
+Класс-рефактор и второй этап технического долга проверены на всех `2 754` keyed
+cases: train, dev, holdout и external сохранили selection, порядок,
+raw/calibrated scores и confidence без единого изменения. Подробные цифры
+находятся в
+[`evaluation.md`](./evaluation.md#technical-debt-refactor-zero-delta-verification).
 
 ## Текущий технический долг
 
-- Постепенно разбить `scorers/legacy.ts` на тематические модули.
-- Заменить оставшиеся внутренние `any` точными типами без изменения поведения.
-- Выделять post-scoring processors только по одному, сохраняя явный порядок.
+- Поэтапно включить TypeScript `strict`: runtime-границы уже типизированы и в
+  `src/**` нет явных `any`, но implicit-типы в старых scorer-ах еще требуют
+  локальной миграции.
+- Декомпозировать крупные `coordinate-table.ts`, `numeric.ts` и
+  `list-evidence.ts`, сохраняя тематические границы и strict zero-delta.
 - Добавить OCR fallback как отдельную runtime-возможность; сейчас low-text PDF
-  только получает `meta.ocrNeeded`.
+  только получает `meta.ocrNeeded`. Это функциональное изменение, поэтому оно
+  должно идти отдельной итерацией с собственным eval, а не как refactor-only
+  задача.
 - Сохранять browser/Node parity при любом изменении PDF runtime.
 
 ## Связанные документы

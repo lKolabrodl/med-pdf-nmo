@@ -1,4 +1,8 @@
-import type { PredictionContext, StructuralResolution } from "../contracts.js";
+import type {
+  PredictionContext,
+  StructuralResolution,
+  StructuralResolutionItem,
+} from "../contracts.js";
 import { resolveHierarchicalList } from "../scorers/hierarchical-list.js";
 import { resolveRecommendationProposition } from "../scorers/recommendation-proposition.js";
 import { resolveRepeatedRecommendationSet } from "../scorers/recommendation-set.js";
@@ -50,7 +54,11 @@ export class StructuralResolverPipeline {
     );
   }
 
-  private merge(...resolutions: any[]): StructuralResolution {
+  private merge(
+    ...resolutions: Array<
+      ReadonlyMap<string, StructuralResolutionItem> | null | undefined
+    >
+  ): StructuralResolution {
     const merged: StructuralResolution = new Map();
     for (const resolution of resolutions) {
       for (const [answerId, item] of resolution ?? []) {

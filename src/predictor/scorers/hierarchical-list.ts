@@ -1,4 +1,5 @@
 import { normalizeForSearch, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { answerSearchPhrases, containsNormalizedPhrase, strictSoftCoverage, tokenHitCount } from "../text-utils.js";
 
@@ -30,7 +31,7 @@ const GENERIC = new Set(
   ),
 );
 
-function flattenLines(pages: any[]) {
+function flattenLines(pages: PdfLinePage[]) {
   const out: FlatLine[] = [];
   let flatIndex = 0;
   for (const page of pages ?? []) {
@@ -62,7 +63,9 @@ function childBoundary(text: string) {
 }
 
 /** Reconstructs consecutive `I. parent -> 1) child` physical-line trees. */
-export function buildHierarchicalListClusters(pages: any[]): HierarchyParent[][] {
+export function buildHierarchicalListClusters(
+  pages: PdfLinePage[],
+): HierarchyParent[][] {
   const lines = flattenLines(pages);
   const parents: HierarchyParent[] = [];
 
@@ -216,7 +219,7 @@ export function resolveHierarchicalList({
   answers,
 }: {
   mode: string;
-  pages: any[];
+  pages: PdfLinePage[];
   question: string;
   answers: AnswerOption[];
 }): HierarchicalListResolution {

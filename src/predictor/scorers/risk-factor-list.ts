@@ -1,4 +1,8 @@
 import { normalizeForSearch, uniqueTokens } from "../../normalize.js";
+import type {
+  PdfAbbreviation,
+  PdfLinePage,
+} from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { answerSearchPhrases, containsNormalizedPhrase, strictSoftCoverage, tokenizeNormalized } from "../text-utils.js";
 
@@ -33,7 +37,10 @@ function riskQuestionTarget(question: string) {
   return target.length >= 4 ? target : null;
 }
 
-function questionTargetTokens(question: string, abbreviations: any[]) {
+function questionTargetTokens(
+  question: string,
+  abbreviations: PdfAbbreviation[],
+) {
   const target = riskQuestionTarget(question);
   if (!target) return [];
   const targetTokens = uniqueTokens(target).filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token));
@@ -117,9 +124,9 @@ export function resolveRiskFactorList({
   answers,
 }: {
   mode: string;
-  pdfText: any;
-  pages: any[];
-  topQuestionPages?: Set<unknown>;
+  pdfText: { abbreviations: PdfAbbreviation[] };
+  pages: PdfLinePage[];
+  topQuestionPages?: Set<number>;
   question: string;
   answers: AnswerOption[];
 }): RiskFactorListResolution {

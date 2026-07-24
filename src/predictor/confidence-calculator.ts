@@ -2,8 +2,12 @@ import {
   BROAD_EVIDENCE_KINDS as CONFIDENCE_BROAD_KINDS,
   CONFIDENCE_STRUCTURAL_EVIDENCE_KINDS as CONFIDENCE_STRUCTURAL_KINDS,
 } from "./scorer-registry.js";
+import type {
+  AnswerMode,
+  CalibratedAnswerScore,
+} from "./types.js";
 
-function confidenceEvidenceSummary(item) {
+function confidenceEvidenceSummary(item: CalibratedAnswerScore) {
   let bestScore = 0;
   let bestKind = "";
   let structuralScore = 0;
@@ -28,7 +32,7 @@ function confidenceEvidenceSummary(item) {
   };
 }
 
-function clampConfidence(value) {
+function clampConfidence(value: number) {
   return Math.max(0.05, Math.min(0.99, value));
 }
 
@@ -36,7 +40,11 @@ function clampConfidence(value) {
  * Считает итоговую уверенность прогноза без влияния на выбранные ответы.
  */
 export class ConfidenceCalculator {
-  calculate(calibrated, selected, mode) {
+  calculate(
+    calibrated: CalibratedAnswerScore[],
+    selected: string[],
+    mode: AnswerMode,
+  ): number {
     const selectedScores = selected.map(
       (id) => calibrated.find((item) => item.answer.id === id)?.score ?? 0,
     );

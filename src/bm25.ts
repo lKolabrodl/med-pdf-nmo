@@ -10,11 +10,17 @@ export type BM25Document = {
   [key: string]: unknown;
 };
 
+/** Одно ранжированное совпадение BM25. */
+export type BM25SearchResult<TDocument extends BM25Document = BM25Document> = {
+  chunk: TDocument;
+  score: number;
+};
+
 /**
  * Небольшая реализация BM25 для локального поиска по чанкам PDF.
  */
-export class BM25Index {
-  documents: BM25Document[];
+export class BM25Index<TDocument extends BM25Document = BM25Document> {
+  documents: TDocument[];
   k1: number;
   b: number;
   docFreq: Map<string, number>;
@@ -28,7 +34,7 @@ export class BM25Index {
    * @param documents Документы с необязательными массивами `tokens`.
    * @param options Параметры настройки BM25.
    */
-  constructor(documents: BM25Document[], { k1 = 1.35, b = 0.72 } = {}) {
+  constructor(documents: TDocument[], { k1 = 1.35, b = 0.72 } = {}) {
     this.documents = documents;
     this.k1 = k1;
     this.b = b;
@@ -84,7 +90,10 @@ export class BM25Index {
    *
    * @returns Лучшие совпадающие чанки с положительным BM25 score.
    */
-  search(query: string | string[], { limit = 10 } = {}) {
+  search(
+    query: string | string[],
+    { limit = 10 } = {},
+  ): BM25SearchResult<TDocument>[] {
     const queryTokens = Array.isArray(query) ? query : tokenize(query);
     if (!queryTokens.length) return [];
     const scores = [];

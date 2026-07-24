@@ -3,18 +3,31 @@ import { PredictionContextBuilder } from "./predictor/context-builder.js";
 import { PredictorEngine } from "./predictor/engine.js";
 import { AnswerScoringPipeline } from "./predictor/pipelines/answer-scoring-pipeline.js";
 import { ScoreAdjustmentPipeline } from "./predictor/pipelines/score-adjustment-pipeline.js";
+import {
+  ClauseLocalCountTupleProcessor,
+  DefinitionLabelProcessor,
+  ExplicitOrdinalRangeSetProcessor,
+  FrozenFeatureRankerProcessor,
+  GeneSentenceSetProcessor,
+  LatinOcrSetProcessor,
+  NegationPairProcessor,
+  RelationTupleProcessor,
+  SharedMultiSegmentProcessor,
+} from "./predictor/pipelines/score-adjustment-processors.js";
 import { StructuralResolverPipeline } from "./predictor/pipelines/structural-resolver-pipeline.js";
 import { PredictionResultBuilder } from "./predictor/result-builder.js";
 import { PdfRuntimeStore } from "./predictor/runtime.js";
+import { scoreAnswer } from "./predictor/scorers/answer-score.js";
+import {
+  buildVisualTableColumnTargetsByPage,
+  hasVisualTableColumnCue,
+} from "./predictor/scorers/classification.js";
+import { questionDefinitionLabel } from "./predictor/scorers/definition.js";
+import { findBoundedListSegments } from "./predictor/scorers/list-evidence.js";
 import {
   addSharedMultiSegmentSupport,
   applyGeneSentenceSetSupport,
-  buildVisualTableColumnTargetsByPage,
-  findBoundedListSegments,
-  hasVisualTableColumnCue,
-  questionDefinitionLabel,
-  scoreAnswer,
-} from "./predictor/scorers/legacy.js";
+} from "./predictor/scorers/multi-support.js";
 import { AnswerSelector } from "./predictor/selection.js";
 import type { PredictorInput, PredictorOptions, PredictorResult } from "./predictor/types.js";
 
@@ -32,11 +45,17 @@ export function createPredictorEngine() {
     }),
     structuralResolverPipeline: new StructuralResolverPipeline(),
     answerScoringPipeline: new AnswerScoringPipeline(scoreAnswer),
-    scoreAdjustmentPipeline: new ScoreAdjustmentPipeline({
-      addSharedMultiSegmentSupport,
-      applyGeneSentenceSetSupport,
-      questionDefinitionLabel,
-    }),
+    scoreAdjustmentPipeline: new ScoreAdjustmentPipeline([
+      new SharedMultiSegmentProcessor(addSharedMultiSegmentSupport),
+      new GeneSentenceSetProcessor(applyGeneSentenceSetSupport),
+      new DefinitionLabelProcessor(questionDefinitionLabel),
+      new LatinOcrSetProcessor(),
+      new ExplicitOrdinalRangeSetProcessor(),
+      new FrozenFeatureRankerProcessor(),
+      new RelationTupleProcessor(),
+      new ClauseLocalCountTupleProcessor(),
+      new NegationPairProcessor(),
+    ]),
     answerSelector: new AnswerSelector(),
     confidenceCalculator: new ConfidenceCalculator(),
     resultBuilder: new PredictionResultBuilder(),

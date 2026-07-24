@@ -16,7 +16,9 @@ export function getRandomValues<T extends ArrayBufferView>(array: T): T {
   if (!globalThis.crypto?.getRandomValues) {
     throw new Error("Web Crypto getRandomValues() is not available in this browser.");
   }
-  (globalThis.crypto.getRandomValues as any)(array);
+  globalThis.crypto.getRandomValues(
+    array as ArrayBufferView<ArrayBuffer>,
+  );
   return array;
 }
 

@@ -1,18 +1,25 @@
 import { BM25Index } from "../bm25.js";
-import { buildChunks } from "../chunk.js";
-import { extractPdfText } from "../pdf.js";
+import { buildChunks, type PdfChunk } from "../chunk.js";
+import {
+  extractPdfText,
+  type ExtractedPdfText,
+  type PdfExtractionOptions,
+} from "../pdf.js";
+import type { AnswerOption } from "./types.js";
 
 export type PdfRuntime = {
-  pdfText: any;
-  chunks: any[];
-  index: BM25Index;
+  pdfText: ExtractedPdfText;
+  chunks: PdfChunk[];
+  index: BM25Index<PdfChunk>;
 };
 
 export type PdfRuntimeStoreDependencies = {
   extractPdfText: typeof extractPdfText;
   buildChunks: typeof buildChunks;
-  createIndex(chunks: any[]): BM25Index;
+  createIndex(chunks: PdfChunk[]): BM25Index<PdfChunk>;
 };
+
+export type PdfRuntimeOptions = PdfExtractionOptions;
 
 const DEFAULT_RUNTIME_DEPENDENCIES: PdfRuntimeStoreDependencies = {
   extractPdfText,
@@ -20,7 +27,7 @@ const DEFAULT_RUNTIME_DEPENDENCIES: PdfRuntimeStoreDependencies = {
   createIndex: (chunks) => new BM25Index(chunks),
 };
 
-function answerId(index) {
+function answerId(index: number) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
   if (index < alphabet.length) return alphabet[index];
   return `A${index + 1}`;
@@ -29,7 +36,9 @@ function answerId(index) {
 /**
  * Нормализует публичные варианты ответа в стабильные объекты `{ id, text }`.
  */
-export function normalizeAnswers(answers) {
+export function normalizeAnswers(
+  answers: Array<AnswerOption | string>,
+): AnswerOption[] {
   return answers.map((answer, index) => {
     if (typeof answer === "string") {
       return { id: answerId(index), text: answer };
@@ -41,7 +50,7 @@ export function normalizeAnswers(answers) {
   });
 }
 
-function objectKey(input) {
+function objectKey(input: unknown): object | null {
   return input && typeof input === "object" ? input : null;
 }
 
@@ -64,7 +73,10 @@ export class PdfRuntimeStore {
   /**
    * Создает или переиспользует runtime-состояние одного PDF.
    */
-  async get(pdfInput, options: any = {}): Promise<PdfRuntime> {
+  async get(
+    pdfInput: unknown,
+    options: PdfRuntimeOptions = {},
+  ): Promise<PdfRuntime> {
     const cacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
     if (cacheKey && this.keyedRuntimeCache.has(cacheKey)) return this.keyedRuntimeCache.get(cacheKey);
 
@@ -98,7 +110,10 @@ export const defaultPdfRuntimeStore = new PdfRuntimeStore();
 /**
  * Совместимая функциональная обертка над runtime store по умолчанию.
  */
-export async function getPdfRuntime(pdfInput, options: any = {}) {
+export async function getPdfRuntime(
+  pdfInput: unknown,
+  options: PdfRuntimeOptions = {},
+) {
   return defaultPdfRuntimeStore.get(pdfInput, options);
 }
 

@@ -1,6 +1,11 @@
 import { detectQuestionIntent, uniqueTokens } from "../normalize.js";
 import type { PredictorConfig } from "./config.js";
-import type { PredictionContext } from "./contracts.js";
+import type {
+  ContextSegment,
+  PredictionContext,
+  QuestionIntent,
+  TableContextByPage,
+} from "./contracts.js";
 import type { PdfRuntime } from "./runtime.js";
 import {
   buildCoordinateMultiCellRowsByPage,
@@ -17,15 +22,21 @@ import { questionFocusTokens } from "./scorers/focused.js";
 import { findAnchorSegments, findRowSegments, findSectionSegments } from "./scorers/search.js";
 import type { AnswerMode, AnswerOption } from "./types.js";
 
-export type LegacyContextBuilders = {
-  findBoundedListSegments(args: any): any[];
+export type ContextBuilderDependencies = {
+  findBoundedListSegments(args: {
+    pages: PdfRuntime["pdfText"]["pages"];
+    question: string;
+    topQuestionPages: Set<number>;
+    mode: AnswerMode;
+    intent: QuestionIntent;
+  }): ContextSegment[];
   hasVisualTableColumnCue(question: string, focusTokens: string[]): boolean;
   buildVisualTableColumnTargetsByPage(
-    pages: any[],
+    pages: PdfRuntime["pdfText"]["pages"],
     question: string,
     focusTokens: string[],
     topQuestionPages: Set<number>,
-  ): any;
+  ): NonNullable<TableContextByPage>;
 };
 
 /**
@@ -35,7 +46,7 @@ export type LegacyContextBuilders = {
  * один раз на вопрос и не смешивались с per-answer scoring.
  */
 export class PredictionContextBuilder {
-  constructor(private readonly legacy: LegacyContextBuilders) {}
+  constructor(private readonly dependencies: ContextBuilderDependencies) {}
 
   build({
     runtime,
@@ -56,9 +67,11 @@ export class PredictionContextBuilder {
     const anchorSegments = findAnchorSegments(runtime.pdfText.pages, question);
     const sectionSegments = findSectionSegments(runtime.pdfText.pages, question);
     const topQuestionMatches = runtime.index.search(questionTokens, { limit: 6 });
-    const topQuestionPages = new Set<number>(topQuestionMatches.map((result: any) => result.chunk.page));
+    const topQuestionPages = new Set<number>(
+      topQuestionMatches.map((result) => result.chunk.page),
+    );
     const rowSegments = findRowSegments(runtime.pdfText.pages, question, topQuestionPages);
-    const boundedListSegments = this.legacy.findBoundedListSegments({
+    const boundedListSegments = this.dependencies.findBoundedListSegments({
       pages: runtime.pdfText.pages,
       question,
       topQuestionPages,
@@ -66,8 +79,8 @@ export class PredictionContextBuilder {
       intent,
     });
     const visualTableColumnTargetsByPage =
-      mode === "multi" && this.legacy.hasVisualTableColumnCue(question, focusTokens)
-        ? this.legacy.buildVisualTableColumnTargetsByPage(
+      mode === "multi" && this.dependencies.hasVisualTableColumnCue(question, focusTokens)
+        ? this.dependencies.buildVisualTableColumnTargetsByPage(
             runtime.pdfText.pages,
             question,
             focusTokens,

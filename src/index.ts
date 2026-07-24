@@ -1,5 +1,6 @@
 import {PredictorEngine, clearPredictorCache, createPredictorEngine, predict} from "./predictor.js";
 import { setPdfJsLib } from "./pdf.js";
+import type { PdfJsModule } from "./pdf.js";
 import type {
   AnswerMode,
   AnswerOption,
@@ -81,7 +82,7 @@ export interface AnswerQuestionOptions {
   /** Необязательный ключ кеша для повторного использования текста PDF. */
   cacheKey?: string;
   /** Явно переданный модуль PDF.js, полезно для браузерного окружения. */
-  pdfjsLib?: any;
+  pdfjsLib?: PdfJsModule;
   /** Уровень логирования PDF.js. По умолчанию показываются только ошибки. */
   pdfVerbosity?: number;
   /** Return display-ready source paragraphs. Enabled by default. */

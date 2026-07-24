@@ -1,4 +1,5 @@
 import { normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { strictSoftCoverage, tokenizeNormalized } from "../text-utils.js";
 import type { AnswerScore } from "../types.js";
@@ -315,7 +316,10 @@ function splitBoundedText(text: string) {
 }
 
 /** Builds fresh sentence/clause and at-most-two-line proof fragments. */
-export function buildRelationTupleFragments(pages: any[], topQuestionPages?: Set<unknown>) {
+export function buildRelationTupleFragments(
+  pages: PdfLinePage[],
+  topQuestionPages?: Set<number>,
+) {
   const fragments: RelationFragment[] = [];
   const seen = new Set<string>();
   for (const page of pages ?? []) {
@@ -528,8 +532,8 @@ export function applySingleRelationTupleResolver(
   answerScores: AnswerScore[],
   context: {
     mode: string;
-    pages: any[];
-    topQuestionPages?: Set<unknown>;
+    pages: PdfLinePage[];
+    topQuestionPages?: Set<number>;
     question: string;
     answers: AnswerOption[];
     enableIntervalFamilies?: boolean;

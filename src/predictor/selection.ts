@@ -1,4 +1,8 @@
-import type { AnswerMode, AnswerScore } from "./types.js";
+import type {
+  AnswerMode,
+  AnswerScore,
+  CalibratedAnswerScore,
+} from "./types.js";
 import type { PredictorConfig } from "./config.js";
 import { normalizeForSearch, tokenize } from "../normalize.js";
 import {
@@ -10,7 +14,9 @@ import {
 /**
  * Преобразует raw score вариантов в относительные confidence-like score.
  */
-export function calibrateScores(answerScores: AnswerScore[]) {
+export function calibrateScores(
+  answerScores: AnswerScore[],
+): CalibratedAnswerScore[] {
   const rawValues = answerScores.map((item) => item.raw);
   const max = Math.max(...rawValues, 0.0001);
   const min = Math.min(...rawValues, 0);
@@ -108,7 +114,14 @@ export function selectAnswers(scored: ReturnType<typeof calibrateScores>, mode: 
  * Управляет калибровкой и финальным выбором single/multi ответов.
  */
 export class AnswerSelector {
-  resolve(answerScores: AnswerScore[], mode: AnswerMode, config: PredictorConfig) {
+  resolve(
+    answerScores: AnswerScore[],
+    mode: AnswerMode,
+    config: PredictorConfig,
+  ): {
+    calibrated: CalibratedAnswerScore[];
+    selected: string[];
+  } {
     const calibrated = calibrateScores(answerScores);
     const selected = selectAnswers(calibrated, mode, config);
     return { calibrated, selected };

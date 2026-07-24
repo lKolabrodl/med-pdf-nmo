@@ -1,4 +1,5 @@
 import { normalizeForSearch, normalizeText, RUSSIAN_STOPWORDS, stemToken, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { rawTokens, strictSoftCoverage, tokenizeNormalized } from "../text-utils.js";
 import type { AnswerScore } from "../types.js";
@@ -148,8 +149,8 @@ export function applyNegationPairClauseResolver(
   answerScores: AnswerScore[],
   context: {
     mode: string;
-    pages: any[];
-    topQuestionPages?: Set<unknown>;
+    pages: PdfLinePage[];
+    topQuestionPages?: Set<number>;
     question: string;
     answers: AnswerOption[];
     focusTokens?: string[];

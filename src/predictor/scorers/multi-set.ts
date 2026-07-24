@@ -1,4 +1,5 @@
 import { normalizeForSearch, normalizeText, uniqueTokens } from "../../normalize.js";
+import type { PdfLinePage } from "../../pdf.js";
 import { FOCUS_STOPWORDS } from "../constants.js";
 import { buildAtomicRecommendationSegments } from "./recommendation-item.js";
 import { strictSoftCoverage, tokenizeNormalized } from "../text-utils.js";
@@ -151,8 +152,8 @@ export function resolveExplicitOrdinalRangeSet({
   answers,
 }: {
   mode: string;
-  pages: any[];
-  topQuestionPages?: Set<unknown>;
+  pages: PdfLinePage[];
+  topQuestionPages?: Set<number>;
   question: string;
   answers: AnswerOption[];
 }) {

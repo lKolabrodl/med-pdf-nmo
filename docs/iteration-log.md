@@ -1116,3 +1116,43 @@ Iteration 149 controller refactor full regression audit: COMPLETE.
 - Across all 2,754 keyed cases, selected IDs, their order, raw scores,
   calibrated scores, and confidence are identical to the pre-refactor
   baseline.
+
+Iteration 150 technical-debt decomposition: ZERO-DELTA.
+
+- Removed the 4,137-line `src/predictor/scorers/legacy.ts` collection and
+  divided the same behavior into `clinical-feature.ts`, `classification.ts`,
+  `search-support.ts`, `list-evidence.ts`, `definition.ts`,
+  `multi-support.ts`, `age-stage.ts`, and `ordinal-utils.ts`.
+- Kept `answer-score.ts` as the explicit behavior-significant composition and
+  weighting order for per-answer scorers.
+- Replaced the monolithic score-adjustment method with nine named
+  `ScoreAdjustmentProcessor` classes. The composition root remains the single
+  source of truth for their execution order.
+- Added typed PDF.js, extracted-PDF, chunk, generic BM25, runtime, context,
+  calibrated-score, diagnostics, CLI, and browser-shim boundaries.
+- Removed every explicit `any` from `src/**`. Full TypeScript `strict` remains
+  a separate incremental migration for older scorer internals.
+- Added an architecture test proving that adjustment processors receive and
+  return scores in their declared order.
+
+Iteration 151 technical-debt full regression audit: COMPLETE.
+
+- Dataset validation remains unchanged: 46 PDF groups, 2,754 keyed cases,
+  1,893 single-answer cases, 861 multi-answer cases, and no duplicate or
+  cross-split records.
+- `npm test` passes 99 focused/architecture/leakage tests; 2,771 corpus fixtures
+  remain intentionally skipped and are covered by the eval commands.
+- `npm run typecheck` and Node/browser builds pass.
+- Strict comparison against the stage baseline:
+  - train: `1074/1541 = 0.6970`, `0` changed cases;
+  - dev: `415/523 = 0.7935`, `0` changed cases;
+  - holdout: `460/540 = 0.8519`, `0` changed cases;
+  - external: `129/150 = 0.8600`, `0` changed cases.
+- Across all 2,754 keyed cases, selected IDs, selected order, raw scores,
+  calibrated scores, and confidence remain identical.
+- A real `npm run predict -- ...` smoke against
+  `__test__/50-dr-gepatit/doc.pdf` selected the source-backed answer `D`.
+  `npm pack --dry-run` succeeded with 136 package files, including every new
+  scorer and processor artifact.
+- OCR fallback was not mixed into this stage: it changes runtime behavior and
+  will require its own measured iteration.
