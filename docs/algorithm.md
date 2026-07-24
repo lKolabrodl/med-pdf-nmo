@@ -1,5 +1,8 @@
 # Algorithm
 
+> Карта слоев, управляющих классов, зависимостей и extension points:
+> [`architecture.md`](./architecture.md).
+
 ## Input
 
 `npm run predict` accepts either a JSON request file or CLI flags.

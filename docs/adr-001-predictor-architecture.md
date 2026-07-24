@@ -56,3 +56,6 @@ Predictor остается ансамблем небольших scorer-моду
 
 `predictor.ts` должен постепенно становиться orchestration-файлом: подготовка runtime-контекста, вызов scorer'ов, агрегация score, selection и публичный API. Большие предметные блоки должны жить в `src/predictor/scorers/*`, а общие текстовые утилиты в `src/predictor/text-utils.ts`.
 
+Этот переход реализован через управляющие классы в
+[`ADR 002`](./adr-002-controller-architecture.md). Актуальная карта модулей и
+lifecycle поддерживается в [`architecture.md`](./architecture.md).
