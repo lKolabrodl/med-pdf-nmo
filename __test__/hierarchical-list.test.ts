@@ -58,4 +58,41 @@ describe("hierarchical list resolver", () => {
       }),
     ).toEqual(new Map());
   });
+
+  it("parses compact roman parents and decimal children without reversing negation", () => {
+    const compact = [
+      {
+        page: 1,
+        lines: [
+          "I.Состояния, не связанные с нагрузкой:",
+          "1.1 альфа реакция с дополнительным описанием;",
+          "1.2 бета реакция с дополнительным описанием.",
+          "II.Состояния, связанные с нагрузкой:",
+          "2.1 гамма реакция с дополнительным описанием;",
+          "2.2 дельта реакция с дополнительным описанием.",
+        ],
+      },
+    ];
+    const answers = [
+      { id: "A", text: "альфа реакция" },
+      { id: "B", text: "бета реакция" },
+      { id: "C", text: "гамма реакция" },
+      { id: "D", text: "дельта реакция" },
+    ];
+    const negative = resolveHierarchicalList({
+      mode: "multi",
+      pages: compact,
+      question: "К состояниям, не связанным с нагрузкой, относятся",
+      answers,
+    });
+    const positive = resolveHierarchicalList({
+      mode: "multi",
+      pages: compact,
+      question: "К состояниям, связанным с нагрузкой, относятся",
+      answers,
+    });
+
+    expect([...negative.entries()].filter(([, item]) => item.evidence).map(([id]) => id)).toEqual(["A", "B"]);
+    expect([...positive.entries()].filter(([, item]) => item.evidence).map(([id]) => id)).toEqual(["C", "D"]);
+  });
 });

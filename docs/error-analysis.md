@@ -2,13 +2,15 @@
 
 ## Current error counts
 
-These counts use the final deduplicated 45-PDF corpus and its frozen groups.
+These counts use the final deduplicated 46-PDF corpus and its frozen groups.
 
 | split | correct | errors | single errors | multi errors |
 | --- | ---: | ---: | ---: | ---: |
+| train | `1074/1541 = 0.6970` | 467 | 208 | 259 |
 | dev | `415/523 = 0.7935` | 108 | 59 | 49 |
-| holdout regression | `459/540 = 0.8500` | 81 | 39 | 42 |
-| external transfer | `64/80 = 0.8000` | 16 | 8 | 8 |
+| holdout regression | `460/540 = 0.8519` | 80 | 38 | 42 |
+| external transfer | `129/150 = 0.8600` | 21 | 19 | 2 |
+| all keyed cases | `2078/2754 = 0.7545` | 676 | 324 | 352 |
 
 `noEvidence = 0` on all splits. The dominant failure is not an inability to
 find PDF text; it is choosing the wrong relation, table row, recommendation
@@ -18,19 +20,19 @@ target, or exact multi set after retrieving a relevant area.
 
 `npm run diagnostics` assigns each error to the first likely work area:
 
-| likely next work | dev | holdout regression |
-| --- | ---: | ---: |
-| option-family resolver | 30 | 17 |
-| multi-set selection | 23 | 21 |
-| table/layout parser | 21 | 3 |
-| recommendation-block parser | 17 | 30 |
-| negative/exception semantics | 6 | 3 |
-| retrieval precision | 4 | 7 |
-| definition binding | 5 | 1 |
-| manual review | 2 | 0 |
+| likely next work | train | dev | holdout | external |
+| --- | ---: | ---: | ---: | ---: |
+| multi-set selection | 136 | 23 | 21 | 0 |
+| option-family resolver | 129 | 30 | 17 | 3 |
+| recommendation-block parser | 96 | 17 | 28 | 2 |
+| table/layout parser | 58 | 21 | 3 | 2 |
+| retrieval precision | 25 | 4 | 7 | 11 |
+| negative/exception semantics | 17 | 6 | 3 | 2 |
+| definition binding | 4 | 5 | 1 | 1 |
+| manual review | 2 | 2 | 0 | 0 |
 
-Broad evidence remains common among errors (`83` dev, `66` holdout), and flat
-retrieval evidence appears in `73` dev and `68` holdout errors. Structural
+Broad evidence remains common among errors (`387/83/65/18` by split), and flat
+retrieval evidence appears in `362/74/66/20` errors. Structural
 scorers therefore need wider but still well-bounded coverage; simply increasing
 BM25 or shared-chunk weights would amplify many distractors.
 
@@ -40,11 +42,11 @@ The minimum-two rule remains correct for this task and corpus. Every validated
 keyed multi case contains at least two expected answers. Residual errors occur
 above that lower bound in both directions:
 
-| cardinality failure | dev | holdout regression |
-| --- | ---: | ---: |
-| under-selected | 14 | 15 |
-| over-selected | 16 | 16 |
-| right count, wrong member | 19 | 11 |
+| cardinality failure | train | dev | holdout | external | total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| under-selected | 111 | 14 | 16 | 0 | 141 |
+| over-selected | 71 | 15 | 17 | 1 | 104 |
+| right count, wrong member | 77 | 20 | 9 | 1 | 107 |
 
 An oracle that provides only the true count, while preserving the predictor's
 raw-score order, reaches multi exact `0.7885` on dev and `0.8247` on holdout,
@@ -60,20 +62,23 @@ by the document-mix prior.
 
 ## Retained improvement
 
-Four source-structure changes were retained after separate aggregate evaluations:
+The current round retained ten bounded hypotheses:
 
-- bounded sibling bullets add three exact multi sets and two inverse-label single
-  answers;
-- whole-interval tuples add three single answers without accepting unrelated
-  endpoint mentions;
-- clause-local counted-object tuples add two single answers while rejecting
-  ranges, doses, percentages, and conflicting fragments;
-- all ten dev selection changes are wrong-to-right; holdout has zero selected-set
-  changes across all four retained steps.
+- coordinate reconstruction of relational table rows;
+- conservative Cyrillic OCR/edit matching inside one focused sentence;
+- subject-bound percentage clauses;
+- comparator canonicalization;
+- continued-table headers and inline abbreviation aliases;
+- explicit table-region boundaries;
+- discharge-indication scope separation;
+- compact Roman parents with decimal children and negation polarity;
+- repeated atomic recommendation targets for one patient context;
+- directed risk-factor list membership with PDF-local abbreviation expansion.
 
-The fifth experiment, exact negation-pair polarity, found only three eligible
-families in the entire keyed corpus and changed no exact selection. It remains
-disabled instead of retaining an accuracy-neutral confidence perturbation.
+Broad OCR, generic numeric clauses, and generic indication expansion were
+rejected or narrowed after aggregate regressions. This is the preferred
+improvement pattern: correct a general representation mismatch, require local
+structural proof, and abstain when the PDF does not preserve enough ownership.
 
 This is the preferred improvement pattern: correct a general representation
 mismatch, keep strict relation semantics, and require an aggregate zero-regression
@@ -146,55 +151,68 @@ yet still clause-bound representation rather than a global polarity boost.
 4. Obtain a genuinely new, label-sealed PDF test set for an unbiased quality
    estimate after runtime logic is frozen.
 
-## Cross-PDF top 10 failure signatures (all 45 PDFs)
+## Top 10 remaining single-answer error classes
 
-The final audit joins train, dev, holdout, and external: all 2,684 keyed
-questions and 674 exact errors. The signatures below overlap; they describe
-mechanisms, so one error can belong to several rows.
+These ten classes are mutually exclusive and cover all `324` remaining single
+errors. Counts join train, dev, holdout, and external. IDs are representative
+examples for source review.
 
-| rank | failure signature | errors | interpretation |
-| ---: | --- | ---: | --- |
-| 1 | only broad-window evidence | 551 | the right area is retrieved, but no bounded row/clause relation is proved |
-| 2 | flat text retrieval dominates | 517 | page text loses list/table ownership |
-| 3 | multi exact membership/cardinality | 357 | 141 under-selected, 108 over-selected, 108 wrong members at the same count |
-| 4 | wrong top option in single mode | 317 | a nearby distractor receives stronger lexical overlap |
-| 5 | dense option family | 230 | options share most tokens and differ by one role, condition, or component |
-| 6 | negative/exception wording | 220 | polarity or exclusion scope is attached to the wrong clause |
-| 7 | numeric option family | 217 | values recur elsewhere without subject/row binding |
-| 8 | recommendation/treatment proposition | 147 | target, population, quantifier, and condition are mixed across items |
-| 9 | shared evidence among multi options | 140 | several choices point to one broad paragraph instead of distinct list members |
-| 10 | table/scale ownership | 72 | labels and values survive extraction but row/column association does not |
+| rank | class | errors | representative IDs | interpretation |
+| ---: | --- | ---: | --- | --- |
+| 1 | numeric option family | 85 | `49-central-ceroz#19`, `11-mening#2` | the correct value is present, but belongs to a different subject, row, or subgroup |
+| 2 | recommendation/treatment scope | 80 | `49-central-ceroz#13`, `11-mening#53` | target, population, timing, or polarity is taken from an adjacent recommendation |
+| 3 | table/layout ownership | 47 | `50-dr-gepatit#21`, `14-sarkoidoz#73` | extracted cells survive, but their row or column relation remains ambiguous |
+| 4 | flat or broad retrieval | 46 | `48-pereferi#23`, `11-mening#6` | the relevant page is found without a unique bounded proposition |
+| 5 | negative/exception scope | 28 | `49-central-ceroz#21`, `11-mening#34` | negation or exclusion attaches to the wrong clause |
+| 6 | dense text option family | 18 | `49-central-ceroz#20`, `19-gepatitc#50` | options differ by one role or modifier despite high shared overlap |
+| 7 | definition binding | 11 | `49-central-ceroz#8`, `23-nimana#41` | a definition is retrieved but assigned to a neighboring label |
+| 8 | manual/unclassified | 4 | `25-shigez#26`, `05-bronhit-hron#30` | diagnostics do not expose a stable reusable pattern |
+| 9 | opposing option family | 4 | `07-hron#39`, `30-heart#10` | directionally opposite variants remain too lexically similar |
+| 10 | gene-symbol retrieval | 1 | `07-hron#54` | a biomedical symbol is not bound to the correct local statement |
 
-An exclusive work-bucket view of the same 674 errors is: multi-set `183`, dense
-option-family `180`, recommendation `146`, table/layout `82`, retrieval precision
-`40`, negative/exception `28`, definition `11`, and manual/other `4`. This is why
-global threshold tuning is unlikely to solve the corpus: most errors require a
-missing relation, not a uniformly weak score.
+## Top 10 remaining multi-answer error classes
 
-## Current external baseline and residuals
+These ten classes are also mutually exclusive and cover all `352` remaining
+multi exact-set errors.
 
-The current predictor was frozen before the two external PDFs were added. Their
-first exact result is `64/80 = 0.8000`: `43/50` and `21/30` by PDF. No predictor
-change was selected from these labels.
+| rank | class | errors | representative IDs | interpretation |
+| ---: | --- | ---: | --- | --- |
+| 1 | set under-selection | 84 | `06-co-toksic#22`, `15-toxic#17` | one or more true list members lack sufficiently local evidence |
+| 2 | set over-selection | 48 | `06-co-toksic#63`, `15-toxic#44` | a neighboring or shared-paragraph distractor enters the set |
+| 3 | right count, wrong members | 48 | `06-co-toksic#69`, `07-hron#5` | cardinality is plausible, but row/list ownership is wrong |
+| 4 | recommendation without structural evidence | 42 | `48-pereferi#42`, `06-co-toksic#28` | broad recommendation prose is available but atomic targets are not reconstructed |
+| 5 | dense text option family | 35 | `06-co-toksic#26`, `15-toxic#63` | similar variants compete inside one broad fragment |
+| 6 | numeric option family | 29 | `06-co-toksic#70`, `15-toxic#42` | several values are present without enough relation binding |
+| 7 | table without layout evidence | 23 | `28-tanzilt#20`, `05-bronhit-hron#65` | the source is table-like but usable coordinates/headers are absent |
+| 8 | recommendation despite structural evidence | 21 | `14-sarkoidoz#12`, `15-toxic#52` | item boundaries exist, but target/condition resolution is incomplete |
+| 9 | parsed table still ambiguous | 14 | `12-nos#15` | coordinate evidence exists but merged cells or headers remain unresolved |
+| 10 | opposing option family | 8 | `49-central-ceroz#6`, `06-co-toksic#56` | inverse direction or polarity is not separated reliably |
+
+## Current external comparison and residuals
+
+Before selecting changes in this round, the three external PDFs scored
+`109/150 = 0.7267`: `43/50`, `21/30`, and `45/70`. Final scores are
+`129/150 = 0.8600`: `46/50`, `24/30`, and `59/70`. This is a transfer-development
+gain of 20 exact cases, not a blind estimate.
 
 Final residual errors are:
 
-- dev: 108 (`59` single, `49` multi), unchanged from iteration 115;
-- frozen holdout: 81 (`39` single, `42` multi), one fewer than baseline;
-- external transfer: 16 (`8` single, `8` multi).
+- dev: 108 (`59` single, `49` multi);
+- frozen holdout: 80 (`38` single, `42` multi);
+- external transfer: 21 (`19` single, `2` multi).
 
-The largest remaining gap is external multi exact accuracy (`3/11 = 0.2727`).
-All five external cardinality errors are over-selection, while the other three
-multi errors choose the wrong member at the correct count. This is direct
-evidence against lowering the global multi threshold. The next safe direction
-is item/row ownership and distractor exclusion inside one bounded source block.
+External multi exact accuracy is now `9/11 = 0.8182`; its two errors are one
+over-selection and one right-count/wrong-member case. The largest remaining
+cross-corpus class is still source ownership, not a global threshold.
 
 ## Cleanup findings
 
-All 45 PDFs are text-extractable and contain clean Cyrillic; none meets the OCR
-fallback threshold. The audit counts 3,375 pages, 89,173 physical lines, 4,073
-bullet lines, 3,287 numbered lines, and 1,818 word-hyphen line endings. About
-6.0% of retained lines are repeated or boilerplate-like.
+The final 46-PDF audit covers 3,476 pages, 91,536 physical lines, 4,161 bullet
+lines, 3,358 numbered lines, and 1,831 word-hyphen line endings. All documents
+are text-extractable with clean Cyrillic; none meets the full-OCR threshold.
+There are still local token distortions and difficult continued tables, which
+is why the retained OCR layer is a bounded token-repair scorer rather than a
+full OCR dependency. Repeated/boilerplate-like lines are `5,348/91,536 = 5.8%`.
 
 The remaining cleanup should be structural:
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uniqueTokens } from "../src/normalize.js";
 import { buildSiblingListBlocks, resolveSiblingList } from "../src/predictor/scorers/sibling-list.js";
+import { resolveRiskFactorList } from "../src/predictor/scorers/risk-factor-list.js";
 
 function pages(lines: string[]) {
   return [
@@ -173,5 +174,33 @@ describe("sibling-list resolver", () => {
     });
 
     expect([...resolved.keys()]).not.toContain("A");
+  });
+
+  it("keeps the direction of an explicit risk-factor relation", () => {
+    const source = pages([
+      "Факторами риска развития АБС являются:",
+      "– прием вещества Альфа;",
+      "– прием вещества Бета.",
+      "Показано, что АБС является фактором риска развития обратного осложнения.",
+    ]);
+    const resolved = resolveRiskFactorList({
+      mode: "multi",
+      pdfText: {
+        abbreviations: [{ abbr: "АБС", expansion: "альфа-бета состояние", page: 1 }],
+      },
+      pages: source,
+      topQuestionPages: new Set([1]),
+      question: "Среди факторов риска развития альфа-бета состояния выделяют",
+      answers: [
+        { id: "A", text: "случайный признак" },
+        { id: "B", text: "прием вещества Альфа" },
+        { id: "C", text: "обратное осложнение" },
+        { id: "D", text: "прием вещества Бета" },
+      ],
+    });
+
+    expect([...resolved.keys()]).toEqual(["B", "D"]);
+    expect(resolved.has("C")).toBe(false);
+    expect(resolved.get("B")?.evidence.kind).toBe("risk_factor_list_member");
   });
 });

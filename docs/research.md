@@ -6,12 +6,17 @@ Runtime inference is JavaScript/Node.js only. It does not use LLMs, transformer 
 
 ## Data found
 
-The current deduplicated local corpus has 45 PDF groups under `__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The TypeScript case files contain the question, variants, mode, and expected labels. The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`, and offline diagnostic scripts read them only for scoring or feature-label export.
+The current deduplicated local corpus has 46 PDF groups under
+`__test__/NN-name/`. Each group contains `doc.pdf` and `cases.test.ts`. The
+TypeScript case files contain the question, variants, mode, and expected labels.
+The predictor never imports these files; `scripts/eval.ts`, `scripts/cases.ts`,
+and offline diagnostic scripts read them only for scoring or feature-label
+export.
 
-Current parsed cases: 2,701, including 17 unkeyed cases that are skipped by exact eval.
+Current parsed cases: 2,771, including 17 unkeyed cases that are skipped by exact eval.
 
-- answer-keyed cases: 2,684
-- single-answer answer-keyed cases: 1,823
+- answer-keyed cases: 2,754
+- single-answer answer-keyed cases: 1,893
 - multi-answer answer-keyed cases: 861
 
 Reproducibility caveat: only five group case files are tracked by Git; most corpus groups are local/ignored. The current metrics therefore require the local workspace dataset and its manifest fingerprints.
@@ -28,7 +33,7 @@ Reproducibility caveat: only five group case files are tracked by Git; most corp
 | Line/table chunks | Can recover some table rows | `pdfjs-dist` often flattens table order into one paragraph | Tried; partially kept line chunks, not sufficient |
 | Compact numeric windows | Intended to fix numeric table rows | Over-scored neighboring values in flattened text | Tried and reverted |
 | Russian number-word aliases | Helps digits vs words like "six" | Folded Cyrillic/Latin extraction produced false numeric matches in nearby context | Tried and reverted |
-| OCR fallback | Needed for scanned PDFs | JS OCR is heavy and not needed for current text-extractable corpus | Not implemented; low-text PDFs are flagged |
+| OCR fallback | Needed for scanned PDFs | Full JS OCR is heavy and unnecessary for the current text-extractable corpus | Full OCR remains rejected; a bounded Cyrillic edit-distance scorer is retained only for local extraction distortions |
 | Small non-LLM feature calibrator | Could improve near-ties and multi pruning without medical text memorization | Dangerous if trained on question/answer text, PDF ids, or labels leaking into features | Exporter and experiment script exist; learned weights are still rejected because dev/holdout stability is worse than fixed structural rules |
 | Parenthetical category binding | Separates adjacent answer groups flattened into one paragraph | Unsafe if applied to incidental parentheses or factor-risk example lists | Kept narrowly for explicit category headings |
 | Stable medical abbreviation aliases | Recovers common RU abbreviations such as `СПЯ` and `РЭ` | Broad aliases can leak semantics into unrelated endometrium/cancer contexts | Kept as a small guarded dictionary and low-weight evidence |
@@ -98,7 +103,43 @@ The best retained version extracts PDF text with `pdfjs-dist`, normalizes Russia
 - ordinal-row binding for answer labels of the form `N тип`, so classification definition lists like `2 тип: ...` can be used without relying on broad neighboring chunks.
 - rejected broad recommendation-block paragraph grouping: it improved dev but regressed holdout, so future work should focus on stronger row/item target binding rather than larger recommendation windows.
 
-On the deduplicated frozen split, the current algorithm reaches dev exact accuracy `415/523 = 0.7935` and holdout-regression exact accuracy `459/540 = 0.8500`, passing the command-level `0.80` acceptance target. Two PDFs added after the predictor was frozen establish a separate external baseline of `64/80 = 0.8000`. Future work should prioritize deeper coordinate-aware table/list reconstruction and another label-sealed external split after the next runtime freeze.
+On the deduplicated frozen split, the current algorithm reaches dev exact
+accuracy `415/523 = 0.7935` and holdout-regression exact accuracy
+`460/540 = 0.8519`, passing the command-level `0.80` acceptance target.
+External transfer reaches `129/150 = 0.8600`; because those labels informed this
+round, this is a regression/transfer score rather than a blind estimate. Across
+all keyed questions, exact accuracy is `2078/2754 = 0.7545`.
+
+## Iteration 125-147 research: ten improvement theories
+
+The starting point for this round was train `1072/1541`, dev `415/523`,
+holdout `459/540`, and external `109/150`. The newly supplied
+`50-dr-gepatit` group scored `45/70` before any new rule was selected.
+
+| # | theory | implementation/experiment | decision |
+| ---: | --- | --- | --- |
+| 1 | Rebuild relational table rows from X coordinates | Clustered physical items into cells, required question focus and answer in different cells of one row | Kept |
+| 2 | Repair local Cyrillic extraction distortions | Tested broad edit matching, then added option-collision, single-token, same-sentence, focus-hit, and coverage gates | Broad version rejected; bounded version kept |
+| 3 | Bind percentages to the named subject | Tested generic numeric clauses, then restricted to multiple percentage clauses with no standalone numeric subgroup in the question | Broad version rejected; percentage-only version kept |
+| 4 | Normalize comparator direction | Canonicalized verbal and symbolic greater/less forms before value binding | Kept as a safety/equivalence improvement |
+| 5 | Recover continued comparison tables | Propagated nearby headers across pages and expanded only inline PDF-local aliases | Kept |
+| 6 | Bound table regions | Stopped coordinate capture at new headings/prose/footnotes and rejected implausibly long rows | Kept as a safety improvement |
+| 7 | Separate sibling indication scopes | A generic extended indication window regressed holdout; final rule extends and contrasts only discharge-indication sections | Generic version rejected; discharge-only version kept |
+| 8 | Parse compact hierarchy | Added `I.` without whitespace, decimal children such as `1.2`, child containment, and parent negation polarity | Kept |
+| 9 | Decode repeated recommendations | Collected independent atomic targets sharing one patient context; added an end-of-question gate to avoid incomplete analyte-list prompts | Kept after safety rewrite |
+| 10 | Preserve risk-factor direction | Bound a risk heading to its following bullets and expanded abbreviations only from the current PDF | Kept |
+
+The historical iteration log shows the same pattern. Successful changes prove
+row, item, parent, target, condition, or direction inside a bounded source
+structure. Failed changes increase context width or global score influence:
+broad recommendation windows, generic OCR similarity, global numeric
+proximity, lower multi thresholds, and a train-only learned cardinality
+calibrator all produced plausible but non-transferable gains.
+
+The implementation consequence is deliberate abstention. A rule is retained
+only when it has a reusable structural trigger and survives aggregate dev,
+holdout, and transfer checks; a medical fact, question id, file name, page
+number, expected count, or fixture answer is never part of runtime.
 
 ## Feature Calibrator Research Guardrails
 
@@ -254,23 +295,23 @@ or external inference dependency is used.
 
 ### All-PDF extraction audit
 
-`npx tsx scripts/pdf-noise.ts` ran the real extractor over all 45 available PDFs:
+`npx tsx scripts/pdf-noise.ts` ran the real extractor over all 46 available PDFs:
 
-- 3,375 pages, about 5.36 million extracted characters, and 89,173 retained
+- 3,476 pages, about 5.51 million extracted characters, and 91,536 retained
   physical lines;
-- all 45 PDFs contain clean Cyrillic text; no mojibake and no PDF met the
+- all 46 PDFs contain clean Cyrillic text; no mojibake and no PDF met the
   extractor's `ocrNeeded` threshold;
-- 4,073 bullet lines and 3,287 numbered lines confirm that list hierarchy is a
+- 4,161 bullet lines and 3,358 numbered lines confirm that list hierarchy is a
   first-class signal, not an edge case;
-- 1,818 physical lines end in a word hyphen. Search normalization already joins
+- 1,831 physical lines end in a word hyphen. Search normalization already joins
   ordinary line-break hyphenation, while intra-item splits such as `Гры жа` need a
   separate conservative document-lexicon repair if pursued later;
-- 5,311 retained lines (6.0%) are repeated or generic boilerplate. The largest
-  residual classes are evidence-grade annotations (2,664), registry/drug-table
-  boilerplate (528), appendix references (455), and running guideline headers
+- 5,348 retained lines (5.8%) are repeated or generic boilerplate. The largest
+  residual classes are evidence-grade annotations (2,694), registry/drug-table
+  boilerplate (528), appendix references (461), and running guideline headers
   (448). One document has 27% repeated registry-table fragments; most other
   high-noise PDFs are around 7-9%;
-- 692 page objects are empty after intentional removal of table-of-contents,
+- 714 page objects are empty after intentional removal of table-of-contents,
   bibliography, and bounded metadata-appendix spans. This is not an OCR failure.
 
 Blindly deleting all residual noise would be unsafe. Evidence-grade lines are
@@ -283,23 +324,18 @@ the historical scoring-text joiner recognizes a mojibake bullet spelling while
 the presentation block builder recognizes the real `•`; changing that broad
 legacy representation was not mixed into this focused predictor round.
 
-### Current external baseline
+### Current external comparison
 
-The predictor was frozen before `48-pereferi` and `49-central-ceroz` were added.
-Their first evaluation therefore gives a useful transfer snapshot rather than a
-post-tuning score:
+The pre-change baseline for the three current external PDFs was
+`109/150 = 0.7267`, with per-PDF scores `43/50`, `21/30`, and `45/70`.
+The final predictor scores `129/150 = 0.8600`: `46/50`, `24/30`, and `59/70`.
+Single accuracy is `120/139 = 0.8633`; multi exact-set accuracy is
+`9/11 = 0.8182`.
 
-- combined exact accuracy: `64/80 = 0.8000`;
-- per PDF: `43/50 = 0.8600` and `21/30 = 0.7000`;
-- single exact accuracy: `61/69 = 0.8841`;
-- multi exact-set accuracy: `3/11 = 0.2727`.
-
-No runtime rule was changed after reading these labels. Diagnostics show 16
-errors: eight single and eight multi. Five multi errors over-select, three choose
-the wrong member at the correct count, and none under-select. The external data
-therefore argues against lowering global multi thresholds. It instead supports
-the existing research direction: prove list/recommendation membership and reject
-neighboring distractors inside bounded physical blocks.
+These labels informed the current work, so the final result is a
+transfer-development comparison, not blind accuracy. The `+20` exact change
+supports the structural direction: prove list/recommendation membership,
+relation direction, and table ownership inside bounded physical blocks.
 
 The cleanup conclusion is deliberately conservative. All PDFs already contain
 usable text, so OCR or aggressive character cleanup is not the bottleneck.

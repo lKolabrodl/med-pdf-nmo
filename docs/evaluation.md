@@ -2,18 +2,18 @@
 
 ## Dataset
 
-The deduplicated local corpus contains 45 PDF groups under
-`__test__/NN-name/` and 2,701 parsed cases. Exact metrics exclude 17 cases with
-`expected: []`, leaving 2,684 keyed cases: 1,824 single-answer and 860
+The deduplicated local corpus contains 46 PDF groups under
+`__test__/NN-name/` and 2,771 parsed cases. Exact metrics exclude 17 cases with
+`expected: []`, leaving 2,754 keyed cases: 1,893 single-answer and 861
 multi-answer cases.
 
 | split | PDF groups | parsed | keyed | single | multi |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| train | 25 | 1,558 | 1,541 | 1,002 | 539 |
+| train | 25 | 1,558 | 1,541 | 1,001 | 540 |
 | dev | 9 | 523 | 523 | 367 | 156 |
 | holdout regression | 9 | 540 | 540 | 386 | 154 |
-| external transfer | 2 | 80 | 80 | 69 | 11 |
-| total | 45 | 2,701 | 2,684 | 1,824 | 860 |
+| external transfer | 3 | 150 | 150 | 139 | 11 |
+| total | 46 | 2,771 | 2,754 | 1,893 | 861 |
 
 Each group contains `doc.pdf` and `cases.test.ts`. Runtime receives only the PDF,
 question, answer variants, and mode. Expected labels are read only by development
@@ -40,13 +40,13 @@ directory is added or removed.
 
 - dev: `07-hron`, `08-ask`, `15-toxic`, `25-shigez`, `28-tanzilt`, `31-hbs`, `32-gemor`, `41-destonia`, `42-skvoz`
 - holdout regression: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `19-gepatitc`, `23-nimana`, `33-aorta`, `43-anomali`, `44-girshprunga`
-- external transfer: `48-pereferi`, `49-central-ceroz`
+- external transfer: `48-pereferi`, `49-central-ceroz`, `50-dr-gepatit`
 - train: `01-toksic-galogen`, `02-metanol-glikol`, `03-chadlv`, `04-hep-d`, `05-bronhit-hron`, `09-covid`, `10-LPP`, `12-nos`, `13-pisha`, `20-hron`, `21-citovirus`, `22-eozif`, `24-kalit`, `26-blevota`, `27-cistit`, `29-tpank`, `30-heart`, `35-cron`, `36-anrid`, `37-bazal`, `38-katarakta`, `39-glaurova`, `40-deficit`, `45-botulizm`, `46-yazva`
 
 The manifest also stores two integrity hashes:
 
-- PDF fingerprint: `cb29ea46952100dcde5c4e51c9734795996bf9c1c6d302f13763713608481497`;
-- parsed-case fingerprint, including expected values: `3517fb694ec83e33c1d143e8a9acedc6d79c7a9a72b1d64b1d87f7c4e79a5cbb`.
+- PDF fingerprint: `97babb222308b6cfd88cdaf2854bfffabe190ef696075db95a4a3109fb6f5f22`;
+- parsed-case fingerprint, including expected values: `538a4c48ee220f79cd71d9044e5d65f476e6cb2e60c39b82baa09ff94ffc295c`.
 
 An intentional corpus change requires an explicit manifest update; silent PDF,
 question, variant, or label changes fail `npm run dataset:validate`.
@@ -74,18 +74,19 @@ npm run predict -- --input request.json
 
 | split | exact | single | multi exact set | macro by PDF |
 | --- | ---: | ---: | ---: | ---: |
-| train | `1072/1541 = 0.6957` | `791/1002 = 0.7894` | `281/539 = 0.5213` | `0.7018` |
+| train | `1074/1541 = 0.6970` | `793/1001 = 0.7922` | `281/540 = 0.5204` | `0.7030` |
 | dev | `415/523 = 0.7935` | `308/367 = 0.8392` | `107/156 = 0.6859` | `0.8011` |
-| holdout regression | `459/540 = 0.8500` | `347/386 = 0.8990` | `112/154 = 0.7273` | `0.8383` |
-| external transfer | `64/80 = 0.8000` | `61/69 = 0.8841` | `3/11 = 0.2727` | `0.7800` |
-| all keyed cases | `2010/2684 = 0.7489` | `1507/1824 = 0.8262` | `503/860 = 0.5849` | — |
+| holdout regression | `460/540 = 0.8519` | `348/386 = 0.9016` | `112/154 = 0.7273` | `0.8399` |
+| external transfer | `129/150 = 0.8600` | `120/139 = 0.8633` | `9/11 = 0.8182` | `0.8543` |
+| all keyed cases | `2078/2754 = 0.7545` | `1569/1893 = 0.8288` | `509/861 = 0.5912` | — |
 
-The predictor was frozen before the two current external groups were added.
-Their first recorded result is therefore a clean baseline for this commit:
-`48-pereferi` scores `43/50 = 0.8600`, and `49-central-ceroz` scores
-`21/30 = 0.7000`. No predictor rule was changed after reading either label set.
-Diagnostics have now been generated, so future iterations must treat `64/80`
-as a regression baseline rather than claiming that the same PDFs remain blind.
+Before this runtime round, the existing predictor scored train `1072/1541`,
+dev `415/523`, holdout `459/540`, and external `109/150`. The newly added
+`50-dr-gepatit` group was measured at `45/70` before any rule was selected from
+its errors. The combined external set then became a transfer-development signal,
+not a blind test. Final per-PDF external scores are `46/50`, `24/30`, and
+`59/70`. The honest future generalization check therefore needs another
+label-sealed PDF group.
 
 Final dev summary:
 
@@ -99,8 +100,8 @@ Final dev summary:
   "macroAccuracyByPdf": 0.8011,
   "noEvidence": 0,
   "errorBuckets": {
-    "confused_with_distractor": 78,
-    "multi_cardinality": 30
+    "confused_with_distractor": 79,
+    "multi_cardinality": 29
   }
 }
 ```
@@ -110,14 +111,14 @@ Final holdout-regression summary:
 ```json
 {
   "total": 540,
-  "correct": 459,
-  "exactAccuracy": 0.85,
-  "singleAccuracy": 0.899,
+  "correct": 460,
+  "exactAccuracy": 0.8519,
+  "singleAccuracy": 0.9016,
   "multiExactAccuracy": 0.7273,
-  "macroAccuracyByPdf": 0.8383,
+  "macroAccuracyByPdf": 0.8399,
   "noEvidence": 0,
   "errorBuckets": {
-    "confused_with_distractor": 48,
+    "confused_with_distractor": 47,
     "multi_cardinality": 33
   }
 }
@@ -127,19 +128,20 @@ External-transfer summary:
 
 ```json
 {
-  "total": 80,
-  "correct": 64,
-  "exactAccuracy": 0.8,
-  "singleAccuracy": 0.8841,
-  "multiExactAccuracy": 0.2727,
-  "macroAccuracyByPdf": 0.78,
+  "total": 150,
+  "correct": 129,
+  "exactAccuracy": 0.86,
+  "singleAccuracy": 0.8633,
+  "multiExactAccuracy": 0.8182,
+  "macroAccuracyByPdf": 0.8543,
   "noEvidence": 0
 }
 ```
 
 The original holdout remains a repeatedly inspected frozen acceptance suite.
-The current external score is the first frozen baseline for those two PDFs; any
-later rule selected using their errors must report against this stored result.
+The current external PDFs also informed this iteration. Their pre-change
+`109/150` result is retained as the comparison baseline; the final `129/150`
+must not be presented as blind accuracy.
 
 ## Multi-answer contract
 
@@ -165,11 +167,11 @@ regression suite rather than a blind estimate of generalization:
   are ignored, so published metrics still require the same local corpus whose two
   fingerprints are listed above.
 
-Dev is the primary iteration signal. Holdout is used as a compatibility report
-and `0.80` acceptance gate. The current external result was recorded only after
-runtime logic was frozen, but its labels are now available to diagnostics. A
-future unbiased estimate therefore requires another deduplicated PDF set whose
-labels remain unseen until the next runtime version is frozen.
+Dev and external transfer were the primary iteration signals in this round.
+Holdout was used as a compatibility report and `0.80` acceptance gate. All
+current labels are now available to diagnostics, so a future unbiased estimate
+requires another deduplicated PDF set whose labels remain unseen until the next
+runtime version is frozen.
 
 ## Leakage checks
 

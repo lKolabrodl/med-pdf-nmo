@@ -22,8 +22,8 @@ export type HierarchicalListResolution = Map<
   }
 >;
 
-const ROMAN_PARENT = /^\s*[ivx]{1,8}\.\s+(.{4,240}?)(?::\s*)?$/iu;
-const NUMBERED_CHILD = /^\s*\d{1,2}[.)]\s+(.+)$/u;
+const ROMAN_PARENT = /^\s*[ivx]{1,8}\.\s*(.{4,240}?)(?::\s*)?$/iu;
+const NUMBERED_CHILD = /^\s*\d{1,2}(?:(?:\.\d{1,2})+\.?|[.)])\s+(.+)$/u;
 const GENERIC = new Set(
   uniqueTokens(
     "грыжа заболевание состояние пациент форма формы тип типа виды вид группа классификация вариант варианты пищеводное отверстие диафрагма",
@@ -129,8 +129,16 @@ function commonLabelTokens(cluster: HierarchyParent[]) {
 }
 
 function parentQuestionMatch(question: string, parent: HierarchyParent, common: Set<string>) {
+  const questionNegated = /(?:^|\s)не\s+\S/iu.test(String(question ?? "").toLowerCase());
+  const labelNegated = /(?:^|\s)не\s+\S/iu.test(String(parent.label ?? "").toLowerCase());
+  if (questionNegated !== labelNegated) return 0;
   const questionTokens = uniqueTokens(question);
-  const distinctive = informative(parent.labelTokens).filter((token) => !common.has(token));
+  const parentTokens = informative(parent.labelTokens);
+  const uncommon = parentTokens.filter((token) => !common.has(token));
+  // Иногда sibling-заголовки лексически различаются только отрицанием.
+  // Полярность уже проверена выше, поэтому в таком случае сравниваем полную
+  // метку, а не отказываемся от структурного контраста.
+  const distinctive = uncommon.length ? uncommon : parentTokens;
   if (!distinctive.length) return 0;
   const hits = tokenHitCount(distinctive, questionTokens);
   const coverage = strictSoftCoverage(distinctive, questionTokens);
@@ -179,9 +187,13 @@ function childAnswerMatch(
   const exactAnswerCoverage = answerTokens.filter((token) => allChildTokens.includes(token)).length / answerTokens.length;
   const exactQuality = Math.min(exactChildCoverage, exactAnswerCoverage);
   const quality = Math.min(childCoverage, answerCoverage);
+  const answerContainedByChild =
+    answerTokens.length >= 2 &&
+    answerCoverage >= 0.78 &&
+    exactAnswerCoverage >= 0.5;
   return {
-    matched: phrase || (childCoverage >= 0.72 && answerCoverage >= 0.6),
-    quality: Math.max(phrase ? 1 : 0, quality) + exactQuality * 0.28,
+    matched: phrase || answerContainedByChild || (childCoverage >= 0.72 && answerCoverage >= 0.6),
+    quality: Math.max(phrase ? 1 : 0, answerContainedByChild ? answerCoverage * 0.94 : 0, quality) + exactQuality * 0.28,
   };
 }
 

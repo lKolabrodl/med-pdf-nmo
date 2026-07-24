@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildAtomicRecommendationSegments } from "../src/predictor/scorers/recommendation-item.js";
+import { resolveRepeatedRecommendationSet } from "../src/predictor/scorers/recommendation-set.js";
 
 function page(lines: string[]) {
   return { page: 1, lines, text: lines.join("\n") };
@@ -32,4 +33,64 @@ describe("atomic recommendation segments", () => {
     expect(segments[0].text).toContain("5 мг ежедневно");
   });
 
+  it("collects targets from repeated recommendations with one patient context", () => {
+    const source = [
+      page([
+        "Рекомендуется исследование Альфа всем пациентам с осложненным состоянием при подготовке к процедуре.",
+        "Уровень убедительности рекомендаций C.",
+        "Рекомендуется регистрация электрофизиограммы всем пациентам с осложненным состоянием при подготовке к процедуре.",
+        "Уровень убедительности рекомендаций C.",
+      ]),
+    ];
+    const resolved = resolveRepeatedRecommendationSet({
+      mode: "multi",
+      pages: source,
+      question: "Всем пациентам с осложненным состоянием при подготовке к процедуре рекомендовано проведение",
+      answers: [
+        { id: "A", text: "исследования Гамма" },
+        { id: "B", text: "исследования Альфа" },
+        { id: "C", text: "электрофизиографии" },
+        { id: "D", text: "оценки показателя Дельта" },
+      ],
+    });
+
+    expect([...resolved.keys()]).toEqual(["B", "C"]);
+    expect(resolved.get("B")?.evidence.kind).toBe("repeated_recommendation_target");
+  });
+
+  it("abstains from set decoding when only one recommendation matches", () => {
+    const resolved = resolveRepeatedRecommendationSet({
+      mode: "multi",
+      pages: [page(["Рекомендуется исследование Альфа всем пациентам с осложненным состоянием при подготовке к процедуре."])],
+      question: "Всем пациентам с осложненным состоянием при подготовке к процедуре рекомендовано проведение",
+      answers: [
+        { id: "A", text: "исследования Альфа" },
+        { id: "B", text: "исследования Бета" },
+        { id: "C", text: "исследования Гамма" },
+      ],
+    });
+
+    expect(resolved).toEqual(new Map());
+  });
+
+  it("abstains when the question ends with a specific incomplete analyte target", () => {
+    const resolved = resolveRepeatedRecommendationSet({
+      mode: "multi",
+      pages: [
+        page([
+          "Рекомендуется исследование уровня маркера Альфа всем пациентам с осложненным состоянием при подготовке к процедуре.",
+          "Рекомендуется исследование уровня маркера Бета всем пациентам с осложненным состоянием при подготовке к процедуре.",
+        ]),
+      ],
+      question:
+        "Всем пациентам с осложненным состоянием при подготовке к процедуре рекомендовано исследование уровня",
+      answers: [
+        { id: "A", text: "маркера Альфа" },
+        { id: "B", text: "маркера Бета" },
+        { id: "C", text: "маркера Гамма" },
+      ],
+    });
+
+    expect(resolved).toEqual(new Map());
+  });
 });

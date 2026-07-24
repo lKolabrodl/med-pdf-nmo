@@ -23,15 +23,20 @@ import { bestFibrosisStageSupport } from "./predictor/scorers/fibrosis-stage.js"
 import { bestAbbreviationAliasSupport } from "./predictor/scorers/abbreviation-alias.js";
 import { bestFrequencyRecommendationSupport, frequencyAnswer, frequencySearchPhrases } from "./predictor/scorers/frequency.js";
 import { bestGeneSentenceSupport, bestLatinFuzzySupport, geneMutationQuestion, latinAnswerTokens, sentenceSegments } from "./predictor/scorers/biomedical-symbols.js";
+import { bestCyrillicOcrSupport } from "./predictor/scorers/ocr-fuzzy.js";
 import {
   bestCoordinateMultiCellRowSupport,
+  bestCoordinateRelationalRowSupport,
   bestCoordinateTableMembershipSupport,
   bestCoordinateTableGroupSupport,
   bestCoordinateTableRowSupport,
   buildCoordinateMultiCellRowsByPage,
+  buildCoordinateRelationalRowsByPage,
   buildCoordinateTableMembershipsByPage,
   buildCoordinateTableGroupsByPage,
   buildCoordinateTableRowsByPage,
+  hasCoordinateComparisonTableCue,
+  hasCoordinateRelationalRowCue,
   hasCoordinateTableCue,
   hasCoordinateTableGroupCue,
 } from "./predictor/scorers/coordinate-table.js";
@@ -50,6 +55,8 @@ import { resolveSiblingList } from "./predictor/scorers/sibling-list.js";
 import { answerOrdinalRowApplicable } from "./predictor/scorers/ordinal-row-gate.js";
 import { resolveHierarchicalList } from "./predictor/scorers/hierarchical-list.js";
 import { resolveRecommendationProposition } from "./predictor/scorers/recommendation-proposition.js";
+import { resolveRepeatedRecommendationSet } from "./predictor/scorers/recommendation-set.js";
+import { resolveRiskFactorList } from "./predictor/scorers/risk-factor-list.js";
 import {
   clinicalCourseCueAdjustment,
   contrastCueMismatchAdjustment,
@@ -64,6 +71,7 @@ import {
   bestExactHourAliasOptionSupport,
   bestExactNumericOptionSupport,
   bestNumericConditionSupport,
+  bestSubjectBoundNumericClauseSupport,
   conditionPairAdjustment,
 } from "./predictor/scorers/numeric.js";
 import {
@@ -2012,21 +2020,48 @@ const INDICATION_LABEL_STOPS = new Set(
 
 function questionIndicationLabel(question) {
   const tokens = rawTokens(question);
-  if (!tokens.some((token) => token.startsWith("\u043f\u043e\u043a\u0430\u0437\u0430\u043d"))) return null;
-  const start = tokens.findIndex((token) => token === "\u0434\u043b\u044f" || token === "\u043a");
+  const indicationIndex = tokens.findIndex((token) => token.startsWith("\u043f\u043e\u043a\u0430\u0437\u0430\u043d"));
+  if (indicationIndex < 0) return null;
+  const relativeStart = tokens
+    .slice(indicationIndex + 1)
+    .findIndex((token) => token === "\u0434\u043b\u044f" || token === "\u043a");
+  const start = relativeStart < 0 ? -1 : indicationIndex + 1 + relativeStart;
   if (start < 0) return null;
   const label = [];
   for (let index = start + 1; index < tokens.length && label.length < 5; index += 1) {
     const token = tokens[index];
-    if (INDICATION_LABEL_STOPS.has(token)) break;
+    if (
+      INDICATION_LABEL_STOPS.has(token) ||
+      token.startsWith("\u043f\u0430\u0446\u0438\u0435\u043d\u0442") ||
+      token.startsWith("\u0431\u043e\u043b\u044c\u043d") ||
+      token === "\u0438\u0437" ||
+      token === "\u0432" ||
+      token.startsWith("\u044f\u0432\u043b\u044f")
+    ) {
+      break;
+    }
     label.push(token);
   }
   return label.length ? label.join(" ") : null;
 }
 
-function indicationLineMatches(line, labelTokens) {
+function dischargeIndicationLabel(label) {
+  return rawTokens(label).some((token) => token.startsWith("\u0432\u044b\u043f\u0438\u0441\u043a"));
+}
+
+function indicationLineMatches(line, labelTokens, strictScope = false) {
   const lineTokens = tokenizeNormalized(normalizeForSearch(line));
-  if (softCoverage(labelTokens, lineTokens) < Math.min(1, labelTokens.length <= 3 ? 0.9 : 0.72)) return false;
+  if (strictScope) {
+    const exactHits = tokenHitCount(labelTokens, lineTokens);
+    const strictCoverage = strictSoftCoverage(labelTokens, lineTokens);
+    if (labelTokens.length <= 2) {
+      if (exactHits < 1 && strictCoverage < 0.9) return false;
+    } else if (strictCoverage < 0.72 && exactHits < Math.min(2, labelTokens.length)) {
+      return false;
+    }
+  } else if (softCoverage(labelTokens, lineTokens) < Math.min(1, labelTokens.length <= 3 ? 0.9 : 0.72)) {
+    return false;
+  }
   const normalized = normalizeForSearch(line);
   return (
     containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d") ||
@@ -2035,7 +2070,18 @@ function indicationLineMatches(line, labelTokens) {
   );
 }
 
-function buildIndicationSegment(lines, index) {
+function indicationHeading(line) {
+  const normalized = normalizeForSearch(line);
+  if (!containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d")) return false;
+  return (
+    /(?:^|\s)показан\p{L}*\s+(?:к|для)\s+/iu.test(String(line ?? "")) ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0438\u044f \u0434\u043b\u044f") ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0438\u044f \u043a") ||
+    containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0438\u044f \u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u044e\u0442")
+  );
+}
+
+function buildIndicationSegment(lines, index, extendedScope = false) {
   const current = normalizeForSearch(lines[index]);
   const before = normalizeForSearch(lines.slice(Math.max(0, index - 2), index).join(" "));
   let start = index;
@@ -2043,10 +2089,12 @@ function buildIndicationSegment(lines, index) {
     start = Math.max(0, index - 2);
   }
   const out = [];
-  for (let cursor = start; cursor < Math.min(lines.length, index + 5); cursor += 1) {
+  const end = extendedScope ? index + 20 : index + 5;
+  for (let cursor = start; cursor < Math.min(lines.length, end); cursor += 1) {
     if (cursor > index) {
       const normalized = normalizeForSearch(lines[cursor]);
       if (
+        indicationHeading(lines[cursor]) ||
         containsNormalizedPhrase(normalized, "\u043f\u043b\u0430\u043d\u043e\u0432") ||
         containsNormalizedPhrase(normalized, "\u044d\u043a\u0441\u0442\u0440\u0435\u043d") ||
         containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d\u0438\u044f \u043a")
@@ -2057,6 +2105,46 @@ function buildIndicationSegment(lines, index) {
     out.push(lines[cursor]);
   }
   return out.join(" ");
+}
+
+function indicationScopeAdjustment({ mode, pages, question, answer, answerTokens }) {
+  if (mode !== "multi") return { adjustment: 0, evidence: null };
+  const label = questionIndicationLabel(question);
+  if (!label || !dischargeIndicationLabel(label)) return { adjustment: 0, evidence: null };
+  const labelTokens = uniqueTokens(label);
+  if (!labelTokens.length) return { adjustment: 0, evidence: null };
+  const phrases = answerSearchPhrases(answer.text).slice(0, 16);
+  let targetHit = false;
+  let siblingEvidence = null;
+
+  for (const page of pages) {
+    const lines = page.lines ?? [];
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!indicationHeading(lines[index])) continue;
+      const targetHeading = indicationLineMatches(lines[index], labelTokens, true);
+      const segment = buildIndicationSegment(lines, index, true);
+      const normalized = normalizeForSearch(segment);
+      const tokens = tokenizeNormalized(normalized);
+      const phraseHit = phrases.some((phrase) => containsNormalizedPhrase(normalized, phrase));
+      const answerCoverage = strictSoftCoverage(answerTokens, tokens);
+      const answerHit = phraseHit || answerCoverage >= 0.66;
+      if (!answerHit) continue;
+      if (targetHeading) {
+        targetHit = true;
+        continue;
+      }
+      siblingEvidence = betterEvidence(siblingEvidence, {
+        answerId: answer.id,
+        page: page.page,
+        text: segment,
+        score: 8.2 + (phraseHit ? 1.8 : 0) + answerCoverage * 2.2,
+        kind: "indication_sibling_scope_mismatch",
+      });
+    }
+  }
+
+  if (targetHit || !siblingEvidence) return { adjustment: 0, evidence: null };
+  return { adjustment: -8.5, evidence: siblingEvidence };
 }
 
 function indicationSemanticSupport(answerText, segment) {
@@ -2096,9 +2184,10 @@ function indicationContrastMismatch(answerText, segment) {
   return false;
 }
 
-function bestIndicationSegmentSupport({ pages, question, answer, answerTokens }) {
+function bestIndicationSegmentSupport({ mode, pages, question, answer, answerTokens }) {
   const label = questionIndicationLabel(question);
   if (!label) return null;
+  const strictScope = dischargeIndicationLabel(label);
   const labelTokens = uniqueTokens(label);
   if (!labelTokens.length) return null;
   const answerPhrases = answerSearchPhrases(answer.text).slice(0, 16);
@@ -2108,8 +2197,8 @@ function bestIndicationSegmentSupport({ pages, question, answer, answerTokens })
     const lines = page.lines ?? [];
     for (let index = 0; index < lines.length; index += 1) {
       const neighborhood = lines.slice(index, Math.min(lines.length, index + 2)).join(" ");
-      if (!indicationLineMatches(neighborhood, labelTokens)) continue;
-      const segment = buildIndicationSegment(lines, index);
+      if (!indicationLineMatches(neighborhood, labelTokens, strictScope)) continue;
+      const segment = buildIndicationSegment(lines, index, strictScope);
       if (indicationContrastMismatch(answer.text, segment)) continue;
       const normalized = normalizeForSearch(segment);
       const tokens = tokenizeNormalized(normalized);
@@ -2117,7 +2206,8 @@ function bestIndicationSegmentSupport({ pages, question, answer, answerTokens })
       const answerCoverage = strictSoftCoverage(answerTokens, tokens);
       const semantic = indicationSemanticSupport(answer.text, segment);
       const support = Math.max(answerCoverage, semantic);
-      if (!phraseHit && support < 0.45) continue;
+      const minimumSupport = mode === "multi" && strictScope ? 0.66 : 0.45;
+      if (!phraseHit && support < minimumSupport) continue;
       const score = 13.8 + (phraseHit ? 2.6 : 0) + support * 5.4;
       best = betterEvidence(best, {
         answerId: answer.id,
@@ -3814,9 +3904,11 @@ function scoreAnswer(context) {
   const ordinalList = bestOrdinalListSupport(context);
   const typeOrdinal = bestTypeOrdinalSupport(context);
   const indicationLabel = bestIndicationSegmentSupport(context);
+  const indicationScope = indicationScopeAdjustment(context);
   const labelDefinition = bestLabelDefinitionSupport(context);
   const recommendationPolarity = recommendationPolarityAdjustment(context);
   const exactNumericOption = bestExactNumericOptionSupport(context);
+  const subjectNumericClause = bestSubjectBoundNumericClauseSupport(context);
   const exactHourAlias = bestExactHourAliasOptionSupport(context);
   const ageEligibility = ageEligibilityAdjustment(context);
   const drugDose = bestDrugDoseSupport(context);
@@ -3840,6 +3932,7 @@ function scoreAnswer(context) {
   const clozeGap = bestClozeGapSupport(context);
   const visualTableColumn = bestVisualTableColumnSupport(context);
   const coordinateTableRow = bestCoordinateTableRowSupport(context);
+  const coordinateRelationalRow = bestCoordinateRelationalRowSupport(context);
   const coordinateTableGroup = bestCoordinateTableGroupSupport(context);
   const coordinateMultiCellRow = bestCoordinateMultiCellRowSupport(context);
   const coordinateTableMembership = bestCoordinateTableMembershipSupport(context);
@@ -3848,6 +3941,7 @@ function scoreAnswer(context) {
   const shortMedicalAlias = bestShortMedicalAliasSupport(context);
   const abbreviationAlias = bestAbbreviationAliasSupport(context);
   const latinFuzzy = bestLatinFuzzySupport(context);
+  const cyrillicOcr = bestCyrillicOcrSupport(context);
   const geneSentence = bestGeneSentenceSupport(context);
   const clinicalFeature = clinicalFeatureAdjustment(context);
   const mkbClassExclusion = bestMkbClassExclusionSupport(context);
@@ -3893,10 +3987,12 @@ function scoreAnswer(context) {
     (ordinalList?.score ?? 0) * 1.15 +
     (typeOrdinal?.score ?? 0) * 1.15 +
     (indicationLabel?.score ?? 0) * 1.15 +
+    indicationScope.adjustment +
     (labelDefinition?.score ?? 0) * 1.15 +
     (recommendationPolarity.support?.score ?? 0) * 1.05 +
     recommendationPolarity.adjustment +
     (exactNumericOption?.score ?? 0) * 1.04 +
+    (subjectNumericClause?.score ?? 0) * 1.08 +
     (exactHourAlias?.score ?? 0) * 1.08 +
     ageEligibility.adjustment +
     (drugDose?.score ?? 0) * 1.15 +
@@ -3921,6 +4017,7 @@ function scoreAnswer(context) {
     (clozeGap?.score ?? 0) * 1.12 +
     (visualTableColumn?.score ?? 0) * 1.18 +
     (coordinateTableRow?.score ?? 0) * 1.12 +
+    (coordinateRelationalRow?.score ?? 0) * 1.16 +
     (coordinateTableGroup?.score ?? 0) * 1.16 +
     (coordinateMultiCellRow?.score ?? 0) * 1.16 +
     (coordinateTableMembership?.score ?? 0) * 1.1 +
@@ -3929,6 +4026,7 @@ function scoreAnswer(context) {
     (shortMedicalAlias?.score ?? 0) * 0.35 +
     (abbreviationAlias?.score ?? 0) * abbreviationAliasWeight +
     (latinFuzzy?.score ?? 0) * latinFuzzyWeight +
+    (cyrillicOcr?.score ?? 0) * 1.08 +
     (geneSentence?.score ?? 0) * 1.18 +
     (clinicalFeature.support?.score ?? 0) * 1.12 +
     clinicalFeature.adjustment +
@@ -3977,10 +4075,12 @@ function scoreAnswer(context) {
     ordinalList,
     typeOrdinal,
     indicationLabel,
+    indicationScope.evidence,
     labelDefinition,
     recommendationPolarity.support,
     recommendationPolarity.evidence,
     exactNumericOption,
+    subjectNumericClause,
     exactHourAlias,
     ageEligibility.evidence,
     drugDose,
@@ -4005,6 +4105,7 @@ function scoreAnswer(context) {
     clozeGap,
     visualTableColumn,
     coordinateTableRow,
+    coordinateRelationalRow,
     coordinateTableGroup,
     coordinateMultiCellRow,
     coordinateTableMembership,
@@ -4013,6 +4114,7 @@ function scoreAnswer(context) {
     shortMedicalAlias,
     abbreviationAlias,
     latinFuzzy,
+    cyrillicOcr,
     geneSentence,
     clinicalFeature.support,
     clinicalFeature.evidence,
@@ -4108,6 +4210,13 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
   const coordinateTableRowsByPage = hasCoordinateTableCue(question, focusTokens)
     ? buildCoordinateTableRowsByPage(runtime.pdfText.pages, topQuestionPages)
     : null;
+  const coordinateRelationalRowsByPage = hasCoordinateRelationalRowCue(question)
+    ? buildCoordinateRelationalRowsByPage(
+        runtime.pdfText.pages,
+        topQuestionPages,
+        hasCoordinateComparisonTableCue(question),
+      )
+    : null;
   const coordinateTableGroupsByPage =
     mode === "multi" && hasCoordinateTableGroupCue(question, focusTokens, intent)
       ? buildCoordinateTableGroupsByPage(runtime.pdfText.pages, topQuestionPages)
@@ -4135,10 +4244,26 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
   const recommendationPropositionResolution = config.recommendationPropositionResolver
     ? resolveRecommendationProposition({ mode, pages: runtime.pdfText.pages, question, answers })
     : new Map();
+  const repeatedRecommendationSetResolution = resolveRepeatedRecommendationSet({
+    mode,
+    pages: runtime.pdfText.pages,
+    question,
+    answers,
+  });
+  const riskFactorListResolution = resolveRiskFactorList({
+    mode,
+    pdfText: runtime.pdfText,
+    pages: runtime.pdfText.pages,
+    topQuestionPages,
+    question,
+    answers,
+  });
   const siblingListResolution = mergeStructuralResolutions(
     boundedSiblingListResolution,
     hierarchicalListResolution,
     recommendationPropositionResolution,
+    repeatedRecommendationSetResolution,
+    riskFactorListResolution,
   );
 
   let answerScores = answers.map((answer) => {
@@ -4164,6 +4289,7 @@ export async function predict(input: PredictorInput, options: PredictorOptions =
       boundedListSegments,
       visualTableColumnTargetsByPage,
       coordinateTableRowsByPage,
+      coordinateRelationalRowsByPage,
       coordinateTableGroupsByPage,
       coordinateMultiCellRowsByPage,
       coordinateTableMembershipsByPage,

@@ -162,7 +162,10 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/abbreviation-alias.ts`: document-specific abbreviation-list alias scorer for multi-answer questions.
 - `src/predictor/scorers/focused.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
 - `src/predictor/scorers/biomedical-symbols.ts`: Latin biomedical token, gene-symbol, and OCR-lookalike normalization scorers.
-- `src/predictor/scorers/coordinate-table.ts`: coordinate-based table row, group, inverse-binding, and multi-cell reconstruction scorers.
+- `src/predictor/scorers/coordinate-table.ts`: coordinate-based table row,
+  group, inverse-binding, multi-cell, and relational row reconstruction. It
+  propagates continued headers, expands document-local inline aliases, and
+  bounds the usable table region before scoring.
 - `src/predictor/scorers/drug-dose.ts`: drug/dose/frequency row scorer, including slash-dose order and component-assigned `N mg component` binding.
 - `src/predictor/scorers/exact-answer.ts`: narrow exact full-answer scorer for oral dose prompts.
 - `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
@@ -171,13 +174,26 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item, explicit target, and multi recommendation-block scorers, plus the atomic recommendation-segment builder shared by the ordinal set decoder.
 - `src/predictor/scorers/fibrosis-stage.ts`: fibrosis/METAVIR stage row scorer.
 - `src/predictor/scorers/direction.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
-- `src/predictor/scorers/numeric.ts`: cloze-gap, condition-pair, exact-numeric/hour option, condition/numeric-condition, and count-relation scorers.
+- `src/predictor/scorers/numeric.ts`: cloze-gap, condition-pair,
+  exact-numeric/hour option, condition/numeric-condition, count-relation, and
+  subject-bound percentage-clause scorers.
+- `src/predictor/scorers/ocr-fuzzy.ts`: bounded Cyrillic edit-distance and
+  fragmented-token repair. It requires the answer distortion and question
+  focus in the same sentence and abstains on colliding option terms.
 - `src/predictor/scorers/option-family.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
 - `src/predictor/scorers/relation-tuple.ts`: bounded subject/role/condition/value/unit resolver for single-answer numeric and whole-interval option families.
 - `src/predictor/scorers/sibling-list.ts`: forward multi membership and inverse single-label binding for bounded sibling bullets.
 - `src/predictor/scorers/ordinal-row-gate.ts`: rejects row-ordinal evidence when the option does not itself begin with the matching stage/type/degree/class label.
-- `src/predictor/scorers/hierarchical-list.ts`: reconstructs bounded Roman-parent / numbered-child list membership.
+- `src/predictor/scorers/hierarchical-list.ts`: reconstructs bounded
+  Roman-parent / numbered-child list membership, including compact `I.` labels,
+  decimal children, and parent negation polarity.
 - `src/predictor/scorers/recommendation-proposition.ts`: separates recommendation target lookup from polarity/quantifier comparison and uses extractor-proven physical blocks for wrapped bullets.
+- `src/predictor/scorers/recommendation-set.ts`: reconstructs repeated atomic
+  recommendation targets that share one patient context, with an explicit
+  abstention gate for incomplete analyte prompts.
+- `src/predictor/scorers/risk-factor-list.ts`: binds a risk-factor heading to
+  its child bullets in the stated direction and expands only PDF-local
+  abbreviations.
 - `src/predictor/scorers/count-tuple.ts`: clause-local counted-object/value resolver for short integer option families.
 - `src/predictor/scorers/negation-pair.ts`: exact paired-option polarity prototype; present for focused testing but disabled in the default config.
 - `src/predictor/scorers/multi-set.ts`: explicit ordinal range/list decoder for source-coherent multi-answer sets.
@@ -205,13 +221,26 @@ Current selection thresholds:
 
 An offline train-only logistic cardinality experiment was not frozen into runtime. It improved the training split but regressed both PDF-grouped dev and holdout, demonstrating that score-shape priors alone do not transfer reliably between document families. Runtime therefore keeps the explicit minimum-two rule plus source/evidence-based conservative adjustments.
 
-The current structural runtime reaches dev `415/523 = 0.7935` and frozen
-holdout `459/540 = 0.8500`. Two later PDFs were evaluated only after this
-predictor was frozen and establish an external baseline of `64/80 = 0.8000`.
-Their single accuracy is `61/69 = 0.8841`, while multi exact-set accuracy is only
-`3/11 = 0.2727`. This supports the architecture's emphasis on bounded source
-relations, but also shows that list/recommendation membership and distractor
-exclusion remain the main unresolved runtime problem.
+The current structural runtime reaches dev `415/523 = 0.7935`, frozen holdout
+`460/540 = 0.8519`, and external transfer `129/150 = 0.8600`. Across all keyed
+cases it reaches `2078/2754 = 0.7545`, versus `2055/2754 = 0.7462` before this
+round. The strongest change is external exact accuracy (`+20` cases); holdout
+also gains one case and remains above the `0.80` gate.
+
+## Codebase assessment
+
+The scorer registry now contains every new evidence kind, structural weight,
+confidence classification, diagnostics category, and feature-export contract in
+one place. New semantics live in separate scorer modules instead of adding more
+dataset-specific branches to selection.
+
+The main remaining maintenance debt is `src/predictor.ts`, which still combines
+several older parsers with orchestration, and the growing
+`coordinate-table.ts`, which contains multiple table representations. A safe
+future refactor is to move indication parsing and relational-table extraction
+into dedicated modules without changing scores, then prove equivalence on all
+four splits. No new dependency was added in this round: PDF.js already exposes
+the physical line and X-coordinate data needed by the accepted approach.
 
 ## Diagnostic Feature Export
 
@@ -233,4 +262,9 @@ Runtime files under `src/` use only Node.js, local TypeScript modules, and `pdfj
 
 ## Known Limitation
 
-The main remaining limitation is layout semantics. Many NMO PDFs contain tables and compact recommendation lists; after `pdfjs-dist` extraction, mutually exclusive rows and answer values often become one flat paragraph. The current text-only algorithm can retrieve the right area and now handles several row-like patterns, but it still cannot always reconstruct which value belongs to which row, condition, heading, or list item.
+The main remaining limitation is layout semantics. Many NMO PDFs contain tables
+and compact recommendation lists; after `pdfjs-dist` extraction, mutually
+exclusive rows and answer values can become one flat paragraph. The predictor
+now uses coordinates, continued headers, list hierarchy, atomic recommendations,
+and bounded OCR repair, but it still cannot always reconstruct which value
+belongs to which row, condition, heading, or list item.
