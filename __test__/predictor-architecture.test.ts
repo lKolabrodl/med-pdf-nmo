@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BM25Index } from "../src/bm25.js";
+import * as coordinateTable from "../src/predictor/scorers/coordinate-table.js";
 import { createPredictorEngine } from "../src/predictor.js";
 import {
   PredictorEngine,
@@ -204,5 +205,26 @@ describe("ScoreAdjustmentPipeline", () => {
 
     expect(calls).toEqual(["first", "second"]);
     expect(result[0].raw).toBe(8);
+  });
+});
+
+describe("coordinate-table facade", () => {
+  it("keeps the public scorer surface explicit", () => {
+    expect(Object.keys(coordinateTable).sort()).toEqual([
+      "bestCoordinateMultiCellRowSupport",
+      "bestCoordinateRelationalRowSupport",
+      "bestCoordinateTableGroupSupport",
+      "bestCoordinateTableMembershipSupport",
+      "bestCoordinateTableRowSupport",
+      "buildCoordinateMultiCellRowsByPage",
+      "buildCoordinateRelationalRowsByPage",
+      "buildCoordinateTableGroupsByPage",
+      "buildCoordinateTableMembershipsByPage",
+      "buildCoordinateTableRowsByPage",
+      "hasCoordinateComparisonTableCue",
+      "hasCoordinateRelationalRowCue",
+      "hasCoordinateTableCue",
+      "hasCoordinateTableGroupCue",
+    ]);
   });
 });

@@ -176,10 +176,19 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/abbreviation-alias.ts`: document-specific abbreviation-list alias scorer for multi-answer questions.
 - `src/predictor/scorers/focused.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
 - `src/predictor/scorers/biomedical-symbols.ts`: Latin biomedical token, gene-symbol, and OCR-lookalike normalization scorers.
-- `src/predictor/scorers/coordinate-table.ts`: coordinate-based table row,
-  group, inverse-binding, multi-cell, and relational row reconstruction. It
-  propagates continued headers, expands document-local inline aliases, and
-  bounds the usable table region before scoring.
+- `src/predictor/scorers/coordinate-table.ts`: stable facade for the
+  coordinate-table scorer family.
+- `src/predictor/scorers/coordinate-table-shared.ts`: base physical-cell and
+  row reconstruction plus common answer/cell matching.
+- `src/predictor/scorers/coordinate-table-relational.ts`: relational
+  multi-column rows, continued headers, bounded table regions, and
+  document-local inline aliases.
+- `src/predictor/scorers/coordinate-table-groups.ts`: multi groups,
+  inverse-binding, and multi-cell row reconstruction.
+- `src/predictor/scorers/coordinate-table-membership.ts`: whole-table
+  membership support.
+- `src/predictor/scorers/coordinate-table-types.ts`: strict cell, row, map,
+  cache, and support contracts shared only inside this scorer family.
 - `src/predictor/scorers/drug-dose.ts`: drug/dose/frequency row scorer, including slash-dose order and component-assigned `N mg component` binding.
 - `src/predictor/scorers/exact-answer.ts`: narrow exact full-answer scorer for oral dose prompts.
 - `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
@@ -262,12 +271,14 @@ per-answer sequence. Set-level adjustments are separate ordered processor
 classes. Runtime boundaries now have explicit contracts, and `src/**` contains
 no explicit `any`.
 
-The remaining maintenance debt is to enable TypeScript strictness incrementally
-and decompose the largest specialized modules (`coordinate-table.ts`,
-`numeric.ts`, and `list-evidence.ts`). Each extraction must remain a zero-delta
-change proven on all four splits. OCR fallback remains a separate functional
-iteration because it changes PDF runtime behavior. No runtime dependency was
-added by this refactor.
+TypeScript strictness is now enforced incrementally for the complete
+coordinate-table scope. That scope has zero strict errors, reducing the
+repository-wide strict backlog from 1,347 to 1,130 errors. The remaining
+maintenance debt is led by `numeric.ts`, `classification.ts`, and
+`list-evidence.ts`; the first and third also need thematic decomposition. Each
+extraction must remain a zero-delta change proven on all four splits. OCR
+fallback remains a separate functional iteration because it changes PDF
+runtime behavior. No runtime dependency was added by this refactor.
 
 ## Diagnostic Feature Export
 

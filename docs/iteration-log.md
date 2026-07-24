@@ -1156,3 +1156,38 @@ Iteration 151 technical-debt full regression audit: COMPLETE.
   scorer and processor artifact.
 - OCR fallback was not mixed into this stage: it changes runtime behavior and
   will require its own measured iteration.
+
+Iteration 152 coordinate-table decomposition and strict typing: ZERO-DELTA.
+
+- Replaced the 1,791-line `coordinate-table.ts` implementation with a 22-line
+  compatibility facade.
+- Extracted separate shared row parsing, relational-table,
+  group/multi-cell, whole-table membership, and domain-type modules. The
+  largest resulting file is 803 lines.
+- Added exact cell, row, cache, per-page map, and scorer-input contracts to
+  `coordinate-table-types.ts`; `PredictionContext` now exposes those concrete
+  map types instead of generic `unknown[]` table values.
+- Removed all 217 strict errors from the coordinate-table family. The
+  repository-wide strict backlog fell from 1,347 to 1,130 errors.
+- Added `npm run typecheck:strict:coordinate`, which compiles the complete
+  project in strict mode but fails only for errors inside the migrated scope.
+- Added an architecture test that freezes the public coordinate-table facade,
+  preventing accidental internal exports or compatibility regressions.
+
+Iteration 153 coordinate-table full regression audit: COMPLETE.
+
+- `npm test` passes 100 focused/architecture/leakage tests; 2,771 corpus
+  fixtures remain intentionally skipped and are covered by eval.
+- Normal typecheck and the coordinate-table strict gate pass.
+- Strict comparison against the stage-3 baseline:
+  - train: `1074/1541 = 0.6970`, `0` changed cases;
+  - dev: `415/523 = 0.7935`, `0` changed cases;
+  - holdout: `460/540 = 0.8519`, `0` changed cases;
+  - external: `129/150 = 0.8600`, `0` changed cases.
+- Across all 2,754 keyed cases, selected IDs, selected order, raw scores,
+  calibrated scores, and confidence remain identical.
+- `npm run eval:holdout` exits zero above the `0.80` acceptance threshold.
+- Dataset validation remains unchanged at 46 groups and 2,754 keyed cases,
+  with no duplicate or cross-split records. Node/browser builds pass.
+- A real PDF CLI smoke still selects the source-backed answer `D`;
+  `npm pack --dry-run` succeeds with 146 package files.

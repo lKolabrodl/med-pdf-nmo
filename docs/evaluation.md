@@ -123,6 +123,31 @@ membership are unchanged. OCR fallback was deliberately excluded because it
 would change PDF runtime behavior and requires a separate functional
 evaluation.
 
+## Coordinate-table decomposition zero-delta verification
+
+The third technical-debt stage replaced the 1,791-line coordinate-table
+implementation with a 22-line compatibility facade and separate shared,
+relational, group/multi-cell, membership, and type modules. It also introduced
+an incremental strict-type gate for this complete scorer family.
+
+The refactor removed all `217` strict errors previously attributed to
+`coordinate-table.ts`; repository-wide strict errors fell from `1,347` to
+`1,130`. No scoring formula, threshold, evidence kind, or execution order was
+changed.
+
+| split | cases compared | changed behavior | exact accuracy |
+| --- | ---: | ---: | ---: |
+| train | `1541` | `0` | `0.6970` |
+| dev | `523` | `0` | `0.7935` |
+| holdout regression | `540` | `0` | `0.8519` |
+| external transfer | `150` | `0` | `0.8600` |
+| total | `2754` | `0` | `0.7545` |
+
+For every case, the selected set, selected-id order, raw scores, calibrated
+scores, and confidence remain identical to the stage-3 baseline.
+`npm run eval:holdout` exits zero at `0.8519`, and
+`npm run typecheck:strict:coordinate` reports zero in-scope errors.
+
 Before this runtime round, the existing predictor scored train `1072/1541`,
 dev `415/523`, holdout `459/540`, and external `109/150`. The newly added
 `50-dr-gepatit` group was measured at `45/70` before any rule was selected from

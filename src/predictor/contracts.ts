@@ -3,6 +3,13 @@ import type { PdfChunk } from "../chunk.js";
 import type { ExtractedPdfText, PdfPage } from "../pdf.js";
 import type { PredictorConfig } from "./config.js";
 import type { PdfRuntime } from "./runtime.js";
+import type {
+  CoordinateMultiCellRowsByPage,
+  CoordinateRelationalRowsByPage,
+  CoordinateTableGroupsByPage,
+  CoordinateTableMembershipsByPage,
+  CoordinateTableRowsByPage,
+} from "./scorers/coordinate-table-types.js";
 import type { AnswerMode, AnswerOption, AnswerScore, EvidenceItem } from "./types.js";
 
 export type QuestionIntent = {
@@ -41,11 +48,13 @@ export type PredictionContext = {
   rowSegments: ContextSegment[];
   boundedListSegments: ContextSegment[];
   visualTableColumnTargetsByPage: TableContextByPage;
-  coordinateTableRowsByPage: TableContextByPage;
-  coordinateRelationalRowsByPage: TableContextByPage;
-  coordinateTableGroupsByPage: TableContextByPage;
-  coordinateMultiCellRowsByPage: TableContextByPage;
-  coordinateTableMembershipsByPage: TableContextByPage;
+  coordinateTableRowsByPage: CoordinateTableRowsByPage | null;
+  coordinateRelationalRowsByPage: CoordinateRelationalRowsByPage | null;
+  coordinateTableGroupsByPage: CoordinateTableGroupsByPage | null;
+  coordinateMultiCellRowsByPage: CoordinateMultiCellRowsByPage | null;
+  coordinateTableMembershipsByPage:
+    | CoordinateTableMembershipsByPage
+    | null;
 };
 
 export type StructuralResolutionItem = {

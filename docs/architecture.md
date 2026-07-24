@@ -96,6 +96,12 @@ src/
     │   ├── definition.ts            термины и определения
     │   ├── list-evidence.ts         списки и их локальный контекст
     │   ├── multi-support.ts         поддержка multi-наборов
+    │   ├── coordinate-table.ts      стабильный facade табличных scorer-ов
+    │   ├── coordinate-table-shared.ts
+    │   ├── coordinate-table-relational.ts
+    │   ├── coordinate-table-groups.ts
+    │   ├── coordinate-table-membership.ts
+    │   ├── coordinate-table-types.ts
     │   └── ...                      остальные узкие scorer-модули
     ├── selection.ts                 калибровка и single/multi selection
     ├── confidence-calculator.ts     confidence без изменения selection
@@ -349,6 +355,22 @@ scoring, selection или confidence.
 подходящей границы нет, создается новый модуль; `answer-score.ts` не должен
 снова становиться хранилищем реализаций.
 
+### Coordinate-table boundary
+
+Coordinate-table домен разделен на слои:
+
+- `coordinate-table.ts` — facade с прежним публичным набором экспортов;
+- `coordinate-table-shared.ts` — базовая реконструкция coordinate rows и общие
+  функции сопоставления;
+- `coordinate-table-relational.ts` — многоколоночные relation tables, header
+  propagation и document-local aliases;
+- `coordinate-table-groups.ts` — multi-группы и multi-cell rows;
+- `coordinate-table-membership.ts` — membership по телу явной таблицы;
+- `coordinate-table-types.ts` — точные row/cell/map/support контракты.
+
+Controller-слои и остальные scorer-ы импортируют только facade. Внутренние
+модули не зависят от `PredictorEngine`, selection или eval tooling.
+
 ## Проверка архитектурных изменений
 
 Минимальный набор проверок для refactor-only изменения:
@@ -356,6 +378,7 @@ scoring, selection или confidence.
 ```bash
 npm test
 npm run typecheck
+npm run typecheck:strict:coordinate
 npm run build
 npm run eval
 npm run eval:holdout
@@ -392,19 +415,20 @@ npm run eval:external
 [`error-analysis.md`](./error-analysis.md). `npm run eval:holdout` обязан
 завершаться с кодом `0`; acceptance threshold равен `0.80`.
 
-Класс-рефактор и второй этап технического долга проверены на всех `2 754` keyed
-cases: train, dev, holdout и external сохранили selection, порядок,
-raw/calibrated scores и confidence без единого изменения. Подробные цифры
-находятся в
-[`evaluation.md`](./evaluation.md#technical-debt-refactor-zero-delta-verification).
+Три архитектурных этапа проверены на всех `2 754` keyed cases: train, dev,
+holdout и external сохранили selection, порядок, raw/calibrated scores и
+confidence без единого изменения. Подробные цифры находятся в
+[`evaluation.md`](./evaluation.md#coordinate-table-decomposition-zero-delta-verification).
 
 ## Текущий технический долг
 
-- Поэтапно включить TypeScript `strict`: runtime-границы уже типизированы и в
-  `src/**` нет явных `any`, но implicit-типы в старых scorer-ах еще требуют
-  локальной миграции.
-- Декомпозировать крупные `coordinate-table.ts`, `numeric.ts` и
-  `list-evidence.ts`, сохраняя тематические границы и strict zero-delta.
+- Поэтапно включить TypeScript `strict`: coordinate-table scope уже имеет
+  обязательный strict-gate и `0` ошибок. Во всем проекте остаются `1 130`
+  strict-ошибок вне этого scope.
+- Следующие крупные источники type debt: `numeric.ts` (`158`),
+  `classification.ts` (`104`) и `list-evidence.ts` (`85`).
+- Декомпозировать `numeric.ts` и `list-evidence.ts`, сохраняя тематические
+  границы и strict zero-delta.
 - Добавить OCR fallback как отдельную runtime-возможность; сейчас low-text PDF
   только получает `meta.ocrNeeded`. Это функциональное изменение, поэтому оно
   должно идти отдельной итерацией с собственным eval, а не как refactor-only
