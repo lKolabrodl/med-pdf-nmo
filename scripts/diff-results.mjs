@@ -12,6 +12,14 @@ function sameSet(a, b) {
   return x.every((value, index) => value === y[index]);
 }
 
+function sameArray(a, b) {
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function sameJson(a, b) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
 async function load(path) {
   const parsed = JSON.parse(await fs.readFile(path, "utf8"));
   const map = new Map();
@@ -37,6 +45,22 @@ async function main() {
     }
     if (!sameSet(base.selected, now.selected)) {
       diffs.push({ id, kind: "selected_changed", before: base.selected, after: now.selected });
+      continue;
+    }
+    if (!sameArray(base.selected, now.selected)) {
+      diffs.push({ id, kind: "selected_order_changed", before: base.selected, after: now.selected });
+      continue;
+    }
+    if (!sameJson(base.rawScores, now.rawScores)) {
+      diffs.push({ id, kind: "raw_scores_changed", before: base.rawScores, after: now.rawScores });
+      continue;
+    }
+    if (!sameJson(base.scores, now.scores)) {
+      diffs.push({ id, kind: "scores_changed", before: base.scores, after: now.scores });
+      continue;
+    }
+    if (base.confidence !== now.confidence) {
+      diffs.push({ id, kind: "confidence_changed", before: base.confidence, after: now.confidence });
     }
   }
   for (const id of current.map.keys()) {
@@ -49,13 +73,17 @@ async function main() {
     `baseline ${b.correct}/${b.total} exact=${b.exactAccuracy} | current ${c.correct}/${c.total} exact=${c.exactAccuracy}\n`,
   );
   if (!diffs.length) {
-    process.stdout.write(`ZERO-DELTA: all ${baseline.map.size} cases have identical selected sets\n`);
+    process.stdout.write(
+      `ZERO-DELTA: all ${baseline.map.size} cases have identical selections, raw scores, calibrated scores, and confidence\n`,
+    );
     process.exit(0);
   }
-  process.stdout.write(`DELTA: ${diffs.length} case(s) changed selected set\n`);
+  process.stdout.write(`DELTA: ${diffs.length} case(s) changed behavior\n`);
   for (const diff of diffs.slice(0, 50)) {
-    if (diff.kind === "selected_changed") {
-      process.stdout.write(`  ${diff.id}: [${diff.before}] -> [${diff.after}]\n`);
+    if (Object.hasOwn(diff, "before") || Object.hasOwn(diff, "after")) {
+      process.stdout.write(
+        `  ${diff.id}: ${diff.kind} ${JSON.stringify(diff.before)} -> ${JSON.stringify(diff.after)}\n`,
+      );
     } else {
       process.stdout.write(`  ${diff.id}: ${diff.kind}\n`);
     }

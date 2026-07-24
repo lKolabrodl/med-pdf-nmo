@@ -1083,3 +1083,36 @@ Iteration 147 final diagnostics and validation: COMPLETE.
   `npm run eval:holdout` exits zero above the required `0.80` threshold.
 - `npm run predict -- ...` completed against the real `50-dr-gepatit/doc.pdf`
   and selected `A`; `npm pack --dry-run` succeeded with 100 package files.
+
+Iteration 148 controller architecture refactor: ZERO-DELTA.
+
+- Introduced `PredictorEngine` as the prediction lifecycle controller.
+- Added dedicated runtime, context, structural-resolution, per-answer scoring,
+  post-scoring, selection, confidence, source-context, and result-building
+  classes.
+- Added dependency injection at controller boundaries and focused tests for
+  stage order, independent engine creation, concurrent runtime-cache reuse, and
+  cache clearing.
+- Kept `predict()`, `answerQuestion()`, and `clearPredictorCache()` backward
+  compatible. Added `createPredictorEngine()` for an isolated PDF cache.
+- Reduced `src/predictor.ts` from 4,522 lines to a 65-line composition root.
+  Behavior-frozen inline scorers were moved unchanged to
+  `src/predictor/scorers/legacy.ts`.
+- Strengthened `scripts/diff-results.mjs`: it now compares selection, selected
+  order, raw scores, calibrated scores, and confidence for every case.
+
+Iteration 149 controller refactor full regression audit: COMPLETE.
+
+- Dataset validation: 46 groups, 2,754 keyed cases, unchanged PDF/case
+  fingerprints, no duplicate or cross-split records.
+- Tests: 98 passed; 2,771 corpus fixtures remain intentionally skipped by
+  `npm test` and are covered by the eval commands.
+- `npm run typecheck` and Node/browser builds pass.
+- Strict zero-delta comparison:
+  - train: `1074/1541 = 0.6970`, `0` changed cases;
+  - dev: `415/523 = 0.7935`, `0` changed cases;
+  - holdout: `460/540 = 0.8519`, `0` changed cases;
+  - external: `129/150 = 0.8600`, `0` changed cases.
+- Across all 2,754 keyed cases, selected IDs, their order, raw scores,
+  calibrated scores, and confidence are identical to the pre-refactor
+  baseline.

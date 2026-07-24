@@ -104,6 +104,17 @@ export function selectAnswers(scored: ReturnType<typeof calibrateScores>, mode: 
   return selected.sort((a, b) => scored.findIndex((item) => item.answer.id === a) - scored.findIndex((item) => item.answer.id === b));
 }
 
+/**
+ * Управляет калибровкой и финальным выбором single/multi ответов.
+ */
+export class AnswerSelector {
+  resolve(answerScores: AnswerScore[], mode: AnswerMode, config: PredictorConfig) {
+    const calibrated = calibrateScores(answerScores);
+    const selected = selectAnswers(calibrated, mode, config);
+    return { calibrated, selected };
+  }
+}
+
 function selectSingleAnswer(sorted: ReturnType<typeof calibrateScores>, config: PredictorConfig) {
   const top = sorted[0];
   const second = sorted[1];

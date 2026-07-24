@@ -427,7 +427,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "inline-legacy",
-    module: "src/predictor.ts",
+    module: "src/predictor/scorers/legacy.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "clinical_feature_segment",
@@ -453,7 +453,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
       "roman_stage_segment",
       "answer_ordinal_row",
     ],
-    purpose: "Remaining legacy scorers that still live in the orchestration file.",
+    purpose: "Remaining legacy scorers isolated from the class-based orchestration layer.",
     risk: "mixed",
   },
 ];

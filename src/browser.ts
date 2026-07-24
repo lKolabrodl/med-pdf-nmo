@@ -11,7 +11,14 @@ import { setPdfJsLib } from "./pdf.js";
 
 setPdfJsLib(pdfjsLib);
 
-export { answerQuestion, predict, clearPredictorCache, setPdfJsLib } from "./index.js";
+export {
+  PredictorEngine,
+  answerQuestion,
+  predict,
+  createPredictorEngine,
+  clearPredictorCache,
+  setPdfJsLib,
+} from "./index.js";
 export type {
   AnswerQuestionOptions,
   AnswerQuestionResult,

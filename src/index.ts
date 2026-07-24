@@ -1,4 +1,4 @@
-import { predict, clearPredictorCache } from "./predictor.js";
+import {PredictorEngine, clearPredictorCache, createPredictorEngine, predict} from "./predictor.js";
 import { setPdfJsLib } from "./pdf.js";
 import type {
   AnswerMode,
@@ -16,7 +16,7 @@ import type {
   SourcePage,
 } from "./predictor/types.js";
 
-export { predict, clearPredictorCache, setPdfJsLib };
+export {  PredictorEngine,  predict,  createPredictorEngine,  clearPredictorCache,  setPdfJsLib};
 export type {
   AnswerMode,
   AnswerOption,

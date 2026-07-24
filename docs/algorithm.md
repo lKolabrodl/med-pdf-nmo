@@ -152,12 +152,21 @@ The predictor returns machine-readable JSON:
 ## Code Layout
 
 - `src/cli.ts`: predict CLI and JSON/flag input parsing.
-- `src/predictor.ts`: scoring orchestration, score combination, and the remaining legacy scorers.
+- `src/predictor.ts`: 65-line composition root, backward-compatible functional API, and factory for isolated `PredictorEngine` instances.
+- `src/predictor/engine.ts`: class-based orchestration of the complete prediction lifecycle.
+- `src/predictor/context-builder.ts`: shared question/runtime context and document-level structure preparation.
+- `src/predictor/contracts.ts`: contracts shared by the controller and pipeline classes.
 - `src/predictor/config.ts`: shared predictor thresholds.
 - `src/predictor/constants.ts`: shared stopword/label constants.
-- `src/predictor/runtime.ts`: PDF extraction cache and input answer normalization.
+- `src/predictor/runtime.ts`: `PdfRuntimeStore`, PDF extraction cache, and input answer normalization.
+- `src/predictor/pipelines/structural-resolver-pipeline.ts`: ordered document-level list/recommendation resolver execution.
+- `src/predictor/pipelines/answer-scoring-pipeline.ts`: stable per-answer scoring order and context propagation.
+- `src/predictor/pipelines/score-adjustment-pipeline.ts`: ordered set-level and post-scoring adjustments.
+- `src/predictor/confidence-calculator.ts`: confidence-only policy, separated from answer selection.
+- `src/predictor/result-builder.ts`: stable public result, diagnostics, evidence, and provenance assembly.
 - `src/predictor/scorer-registry.ts`: scorer/evidence-kind registry plus shared structural, broad, noisy, confidence, diagnostics, and feature-export evidence contracts.
 - `src/predictor/text-utils.ts`: shared phrase, token, evidence, proximity, and number helpers.
+- `src/predictor/scorers/legacy.ts`: behavior-frozen legacy scorer collection isolated from orchestration; it is the remaining extraction target for future domain-by-domain refactors.
 - `src/predictor/scorers/search.ts`: anchor, section, phrase, and row-label retrieval scorers.
 - `src/predictor/scorers/abbreviation-alias.ts`: document-specific abbreviation-list alias scorer for multi-answer questions.
 - `src/predictor/scorers/focused.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
@@ -169,8 +178,8 @@ The predictor returns machine-readable JSON:
 - `src/predictor/scorers/drug-dose.ts`: drug/dose/frequency row scorer, including slash-dose order and component-assigned `N mg component` binding.
 - `src/predictor/scorers/exact-answer.ts`: narrow exact full-answer scorer for oral dose prompts.
 - `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
-- `frequency_polarity_segment` / `frequency_polarity_list_item` in `src/predictor.ts`: narrow sentence/list-heading scorers for common/rare/leading frequency wording.
-- `definition_exact_answer_segment` in `src/predictor.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
+- `frequency_polarity_segment` / `frequency_polarity_list_item` in `src/predictor/scorers/legacy.ts`: narrow sentence/list-heading scorers for common/rare/leading frequency wording.
+- `definition_exact_answer_segment` in `src/predictor/scorers/legacy.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
 - `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item, explicit target, and multi recommendation-block scorers, plus the atomic recommendation-segment builder shared by the ordinal set decoder.
 - `src/predictor/scorers/fibrosis-stage.ts`: fibrosis/METAVIR stage row scorer.
 - `src/predictor/scorers/direction.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
@@ -234,13 +243,20 @@ confidence classification, diagnostics category, and feature-export contract in
 one place. New semantics live in separate scorer modules instead of adding more
 dataset-specific branches to selection.
 
-The main remaining maintenance debt is `src/predictor.ts`, which still combines
-several older parsers with orchestration, and the growing
-`coordinate-table.ts`, which contains multiple table representations. A safe
-future refactor is to move indication parsing and relational-table extraction
-into dedicated modules without changing scores, then prove equivalence on all
-four splits. No new dependency was added in this round: PDF.js already exposes
-the physical line and X-coordinate data needed by the accepted approach.
+Prediction lifecycle orchestration is now class-based. `PredictorEngine`
+coordinates dedicated runtime, context, structural-resolution, per-answer
+scoring, post-processing, selection, confidence, and result-building
+controllers. The functional `predict()` and `clearPredictorCache()` exports
+delegate to one default engine, while `createPredictorEngine()` creates an
+independent instance with its own PDF cache.
+
+The previous 4,522-line `src/predictor.ts` is now a 65-line composition root.
+The behavior-frozen inline scorers moved to
+`src/predictor/scorers/legacy.ts`; this keeps the zero-delta refactor separate
+from future semantic changes. The remaining maintenance debt is to split that
+legacy collection by domain and to decompose the growing
+`coordinate-table.ts`. Each extraction should remain a separate zero-delta
+change proven on all four splits. No runtime dependency was added.
 
 ## Diagnostic Feature Export
 

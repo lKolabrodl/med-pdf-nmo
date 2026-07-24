@@ -315,8 +315,10 @@ does not read the expected cardinality or an answer key during inference.
 
 ```js
 import {
+  PredictorEngine,
   predict,
   answerQuestion,
+  createPredictorEngine,
   setPdfJsLib,
   clearPredictorCache
 } from "med-pdf-nmo";
@@ -324,8 +326,16 @@ import {
 
 - `answerQuestion`: convenient high-level API.
 - `predict`: low-level predictor API.
+- `createPredictorEngine`: creates an independent predictor with its own PDF cache.
+- `PredictorEngine`: predictor controller class; normally created through `createPredictorEngine`.
 - `setPdfJsLib`: explicit PDF.js configuration hook.
 - `clearPredictorCache`: clears the runtime predictor cache.
+
+```js
+const engine = createPredictorEngine();
+const result = await engine.predict(input);
+engine.clearCache();
+```
 
 ## CLI
 

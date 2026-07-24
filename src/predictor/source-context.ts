@@ -658,3 +658,17 @@ export function buildPredictionSources({
 
   return { question: questionExcerpt, answers: answerSources, pages: sourcePages };
 }
+
+/**
+ * Управляющий facade presentation-слоя. Он вызывается только после selection и
+ * не участвует в raw score или выборе ответа.
+ */
+export class SourceContextBuilder {
+  empty(answers: AnswerOption[], selected: string[]): PredictionSources {
+    return emptyPredictionSources(answers, selected);
+  }
+
+  build(input: Parameters<typeof buildPredictionSources>[0]): PredictionSources {
+    return buildPredictionSources(input);
+  }
+}

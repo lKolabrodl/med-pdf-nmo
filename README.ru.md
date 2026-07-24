@@ -259,8 +259,10 @@ answer key и не знает ожидаемую мощность множест
 
 ```js
 import {
+  PredictorEngine,
   predict,
   answerQuestion,
+  createPredictorEngine,
   setPdfJsLib,
   clearPredictorCache
 } from "med-pdf-nmo";
@@ -268,8 +270,16 @@ import {
 
 - `answerQuestion`: удобный высокоуровневый API.
 - `predict`: низкоуровневый predictor API.
+- `createPredictorEngine`: создание независимого predictor с собственным PDF-кешем.
+- `PredictorEngine`: управляющий класс predictor; обычно создается через `createPredictorEngine`.
 - `setPdfJsLib`: ручная настройка PDF.js.
 - `clearPredictorCache`: очистка runtime-кеша predictor.
+
+```js
+const engine = createPredictorEngine();
+const result = await engine.predict(input);
+engine.clearCache();
+```
 
 ## CLI
 

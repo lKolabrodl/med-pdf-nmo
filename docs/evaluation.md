@@ -80,6 +80,24 @@ npm run predict -- --input request.json
 | external transfer | `129/150 = 0.8600` | `120/139 = 0.8633` | `9/11 = 0.8182` | `0.8543` |
 | all keyed cases | `2078/2754 = 0.7545` | `1569/1893 = 0.8288` | `509/861 = 0.5912` | — |
 
+## Controller refactor zero-delta verification
+
+The class-based orchestration refactor was compared against pre-refactor JSON
+artifacts case by case with `scripts/diff-results.mjs`. The comparator requires
+identical selected sets, selected-id order, raw scores, calibrated scores, and
+confidence.
+
+| split | cases compared | changed behavior |
+| --- | ---: | ---: |
+| train | `1541` | `0` |
+| dev | `523` | `0` |
+| holdout regression | `540` | `0` |
+| external transfer | `150` | `0` |
+| total | `2754` | `0` |
+
+The refactor therefore leaves all exact metrics unchanged. The holdout command
+continues to exit zero at `0.8519`, above the required `0.80` threshold.
+
 Before this runtime round, the existing predictor scored train `1072/1541`,
 dev `415/523`, holdout `459/540`, and external `109/150`. The newly added
 `50-dr-gepatit` group was measured at `45/70` before any rule was selected from

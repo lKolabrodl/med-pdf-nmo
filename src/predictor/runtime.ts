@@ -2,8 +2,23 @@ import { BM25Index } from "../bm25.js";
 import { buildChunks } from "../chunk.js";
 import { extractPdfText } from "../pdf.js";
 
-const keyedRuntimeCache = new Map();
-const objectRuntimeCache = new WeakMap<object, any>();
+export type PdfRuntime = {
+  pdfText: any;
+  chunks: any[];
+  index: BM25Index;
+};
+
+export type PdfRuntimeStoreDependencies = {
+  extractPdfText: typeof extractPdfText;
+  buildChunks: typeof buildChunks;
+  createIndex(chunks: any[]): BM25Index;
+};
+
+const DEFAULT_RUNTIME_DEPENDENCIES: PdfRuntimeStoreDependencies = {
+  extractPdfText,
+  buildChunks,
+  createIndex: (chunks) => new BM25Index(chunks),
+};
 
 function answerId(index) {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -31,34 +46,65 @@ function objectKey(input) {
 }
 
 /**
- * Создает или переиспользует runtime-состояние PDF для одного предсказания.
+ * Управляет извлеченным PDF-текстом, поисковыми чанками, BM25-индексом и
+ * жизненным циклом runtime-кеша.
  *
- * Runtime содержит извлеченный текст PDF, поисковые чанки и BM25-индекс.
  * Кеширование идет по явному `cacheKey`, URL-строке или identity объекта.
+ * Promise сохраняется сразу, поэтому параллельные запросы к одному PDF также
+ * переиспользуют одну операцию извлечения.
+ */
+export class PdfRuntimeStore {
+  private readonly keyedRuntimeCache = new Map<string, Promise<PdfRuntime>>();
+  private readonly objectRuntimeCache = new WeakMap<object, Promise<PdfRuntime>>();
+
+  constructor(
+    private readonly dependencies: PdfRuntimeStoreDependencies = DEFAULT_RUNTIME_DEPENDENCIES,
+  ) {}
+
+  /**
+   * Создает или переиспользует runtime-состояние одного PDF.
+   */
+  async get(pdfInput, options: any = {}): Promise<PdfRuntime> {
+    const cacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
+    if (cacheKey && this.keyedRuntimeCache.has(cacheKey)) return this.keyedRuntimeCache.get(cacheKey);
+
+    const weakKey = objectKey(pdfInput);
+    if (!cacheKey && weakKey && this.objectRuntimeCache.has(weakKey)) return this.objectRuntimeCache.get(weakKey);
+
+    const runtimePromise = (async () => {
+      const pdfText = await this.dependencies.extractPdfText(pdfInput, options);
+      const chunks = this.dependencies.buildChunks(pdfText);
+      const index = this.dependencies.createIndex(chunks);
+      return { pdfText, chunks, index };
+    })();
+
+    if (cacheKey) this.keyedRuntimeCache.set(cacheKey, runtimePromise);
+    else if (weakKey) this.objectRuntimeCache.set(weakKey, runtimePromise);
+
+    return runtimePromise;
+  }
+
+  /**
+   * Очищает keyed-кеш. WeakMap сохраняет прежнюю семантику: его записи
+   * освобождаются сборщиком мусора вместе с исходными объектами PDF.
+   */
+  clear() {
+    this.keyedRuntimeCache.clear();
+  }
+}
+
+export const defaultPdfRuntimeStore = new PdfRuntimeStore();
+
+/**
+ * Совместимая функциональная обертка над runtime store по умолчанию.
  */
 export async function getPdfRuntime(pdfInput, options: any = {}) {
-  const cacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
-  if (cacheKey && keyedRuntimeCache.has(cacheKey)) return keyedRuntimeCache.get(cacheKey);
-
-  const weakKey = objectKey(pdfInput);
-  if (!cacheKey && weakKey && objectRuntimeCache.has(weakKey)) return objectRuntimeCache.get(weakKey);
-
-  const runtimePromise = (async () => {
-    const pdfText = await extractPdfText(pdfInput, options);
-    const chunks = buildChunks(pdfText);
-    const index = new BM25Index(chunks);
-    return { pdfText, chunks, index };
-  })();
-
-  if (cacheKey) keyedRuntimeCache.set(cacheKey, runtimePromise);
-  else if (weakKey) objectRuntimeCache.set(weakKey, runtimePromise);
-
-  return runtimePromise;
+  return defaultPdfRuntimeStore.get(pdfInput, options);
 }
 
 /**
  * Очищает keyed runtime-кеш PDF.
  */
 export function clearPdfRuntimeCache() {
-  keyedRuntimeCache.clear();
+  defaultPdfRuntimeStore.clear();
 }
