@@ -170,56 +170,63 @@ The predictor returns machine-readable JSON:
 - `src/predictor/result-builder.ts`: stable public result, diagnostics, evidence, and provenance assembly.
 - `src/predictor/scorer-registry.ts`: scorer/evidence-kind registry plus shared structural, broad, noisy, confidence, diagnostics, and feature-export evidence contracts.
 - `src/predictor/text-utils.ts`: shared phrase, token, evidence, proximity, and number helpers.
-- `src/predictor/scorers/answer-score.ts`: behavior-frozen per-answer scoring sequence and evidence aggregation.
-- `src/predictor/scorers/clinical-feature.ts`, `classification.ts`, `search-support.ts`, `list-evidence.ts`, `definition.ts`, `multi-support.ts`, `age-stage.ts`, and `ordinal-utils.ts`: thematic modules extracted from the former legacy scorer collection without changing score arithmetic or evidence order.
-- `src/predictor/scorers/search.ts`: anchor, section, phrase, and row-label retrieval scorers.
-- `src/predictor/scorers/abbreviation-alias.ts`: document-specific abbreviation-list alias scorer for multi-answer questions.
-- `src/predictor/scorers/focused.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
-- `src/predictor/scorers/biomedical-symbols.ts`: Latin biomedical token, gene-symbol, and OCR-lookalike normalization scorers.
-- `src/predictor/scorers/coordinate-table.ts`: stable facade for the
+- Every scorer is a feature folder under `src/predictor/scorers/`; its
+  `index.ts` is the only public module boundary. Larger scorer families keep
+  implementation files inside that folder.
+- `src/predictor/scorers/answer-score/index.ts`: behavior-frozen per-answer scoring sequence and evidence aggregation.
+- `clinical-feature/index.ts`, `classification/index.ts`, `search-support/index.ts`, `list-evidence/index.ts`, `definition/index.ts`, `multi-support/index.ts`, `age-stage/index.ts`, and `ordinal-utils/index.ts`: thematic modules extracted from the former legacy scorer collection without changing score arithmetic or evidence order.
+- `search/index.ts`: anchor, section, phrase, and row-label retrieval scorers.
+- `abbreviation-alias/index.ts`: document-specific abbreviation-list alias scorer for multi-answer questions.
+- `focused/index.ts`: question focus extraction plus local focused-window and line/pair evidence scorers.
+- `biomedical-symbols/index.ts`: Latin biomedical token, gene-symbol, and OCR-lookalike normalization scorers.
+- `coordinate-table/index.ts`: stable facade for the
   coordinate-table scorer family.
-- `src/predictor/scorers/coordinate-table-shared.ts`: base physical-cell and
+- `coordinate-table/shared.ts`: base physical-cell and
   row reconstruction plus common answer/cell matching.
-- `src/predictor/scorers/coordinate-table-relational.ts`: relational
+- `coordinate-table/relational.ts`: relational
   multi-column rows, continued headers, bounded table regions, and
   document-local inline aliases.
-- `src/predictor/scorers/coordinate-table-groups.ts`: multi groups,
+- `coordinate-table/groups.ts`: multi groups,
   inverse-binding, and multi-cell row reconstruction.
-- `src/predictor/scorers/coordinate-table-membership.ts`: whole-table
+- `coordinate-table/membership.ts`: whole-table
   membership support.
-- `src/predictor/scorers/coordinate-table-types.ts`: strict cell, row, map,
+- `coordinate-table/types.ts`: strict cell, row, map,
   cache, and support contracts shared only inside this scorer family.
-- `src/predictor/scorers/drug-dose.ts`: drug/dose/frequency row scorer, including slash-dose order and component-assigned `N mg component` binding.
-- `src/predictor/scorers/exact-answer.ts`: narrow exact full-answer scorer for oral dose prompts.
-- `src/predictor/scorers/frequency.ts`: frequency/duration recommendation scorer.
-- `frequency_polarity_segment` / `frequency_polarity_list_item` in `src/predictor/scorers/clinical-feature.ts`: narrow sentence/list-heading scorers for common/rare/leading frequency wording.
-- `definition_exact_answer_segment` in `src/predictor/scorers/definition.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
-- `src/predictor/scorers/recommendation-item.ts`: narrow recommendation item, explicit target, and multi recommendation-block scorers, plus the atomic recommendation-segment builder shared by the ordinal set decoder.
-- `src/predictor/scorers/fibrosis-stage.ts`: fibrosis/METAVIR stage row scorer.
-- `src/predictor/scorers/direction.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
-- `src/predictor/scorers/numeric.ts`: cloze-gap, condition-pair,
-  exact-numeric/hour option, condition/numeric-condition, count-relation, and
-  subject-bound percentage-clause scorers.
-- `src/predictor/scorers/ocr-fuzzy.ts`: bounded Cyrillic edit-distance and
+- `drug-dose/index.ts`: drug/dose/frequency row scorer, including slash-dose order and component-assigned `N mg component` binding.
+- `exact-answer/index.ts`: narrow exact full-answer scorer for oral dose prompts.
+- `frequency/index.ts`: frequency/duration recommendation scorer.
+- `frequency_polarity_segment` / `frequency_polarity_list_item` in `clinical-feature/index.ts`: narrow sentence/list-heading scorers for common/rare/leading frequency wording.
+- `definition_exact_answer_segment` in `definition/index.ts`: narrow exact-answer scorer for definition fragments with term-label binding and one-edit OCR tolerance.
+- `recommendation-item/index.ts`: narrow recommendation item, explicit target, and multi recommendation-block scorers, plus the atomic recommendation-segment builder shared by the ordinal set decoder.
+- `fibrosis-stage/index.ts`: fibrosis/METAVIR stage row scorer.
+- `direction/index.ts`: polarity, temporal day/night, clinical course manifestation, contrast-cue, modifier-target, and excluded-condition mismatch scorers.
+- `numeric/index.ts`: stable facade for cloze-gap, condition-pair,
+  exact-numeric/hour option, numeric-condition, count-relation, and
+  subject-bound percentage-clause scorers. The implementations live in
+  `numeric/cloze.ts`, `condition-pair.ts`, `exact-option.ts`,
+  `subject-bound.ts`, `numeric-condition.ts`, and `count-relation.ts`;
+  `numeric/dependencies.ts` is a typed adapter boundary around shared
+  legacy helpers and does not change their runtime behavior.
+- `ocr-fuzzy/index.ts`: bounded Cyrillic edit-distance and
   fragmented-token repair. It requires the answer distortion and question
   focus in the same sentence and abstains on colliding option terms.
-- `src/predictor/scorers/option-family.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
-- `src/predictor/scorers/relation-tuple.ts`: bounded subject/role/condition/value/unit resolver for single-answer numeric and whole-interval option families.
-- `src/predictor/scorers/sibling-list.ts`: forward multi membership and inverse single-label binding for bounded sibling bullets.
-- `src/predictor/scorers/ordinal-row-gate.ts`: rejects row-ordinal evidence when the option does not itself begin with the matching stage/type/degree/class label.
-- `src/predictor/scorers/hierarchical-list.ts`: reconstructs bounded
+- `option-family/index.ts`: dense option-family guards for comparator direction and compact abbreviation combinations.
+- `relation-tuple/index.ts`: bounded subject/role/condition/value/unit resolver for single-answer numeric and whole-interval option families.
+- `sibling-list/index.ts`: forward multi membership and inverse single-label binding for bounded sibling bullets.
+- `ordinal-row-gate/index.ts`: rejects row-ordinal evidence when the option does not itself begin with the matching stage/type/degree/class label.
+- `hierarchical-list/index.ts`: reconstructs bounded
   Roman-parent / numbered-child list membership, including compact `I.` labels,
   decimal children, and parent negation polarity.
-- `src/predictor/scorers/recommendation-proposition.ts`: separates recommendation target lookup from polarity/quantifier comparison and uses extractor-proven physical blocks for wrapped bullets.
-- `src/predictor/scorers/recommendation-set.ts`: reconstructs repeated atomic
+- `recommendation-proposition/index.ts`: separates recommendation target lookup from polarity/quantifier comparison and uses extractor-proven physical blocks for wrapped bullets.
+- `recommendation-set/index.ts`: reconstructs repeated atomic
   recommendation targets that share one patient context, with an explicit
   abstention gate for incomplete analyte prompts.
-- `src/predictor/scorers/risk-factor-list.ts`: binds a risk-factor heading to
+- `risk-factor-list/index.ts`: binds a risk-factor heading to
   its child bullets in the stated direction and expands only PDF-local
   abbreviations.
-- `src/predictor/scorers/count-tuple.ts`: clause-local counted-object/value resolver for short integer option families.
-- `src/predictor/scorers/negation-pair.ts`: exact paired-option polarity prototype; present for focused testing but disabled in the default config.
-- `src/predictor/scorers/multi-set.ts`: explicit ordinal range/list decoder for source-coherent multi-answer sets.
+- `count-tuple/index.ts`: clause-local counted-object/value resolver for short integer option families.
+- `negation-pair/index.ts`: exact paired-option polarity prototype; present for focused testing but disabled in the default config.
+- `multi-set/index.ts`: explicit ordinal range/list decoder for source-coherent multi-answer sets.
 - `src/predictor/source-context.ts`: post-selection, display-only question/answer source paragraph builder.
 - `src/predictor/types.ts`: answer/evidence score contracts.
 - `src/predictor/selection.ts`: score calibration and single/multi selection.
@@ -266,17 +273,17 @@ independent instance with its own PDF cache.
 
 The previous 4,522-line `src/predictor.ts` is now a small composition root.
 The former 4,137-line legacy scorer collection has been split into thematic
-modules, while `answer-score.ts` retains only the behavior-significant
+feature folders, while `answer-score/index.ts` retains only the behavior-significant
 per-answer sequence. Set-level adjustments are separate ordered processor
 classes. Runtime boundaries now have explicit contracts, and `src/**` contains
 no explicit `any`.
 
 TypeScript strictness is now enforced incrementally for the complete
-coordinate-table scope. That scope has zero strict errors, reducing the
-repository-wide strict backlog from 1,347 to 1,130 errors. The remaining
-maintenance debt is led by `numeric.ts`, `classification.ts`, and
-`list-evidence.ts`; the first and third also need thematic decomposition. Each
-extraction must remain a zero-delta change proven on all four splits. OCR
+`coordinate-table/` and `numeric/` scopes. Both scopes have zero strict errors,
+reducing the repository-wide strict backlog from 1,347 to 971 errors. The
+remaining maintenance debt is led by `classification/index.ts` and
+`list-evidence/index.ts`; the latter also needs internal thematic decomposition.
+Each extraction must remain a zero-delta change proven on all four splits. OCR
 fallback remains a separate functional iteration because it changes PDF
 runtime behavior. No runtime dependency was added by this refactor.
 

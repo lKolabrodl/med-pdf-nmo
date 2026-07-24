@@ -3,11 +3,11 @@ import type {
   StructuralResolution,
   StructuralResolutionItem,
 } from "../contracts.js";
-import { resolveHierarchicalList } from "../scorers/hierarchical-list.js";
-import { resolveRecommendationProposition } from "../scorers/recommendation-proposition.js";
-import { resolveRepeatedRecommendationSet } from "../scorers/recommendation-set.js";
-import { resolveRiskFactorList } from "../scorers/risk-factor-list.js";
-import { resolveSiblingList } from "../scorers/sibling-list.js";
+import { resolveHierarchicalList } from "../scorers/hierarchical-list/index.js";
+import { resolveRecommendationProposition } from "../scorers/recommendation-proposition/index.js";
+import { resolveRepeatedRecommendationSet } from "../scorers/recommendation-set/index.js";
+import { resolveRiskFactorList } from "../scorers/risk-factor-list/index.js";
+import { resolveSiblingList } from "../scorers/sibling-list/index.js";
 
 /**
  * Запускает document-level resolver-ы и объединяет их корректировки по answer id.

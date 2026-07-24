@@ -1,14 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { BM25Index } from "../src/bm25.js";
-import * as coordinateTable from "../src/predictor/scorers/coordinate-table.js";
-import { createPredictorEngine } from "../src/predictor.js";
-import {
-  PredictorEngine,
-  type PredictorEngineDependencies,
-} from "../src/predictor/engine.js";
-import { ScoreAdjustmentPipeline } from "../src/predictor/pipelines/score-adjustment-pipeline.js";
-import { PdfRuntimeStore } from "../src/predictor/runtime.js";
-import type { ScoreAdjustmentContext } from "../src/predictor/contracts.js";
+import {existsSync, readdirSync} from "node:fs";
+import path from "node:path";
+import {describe, expect, it} from "vitest";
+import {BM25Index} from "../src/bm25.js";
+import * as coordinateTable from "../src/predictor/scorers/coordinate-table/index.js";
+import * as numeric from "../src/predictor/scorers/numeric/index.js";
+import {createPredictorEngine} from "../src/predictor.js";
+import {PredictorEngine, type PredictorEngineDependencies} from "../src/predictor/engine.js";
+import {ScoreAdjustmentPipeline} from "../src/predictor/pipelines/score-adjustment-pipeline.js";
+import {PdfRuntimeStore} from "../src/predictor/runtime.js";
+import type {ScoreAdjustmentContext} from "../src/predictor/contracts.js";
 
 describe("PredictorEngine orchestration", () => {
   it("creates independent default engines", () => {
@@ -225,6 +225,37 @@ describe("coordinate-table facade", () => {
       "hasCoordinateRelationalRowCue",
       "hasCoordinateTableCue",
       "hasCoordinateTableGroupCue",
+    ]);
+  });
+});
+
+describe("scorer feature folders", () => {
+  const scorersRoot = path.join(process.cwd(), "src", "predictor", "scorers");
+  const entries = readdirSync(scorersRoot, {withFileTypes: true});
+
+  it("keeps every scorer behind a feature-folder index", () => {
+    const flatModules = entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith(".ts"))
+      .map((entry) => entry.name);
+    const missingFacades = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => !existsSync(path.join(scorersRoot, name, "index.ts")));
+
+    expect(flatModules).toEqual([]);
+    expect(missingFacades).toEqual([]);
+  });
+
+  it("keeps the numeric public scorer surface explicit", () => {
+    expect(Object.keys(numeric).sort()).toEqual([
+      "bestClozeGapSupport",
+      "bestConditionedNumberSupport",
+      "bestCountRelationSupport",
+      "bestExactHourAliasOptionSupport",
+      "bestExactNumericOptionSupport",
+      "bestNumericConditionSupport",
+      "bestSubjectBoundNumericClauseSupport",
+      "conditionPairAdjustment",
     ]);
   });
 });

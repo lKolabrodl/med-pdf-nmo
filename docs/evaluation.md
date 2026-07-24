@@ -148,6 +148,38 @@ scores, and confidence remain identical to the stage-3 baseline.
 `npm run eval:holdout` exits zero at `0.8519`, and
 `npm run typecheck:strict:coordinate` reports zero in-scope errors.
 
+## Scorer feature-folders and numeric decomposition zero-delta verification
+
+The fourth technical-debt stage moved every first-level scorer into one
+feature folder with a mandatory `index.ts`. There are now 33 scorer feature
+folders and no flat TypeScript modules directly under `scorers/`.
+`coordinate-table/` owns its existing internal files, while the former
+1,296-line numeric implementation is now a six-line facade over focused cloze,
+condition-pair, exact-option, subject-bound, numeric-condition, and
+count-relation modules.
+
+The numeric scope now has zero strict errors and is protected by
+`npm run typecheck:strict:numeric`. Together with removal of the unreachable
+`condition_number_segment` path and its permanent `conditionNumber = null`
+aggregation slots, the repository-wide strict backlog fell from `1,130` to
+`971` errors. The dead-code cleanup changes no executable score because the
+scorer had been explicitly disabled.
+
+The stage-4 baseline was compared with the final artifacts:
+
+| split | cases compared | changed behavior | exact accuracy |
+| --- | ---: | ---: | ---: |
+| train | `1541` | `0` | `0.6970` |
+| dev | `523` | `0` | `0.7935` |
+| holdout regression | `540` | `0` | `0.8519` |
+| external transfer | `150` | `0` | `0.8600` |
+| total | `2754` | `0` | `0.7545` |
+
+For every case, selected IDs, selected order, raw scores, calibrated scores,
+and confidence are identical. `npm run eval:holdout` exits zero above the
+`0.80` acceptance target. Unit/architecture/leakage tests, normal typecheck,
+both scoped strict gates, dataset validation, and Node/browser builds also pass.
+
 Before this runtime round, the existing predictor scored train `1072/1541`,
 dev `415/523`, holdout `459/540`, and external `109/150`. The newly added
 `50-dr-gepatit` group was measured at `45/70` before any rule was selected from

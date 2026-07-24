@@ -3,7 +3,7 @@ import {
   applySingleRelationTupleResolver,
   buildRelationTupleFragments,
   resolveRelationTuple,
-} from "../src/predictor/scorers/relation-tuple.js";
+} from "../src/predictor/scorers/relation-tuple/index.js";
 
 function answers(values: string[]) {
   return values.map((text, index) => ({ id: String.fromCharCode(65 + index), text }));

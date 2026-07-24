@@ -1191,3 +1191,46 @@ Iteration 153 coordinate-table full regression audit: COMPLETE.
   with no duplicate or cross-split records. Node/browser builds pass.
 - A real PDF CLI smoke still selects the source-backed answer `D`;
   `npm pack --dry-run` succeeds with 146 package files.
+
+Iteration 154 scorer feature-folders and numeric decomposition: ZERO-DELTA.
+
+- Replaced the mixed flat `src/predictor/scorers/*.ts` layout with 33
+  feature folders. Every feature has an `index.ts`; no TypeScript file remains
+  directly under `scorers/`.
+- Kept simple scorers in their folder facade and grouped the existing
+  coordinate-table facade, shared parser, relational, group, membership, and
+  type files under `coordinate-table/`.
+- Replaced the 1,296-line `numeric.ts` with a six-line compatibility facade and
+  focused cloze, condition-pair, exact-option, subject-bound,
+  numeric-condition, and count-relation modules.
+- Added exact numeric input/evidence contracts and a typed dependency adapter
+  for legacy normalize/text helpers. `npm run typecheck:strict:numeric` now
+  reports zero in-scope errors.
+- Removed the unreachable `condition_number_segment` implementation and its
+  permanent `conditionNumber = null` score/evidence slots. That experimental
+  scorer had remained disabled since its earlier regression.
+- Repository-wide strict debt fell from `1,130` to `971` errors.
+- Added architecture tests that reject flat scorer modules, require `index.ts`
+  in every feature folder, and freeze the eight-export numeric facade.
+
+Iteration 155 scorer-folder full regression audit: COMPLETE.
+
+- `npm test` passes 102 focused/architecture/leakage tests; 2,771 corpus
+  fixtures remain intentionally skipped and are covered by eval.
+- Normal typecheck, `typecheck:strict:coordinate`,
+  `typecheck:strict:numeric`, dataset validation, and Node/browser builds pass.
+- Dataset integrity remains unchanged: 46 groups, 2,754 keyed cases, no
+  duplicate PDFs, likely duplicate groups, or cross-/same-split duplicate
+  records.
+- Strict comparison against the stage-4 baseline:
+  - train: `1074/1541 = 0.6970`, `0` changed cases;
+  - dev: `415/523 = 0.7935`, `0` changed cases;
+  - holdout: `460/540 = 0.8519`, `0` changed cases;
+  - external: `129/150 = 0.8600`, `0` changed cases.
+- Across all 2,754 keyed cases, selected IDs, selected order, raw scores,
+  calibrated scores, and confidence remain identical.
+- `npm run eval:holdout` exits zero above the required `0.80` threshold.
+- A real CLI smoke against `__test__/50-dr-gepatit/doc.pdf` selects the
+  source-backed answer `D` (`70% крови`) with confidence `0.9193`.
+- `npm pack --dry-run` succeeds with 166 package files, including every
+  feature-folder facade and numeric internal module.

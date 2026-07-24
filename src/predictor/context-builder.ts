@@ -17,9 +17,9 @@ import {
   hasCoordinateRelationalRowCue,
   hasCoordinateTableCue,
   hasCoordinateTableGroupCue,
-} from "./scorers/coordinate-table.js";
-import { questionFocusTokens } from "./scorers/focused.js";
-import { findAnchorSegments, findRowSegments, findSectionSegments } from "./scorers/search.js";
+} from "./scorers/coordinate-table/index.js";
+import { questionFocusTokens } from "./scorers/focused/index.js";
+import { findAnchorSegments, findRowSegments, findSectionSegments } from "./scorers/search/index.js";
 import type { AnswerMode, AnswerOption } from "./types.js";
 
 export type ContextBuilderDependencies = {

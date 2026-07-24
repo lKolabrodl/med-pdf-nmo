@@ -222,7 +222,7 @@ export const DIAGNOSTIC_STRUCTURAL_EVIDENCE_PREFIXES = [
 export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   {
     id: "search",
-    module: "src/predictor/scorers/search.ts",
+    module: "src/predictor/scorers/search/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "question_answer_phrase",
@@ -239,7 +239,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "focused",
-    module: "src/predictor/scorers/focused.ts",
+    module: "src/predictor/scorers/focused/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: ["focused_answer_window", "line_token_line", "line_token_line_pair"],
     purpose: "Question-focus windows and compact line-token evidence.",
@@ -247,7 +247,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "abbreviation-alias",
-    module: "src/predictor/scorers/abbreviation-alias.ts",
+    module: "src/predictor/scorers/abbreviation-alias/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: ["abbreviation_alias_window"],
     purpose: "Document-specific abbreviation list aliases bound to a local question window.",
@@ -255,7 +255,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "multi-set",
-    module: "src/predictor/scorers/multi-set.ts",
+    module: "src/predictor/scorers/multi-set/index.ts",
     modes: ["multi"],
     evidenceKinds: ["explicit_ordinal_range_set"],
     purpose: "Set-level decoding only when one atomic source explicitly encodes an ordinal range.",
@@ -263,7 +263,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "relation-tuple",
-    module: "src/predictor/scorers/relation-tuple.ts",
+    module: "src/predictor/scorers/relation-tuple/index.ts",
     modes: ["single"],
     evidenceKinds: ["relation_tuple_segment"],
     purpose: "Joint numeric option-family resolution from one bounded subject/role/condition tuple.",
@@ -271,7 +271,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "interval-relation-tuple",
-    module: "src/predictor/scorers/relation-tuple.ts",
+    module: "src/predictor/scorers/relation-tuple/index.ts",
     modes: ["single"],
     evidenceKinds: ["interval_relation_tuple_segment"],
     purpose: "Exact whole-interval resolution across dash and from-to notation inside one bounded role scope.",
@@ -279,7 +279,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "clause-local-count-tuple",
-    module: "src/predictor/scorers/count-tuple.ts",
+    module: "src/predictor/scorers/count-tuple/index.ts",
     modes: ["single"],
     evidenceKinds: ["clause_count_tuple_segment"],
     purpose: "Unique digit/number-word count binding to a counted object inside one bounded fragment.",
@@ -287,7 +287,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "negation-pair-clause",
-    module: "src/predictor/scorers/negation-pair.ts",
+    module: "src/predictor/scorers/negation-pair/index.ts",
     modes: ["single"],
     evidenceKinds: ["negation_pair_clause"],
     purpose: "Local polarity binding for one option pair whose lexical skeleton differs only by explicit negation.",
@@ -295,7 +295,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "sibling-list",
-    module: "src/predictor/scorers/sibling-list.ts",
+    module: "src/predictor/scorers/sibling-list/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: ["sibling_list_member", "sibling_list_label", "sibling_list_body"],
     purpose: "Contrastive binding between sibling bullet/row labels and their bounded bodies.",
@@ -303,7 +303,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "hierarchical-list",
-    module: "src/predictor/scorers/hierarchical-list.ts",
+    module: "src/predictor/scorers/hierarchical-list/index.ts",
     modes: ["multi"],
     evidenceKinds: ["hierarchical_list_member"],
     purpose: "Roman parent to numbered-child hierarchy reconstruction with sibling contrast.",
@@ -311,7 +311,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "recommendation-proposition",
-    module: "src/predictor/scorers/recommendation-proposition.ts",
+    module: "src/predictor/scorers/recommendation-proposition/index.ts",
     modes: ["single"],
     evidenceKinds: ["recommendation_proposition"],
     purpose: "Atomic recommendation target, polarity, restriction, and universal-quantifier binding.",
@@ -319,7 +319,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "recommendation-set",
-    module: "src/predictor/scorers/recommendation-set.ts",
+    module: "src/predictor/scorers/recommendation-set/index.ts",
     modes: ["multi"],
     evidenceKinds: ["repeated_recommendation_target"],
     purpose: "Exact-set binding across repeated atomic recommendations that share one patient context.",
@@ -327,7 +327,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "risk-factor-list",
-    module: "src/predictor/scorers/risk-factor-list.ts",
+    module: "src/predictor/scorers/risk-factor-list/index.ts",
     modes: ["multi"],
     evidenceKinds: ["risk_factor_list_member"],
     purpose: "Directed risk-factor header and child-list binding with document abbreviation expansion.",
@@ -335,7 +335,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "coordinate-table",
-    module: "src/predictor/scorers/coordinate-table.ts",
+    module: "src/predictor/scorers/coordinate-table/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "coordinate_table_membership",
@@ -350,7 +350,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "numeric",
-    module: "src/predictor/scorers/numeric.ts",
+    module: "src/predictor/scorers/numeric/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "cloze_gap_local",
@@ -359,7 +359,6 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
       "exact_numeric_option_segment",
       "subject_numeric_clause",
       "exact_hour_alias_segment",
-      "condition_number_segment",
       "numeric_condition_less_than",
       "numeric_condition_more_than",
       "numeric_condition_equal",
@@ -371,7 +370,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "direction",
-    module: "src/predictor/scorers/direction.ts",
+    module: "src/predictor/scorers/direction/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "polarity_match",
@@ -389,7 +388,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "drug-dose",
-    module: "src/predictor/scorers/drug-dose.ts",
+    module: "src/predictor/scorers/drug-dose/index.ts",
     modes: ["single"],
     evidenceKinds: ["drug_dose_segment"],
     purpose: "Drug dose/frequency facts, slash-dose order, and component-assigned dose binding.",
@@ -397,7 +396,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "recommendation-item",
-    module: "src/predictor/scorers/recommendation-item.ts",
+    module: "src/predictor/scorers/recommendation-item/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "explicit_recommendation_target_segment",
@@ -410,7 +409,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "biomedical-symbols",
-    module: "src/predictor/scorers/biomedical-symbols.ts",
+    module: "src/predictor/scorers/biomedical-symbols/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: ["latin_fuzzy_ocr", "gene_sentence_segment"],
     purpose: "Latin biomedical tokens, gene symbols, and OCR-lookalike support.",
@@ -418,7 +417,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "cyrillic-ocr",
-    module: "src/predictor/scorers/ocr-fuzzy.ts",
+    module: "src/predictor/scorers/ocr-fuzzy/index.ts",
     modes: ["single"],
     evidenceKinds: ["cyrillic_ocr_segment"],
     purpose: "Bounded fuzzy matching for long Cyrillic terms damaged by PDF OCR.",
@@ -426,7 +425,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "clinical-feature",
-    module: "src/predictor/scorers/clinical-feature.ts",
+    module: "src/predictor/scorers/clinical-feature/index.ts",
     modes: ["multi"],
     evidenceKinds: [
       "clinical_feature_segment",
@@ -437,7 +436,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "classification",
-    module: "src/predictor/scorers/classification.ts",
+    module: "src/predictor/scorers/classification/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "label_number_proximity",
@@ -453,7 +452,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "search-support",
-    module: "src/predictor/scorers/search-support.ts",
+    module: "src/predictor/scorers/search-support/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "question_prefix_continuation",
@@ -467,7 +466,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "list-evidence",
-    module: "src/predictor/scorers/list-evidence.ts",
+    module: "src/predictor/scorers/list-evidence/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "bounded_list_segment",
@@ -483,7 +482,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "definition",
-    module: "src/predictor/scorers/definition.ts",
+    module: "src/predictor/scorers/definition/index.ts",
     modes: ["single", "multi"],
     evidenceKinds: [
       "term_definition_segment",
@@ -503,7 +502,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "multi-support",
-    module: "src/predictor/scorers/multi-support.ts",
+    module: "src/predictor/scorers/multi-support/index.ts",
     modes: ["multi"],
     evidenceKinds: [
       "short_medical_alias_segment",
@@ -516,7 +515,7 @@ export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   },
   {
     id: "age-stage",
-    module: "src/predictor/scorers/age-stage.ts",
+    module: "src/predictor/scorers/age-stage/index.ts",
     modes: ["single"],
     evidenceKinds: [
       "age_form_segment",

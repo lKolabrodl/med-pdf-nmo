@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildAtomicRecommendationSegments } from "../src/predictor/scorers/recommendation-item.js";
-import { resolveRepeatedRecommendationSet } from "../src/predictor/scorers/recommendation-set.js";
+import { buildAtomicRecommendationSegments } from "../src/predictor/scorers/recommendation-item/index.js";
+import { resolveRepeatedRecommendationSet } from "../src/predictor/scorers/recommendation-set/index.js";
 
 function page(lines: string[]) {
   return { page: 1, lines, text: lines.join("\n") };

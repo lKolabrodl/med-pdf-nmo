@@ -9,7 +9,7 @@ import type {
   CoordinateTableGroupsByPage,
   CoordinateTableMembershipsByPage,
   CoordinateTableRowsByPage,
-} from "./scorers/coordinate-table-types.js";
+} from "./scorers/coordinate-table/types.js";
 import type { AnswerMode, AnswerOption, AnswerScore, EvidenceItem } from "./types.js";
 
 export type QuestionIntent = {

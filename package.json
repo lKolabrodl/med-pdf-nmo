@@ -63,6 +63,7 @@
     "test": "vitest run --maxWorkers=2",
     "typecheck": "tsc --noEmit",
     "typecheck:strict:coordinate": "node scripts/check-strict-scope.mjs src/predictor/scorers/coordinate-table",
+    "typecheck:strict:numeric": "node scripts/check-strict-scope.mjs src/predictor/scorers/numeric",
     "predict": "tsx src/cli.ts",
     "dataset:validate": "tsx scripts/validate-dataset.ts",
     "pdf:audit": "tsx scripts/pdf-noise.ts",

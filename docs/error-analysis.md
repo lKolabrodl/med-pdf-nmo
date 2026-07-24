@@ -228,3 +228,12 @@ The remaining cleanup should be structural:
 Global deletion of evidence grades, appendix references, registry text, or all
 repeated lines is unsafe because each class can carry a real question target or
 an important boundary.
+
+## Scorer-folder refactor impact
+
+The feature-folder and numeric-decomposition stage changed `0` of `2,754`
+case-level results across train, dev, holdout, and external. Therefore the
+residual counts and mutually exclusive error classes above remain current.
+Removing the disabled `condition_number_segment` implementation also produced
+no changed case, confirming that it was dead code rather than an active error
+signal. No new error category was introduced by this architecture-only stage.

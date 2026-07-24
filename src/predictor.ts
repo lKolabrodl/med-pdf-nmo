@@ -17,17 +17,17 @@ import {
 import { StructuralResolverPipeline } from "./predictor/pipelines/structural-resolver-pipeline.js";
 import { PredictionResultBuilder } from "./predictor/result-builder.js";
 import { PdfRuntimeStore } from "./predictor/runtime.js";
-import { scoreAnswer } from "./predictor/scorers/answer-score.js";
+import { scoreAnswer } from "./predictor/scorers/answer-score/index.js";
 import {
   buildVisualTableColumnTargetsByPage,
   hasVisualTableColumnCue,
-} from "./predictor/scorers/classification.js";
-import { questionDefinitionLabel } from "./predictor/scorers/definition.js";
-import { findBoundedListSegments } from "./predictor/scorers/list-evidence.js";
+} from "./predictor/scorers/classification/index.js";
+import { questionDefinitionLabel } from "./predictor/scorers/definition/index.js";
+import { findBoundedListSegments } from "./predictor/scorers/list-evidence/index.js";
 import {
   addSharedMultiSegmentSupport,
   applyGeneSentenceSetSupport,
-} from "./predictor/scorers/multi-support.js";
+} from "./predictor/scorers/multi-support/index.js";
 import { AnswerSelector } from "./predictor/selection.js";
 import type { PredictorInput, PredictorOptions, PredictorResult } from "./predictor/types.js";
 

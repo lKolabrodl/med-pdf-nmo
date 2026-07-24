@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { uniqueTokens } from "../src/normalize.js";
-import { buildSiblingListBlocks, resolveSiblingList } from "../src/predictor/scorers/sibling-list.js";
-import { resolveRiskFactorList } from "../src/predictor/scorers/risk-factor-list.js";
+import { buildSiblingListBlocks, resolveSiblingList } from "../src/predictor/scorers/sibling-list/index.js";
+import { resolveRiskFactorList } from "../src/predictor/scorers/risk-factor-list/index.js";
 
 function pages(lines: string[]) {
   return [

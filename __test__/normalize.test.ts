@@ -4,13 +4,13 @@ import { extractComparatorNumbers, numberCoverage } from "../src/predictor/text-
 import {
   bestCyrillicOcrSupport,
   cyrillicOcrCoverage,
-} from "../src/predictor/scorers/ocr-fuzzy.js";
-import { bestSubjectBoundNumericClauseSupport } from "../src/predictor/scorers/numeric.js";
+} from "../src/predictor/scorers/ocr-fuzzy/index.js";
+import { bestSubjectBoundNumericClauseSupport } from "../src/predictor/scorers/numeric/index.js";
 import {
   bestCoordinateRelationalRowSupport,
   buildCoordinateRelationalRowsByPage,
   hasCoordinateRelationalRowCue,
-} from "../src/predictor/scorers/coordinate-table.js";
+} from "../src/predictor/scorers/coordinate-table/index.js";
 
 describe("normalize", () => {
   it("aligns Greek letter symbols and Russian letter names", () => {

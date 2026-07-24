@@ -90,19 +90,28 @@ src/
     │   ├── score-adjustment-pipeline.ts
     │   └── score-adjustment-processors.ts
     ├── scorers/
-    │   ├── answer-score.ts          композиция per-answer scorer-ов
-    │   ├── classification.ts        тип и структура вопроса
-    │   ├── clinical-feature.ts      клинические признаки
-    │   ├── definition.ts            термины и определения
-    │   ├── list-evidence.ts         списки и их локальный контекст
-    │   ├── multi-support.ts         поддержка multi-наборов
-    │   ├── coordinate-table.ts      стабильный facade табличных scorer-ов
-    │   ├── coordinate-table-shared.ts
-    │   ├── coordinate-table-relational.ts
-    │   ├── coordinate-table-groups.ts
-    │   ├── coordinate-table-membership.ts
-    │   ├── coordinate-table-types.ts
-    │   └── ...                      остальные узкие scorer-модули
+    │   ├── answer-score/
+    │   │   └── index.ts             композиция per-answer scorer-ов
+    │   ├── classification/
+    │   │   └── index.ts             тип и структура вопроса
+    │   ├── coordinate-table/
+    │   │   ├── index.ts             публичный facade
+    │   │   ├── shared.ts
+    │   │   ├── relational.ts
+    │   │   ├── groups.ts
+    │   │   ├── membership.ts
+    │   │   └── types.ts
+    │   ├── numeric/
+    │   │   ├── index.ts             публичный facade
+    │   │   ├── cloze.ts
+    │   │   ├── condition-pair.ts
+    │   │   ├── exact-option.ts
+    │   │   ├── subject-bound.ts
+    │   │   ├── numeric-condition.ts
+    │   │   ├── count-relation.ts
+    │   │   ├── dependencies.ts       typed adapter к shared helpers
+    │   │   └── types.ts
+    │   └── <feature>/index.ts        остальные узкие scorer-модули
     ├── selection.ts                 калибровка и single/multi selection
     ├── confidence-calculator.ts     confidence без изменения selection
     ├── result-builder.ts            сборка публичного результата
@@ -300,7 +309,8 @@ inference от leakage.
 
 ### Новый per-answer scorer
 
-1. Создать тематический модуль в `src/predictor/scorers/`.
+1. Создать feature-папку `src/predictor/scorers/<feature>/` с обязательным
+   публичным `index.ts`.
 2. Добавить узкий gate, описывающий допустимую структуру вопроса и PDF.
 3. Вернуть evidence с отдельным стабильным `kind`.
 4. Зарегистрировать kind в нужных контрактах `scorer-registry.ts`.
@@ -340,36 +350,60 @@ scoring, selection или confidence.
 Общего `legacy.ts` больше нет. Поведенчески замороженная логика разделена по
 назначению:
 
-- `clinical-feature.ts` — признаки, симптомы и клинические характеристики;
-- `classification.ts` — распознавание типа вопроса и структуры вариантов;
-- `search-support.ts` — общая лексическая и condition-aware поисковая поддержка;
-- `list-evidence.ts` — построение и оценка локальных списков;
-- `definition.ts` — label/term/definition-сигналы;
-- `multi-support.ts` — совместная поддержка вариантов multi-вопроса;
-- `age-stage.ts` и `ordinal-utils.ts` — возрастные, стадийные и порядковые
+- `clinical-feature/index.ts` — признаки, симптомы и клинические характеристики;
+- `classification/index.ts` — распознавание типа вопроса и структуры вариантов;
+- `search-support/index.ts` — общая лексическая и condition-aware поисковая
+  поддержка;
+- `list-evidence/index.ts` — построение и оценка локальных списков;
+- `definition/index.ts` — label/term/definition-сигналы;
+- `multi-support/index.ts` — совместная поддержка вариантов multi-вопроса;
+- `age-stage/index.ts` и `ordinal-utils/index.ts` — возрастные, стадийные и порядковые
   отношения;
-- `answer-score.ts` — только фиксированный порядок per-answer scorer-ов и
+- `answer-score/index.ts` — только фиксированный порядок per-answer scorer-ов и
   суммирование их evidence.
 
 Новую семантику нужно добавлять в наиболее узкий тематический модуль. Если
-подходящей границы нет, создается новый модуль; `answer-score.ts` не должен
+подходящей границы нет, создается новая feature-папка; `answer-score/index.ts` не должен
 снова становиться хранилищем реализаций.
+
+Каждый scorer первого уровня является папкой с обязательным `index.ts`.
+Простая feature может хранить реализацию прямо в facade; крупная feature делится
+на внутренние файлы. Внешние потребители импортируют только `index.ts`, а
+архитектурный тест запрещает `.ts`-файлы непосредственно в `scorers/` и
+проверяет наличие facade у каждой feature.
 
 ### Coordinate-table boundary
 
 Coordinate-table домен разделен на слои:
 
-- `coordinate-table.ts` — facade с прежним публичным набором экспортов;
-- `coordinate-table-shared.ts` — базовая реконструкция coordinate rows и общие
+- `coordinate-table/index.ts` — facade с прежним публичным набором экспортов;
+- `coordinate-table/shared.ts` — базовая реконструкция coordinate rows и общие
   функции сопоставления;
-- `coordinate-table-relational.ts` — многоколоночные relation tables, header
+- `coordinate-table/relational.ts` — многоколоночные relation tables, header
   propagation и document-local aliases;
-- `coordinate-table-groups.ts` — multi-группы и multi-cell rows;
-- `coordinate-table-membership.ts` — membership по телу явной таблицы;
-- `coordinate-table-types.ts` — точные row/cell/map/support контракты.
+- `coordinate-table/groups.ts` — multi-группы и multi-cell rows;
+- `coordinate-table/membership.ts` — membership по телу явной таблицы;
+- `coordinate-table/types.ts` — точные row/cell/map/support контракты.
 
 Controller-слои и остальные scorer-ы импортируют только facade. Внутренние
 модули не зависят от `PredictorEngine`, selection или eval tooling.
+
+### Numeric boundary
+
+`numeric/index.ts` сохраняет прежние восемь публичных экспортов. Реализация
+разделена по доказуемому типу числового отношения:
+
+- `cloze.ts` — заполнение пропуска;
+- `condition-pair.ts` — пара «значение — условие»;
+- `exact-option.ts` — точный числовой вариант и hour alias;
+- `subject-bound.ts` — число, привязанное к субъекту в одной clause;
+- `numeric-condition.ts` — marker/condition/number binding;
+- `count-relation.ts` — число, связанное со считаемым объектом;
+- `types.ts` — входные и evidence-контракты;
+- `dependencies.ts` — типизированная граница к общим text/normalize helpers.
+
+Внутренние numeric-файлы не импортируются из pipeline напрямую. Полный scope
+защищен отдельным strict-gate и facade-contract test-ом.
 
 ## Проверка архитектурных изменений
 
@@ -379,6 +413,7 @@ Controller-слои и остальные scorer-ы импортируют то�
 npm test
 npm run typecheck
 npm run typecheck:strict:coordinate
+npm run typecheck:strict:numeric
 npm run build
 npm run eval
 npm run eval:holdout
@@ -415,20 +450,20 @@ npm run eval:external
 [`error-analysis.md`](./error-analysis.md). `npm run eval:holdout` обязан
 завершаться с кодом `0`; acceptance threshold равен `0.80`.
 
-Три архитектурных этапа проверены на всех `2 754` keyed cases: train, dev,
+Архитектурные этапы проверены на всех `2 754` keyed cases: train, dev,
 holdout и external сохранили selection, порядок, raw/calibrated scores и
 confidence без единого изменения. Подробные цифры находятся в
-[`evaluation.md`](./evaluation.md#coordinate-table-decomposition-zero-delta-verification).
+[`evaluation.md`](./evaluation.md).
 
 ## Текущий технический долг
 
-- Поэтапно включить TypeScript `strict`: coordinate-table scope уже имеет
-  обязательный strict-gate и `0` ошибок. Во всем проекте остаются `1 130`
-  strict-ошибок вне этого scope.
-- Следующие крупные источники type debt: `numeric.ts` (`158`),
-  `classification.ts` (`104`) и `list-evidence.ts` (`85`).
-- Декомпозировать `numeric.ts` и `list-evidence.ts`, сохраняя тематические
-  границы и strict zero-delta.
+- Поэтапно включить TypeScript `strict`: `coordinate-table/` и `numeric/`
+  имеют обязательные strict-gates и `0` ошибок. В общем backlog вне этих scope
+  осталось `971` нарушение strict-проверки.
+- Следующие крупные источники type debt: `classification/index.ts` (`104`) и
+  `list-evidence/index.ts` (`85`).
+- Декомпозировать внутренности `list-evidence/`, сохраняя публичный facade,
+  тематические границы и strict zero-delta.
 - Добавить OCR fallback как отдельную runtime-возможность; сейчас low-text PDF
   только получает `meta.ocrNeeded`. Это функциональное изменение, поэтому оно
   должно идти отдельной итерацией с собственным eval, а не как refactor-only

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveRecommendationProposition } from "../src/predictor/scorers/recommendation-proposition.js";
+import { resolveRecommendationProposition } from "../src/predictor/scorers/recommendation-proposition/index.js";
 
 function pages(lines: string[]) {
   return [{ page: 1, lines }];

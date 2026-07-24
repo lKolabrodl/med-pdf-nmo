@@ -1,11 +1,11 @@
-import { latinAnswerTokens } from "../scorers/biomedical-symbols.js";
-import { applyClauseLocalCountTupleResolver } from "../scorers/count-tuple.js";
-import { applyNegationPairClauseResolver } from "../scorers/negation-pair.js";
+import { latinAnswerTokens } from "../scorers/biomedical-symbols/index.js";
+import { applyClauseLocalCountTupleResolver } from "../scorers/count-tuple/index.js";
+import { applyNegationPairClauseResolver } from "../scorers/negation-pair/index.js";
 import {
   applyExplicitOrdinalRangeSetScores,
   resolveExplicitOrdinalRangeSet,
-} from "../scorers/multi-set.js";
-import { applySingleRelationTupleResolver } from "../scorers/relation-tuple.js";
+} from "../scorers/multi-set/index.js";
+import { applySingleRelationTupleResolver } from "../scorers/relation-tuple/index.js";
 import { applyFrozenFeatureRanker } from "../selection.js";
 import type {
   QuestionIntent,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyExplicitOrdinalRangeSetScores, resolveExplicitOrdinalRangeSet } from "../src/predictor/scorers/multi-set.js";
+import { applyExplicitOrdinalRangeSetScores, resolveExplicitOrdinalRangeSet } from "../src/predictor/scorers/multi-set/index.js";
 
 const degreeAnswers = [1, 2, 3, 4].map((value, index) => ({ id: String.fromCharCode(65 + index), text: `${value} степени` }));
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveClauseLocalCountTuple } from "../src/predictor/scorers/count-tuple.js";
+import { resolveClauseLocalCountTuple } from "../src/predictor/scorers/count-tuple/index.js";
 
 function answers(values: string[]) {
   return values.map((text, index) => ({ id: String.fromCharCode(65 + index), text }));

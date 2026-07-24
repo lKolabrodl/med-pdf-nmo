@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveNegationPairClause } from "../src/predictor/scorers/negation-pair.js";
+import { resolveNegationPairClause } from "../src/predictor/scorers/negation-pair/index.js";
 
 function answers(values: string[]) {
   return values.map((text, index) => ({ id: String.fromCharCode(65 + index), text }));

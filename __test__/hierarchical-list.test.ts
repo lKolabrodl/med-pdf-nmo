@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHierarchicalListClusters, resolveHierarchicalList } from "../src/predictor/scorers/hierarchical-list.js";
+import { buildHierarchicalListClusters, resolveHierarchicalList } from "../src/predictor/scorers/hierarchical-list/index.js";
 
 const source = [
   {

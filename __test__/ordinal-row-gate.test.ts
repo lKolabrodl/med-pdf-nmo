@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { answerOrdinalRowApplicable } from "../src/predictor/scorers/ordinal-row-gate.js";
+import { answerOrdinalRowApplicable } from "../src/predictor/scorers/ordinal-row-gate/index.js";
 
 describe("answer ordinal row gate", () => {
   it("accepts options that directly name a classification row", () => {

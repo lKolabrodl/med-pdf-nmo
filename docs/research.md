@@ -345,3 +345,34 @@ provide proof for wrapped list items. A future cleanup pass should prioritize
 coordinate-stable repeated headers/footers and conservative document-internal
 repair of split words; it should not globally delete evidence grades, appendix
 references, registry text, or every repeated line.
+
+## Scorer feature-folder and strict-migration study
+
+Three layouts were considered for the scorer layer:
+
+1. Keep flat files and add barrel exports. This shortens imports but does not
+   create an ownership boundary for tests, types, fixtures, or future helpers.
+2. Put only large scorer families in folders. This reduces the immediate diff,
+   but leaves two competing conventions and makes it unclear when a module
+   should migrate.
+3. Give every scorer one feature folder with a mandatory `index.ts`, while
+   allowing simple features to keep their implementation in that file.
+
+The third layout was selected. It provides one predictable import rule and lets
+large features grow internally without changing their consumers. An architecture
+test now rejects flat `.ts` files directly under `scorers/` and rejects a feature
+folder without `index.ts`.
+
+The 1,296-line numeric scorer was also examined as the next strict-migration
+candidate. Splitting by arbitrary line count would reduce file size but mix
+different evidence contracts. The retained decomposition follows the relation
+proved by each heuristic: cloze, value/condition pair, exact option, subject-bound
+number, conditioned number, and counted-object relation. `numeric/index.ts`
+re-exports exactly the old public surface.
+
+Shared `normalize.ts` and `text-utils.ts` still contain historical non-strict
+signatures. Instead of widening the newly strict numeric files with `any`,
+`numeric/dependencies.ts` gives those existing functions precise local call
+signatures without wrapping or changing their runtime behavior. This removes all
+158 numeric-scope strict errors while keeping the broader strict migration
+incremental.
