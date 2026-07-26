@@ -19,10 +19,38 @@ import {
   tokenSequenceIncludes,
   tokenizeNormalized,
 } from "../../text-utils.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import type {AnswerOption, EvidenceItem} from "../../types.js";
 import { answerOrdinalRowApplicable } from "../ordinal-row-gate/index.js";
 import { ordinalValueToNumber, romanStageVariants } from "../ordinal-utils/index.js";
 
-function questionAgeFormCues(question) {
+type AgeAnswerSupport = {
+  phraseHit: boolean;
+  tokenCoverage: number;
+  numberHit: number;
+};
+
+type AnswerOrdinalKind = "stage" | "degree" | "type" | "class";
+
+type AnswerOrdinalLabel = {
+  kind: AnswerOrdinalKind;
+  cue: string;
+  number: number;
+};
+
+type OrdinalWindowSource = {
+  normalized: string;
+  text: string;
+};
+
+/**
+ * Выделяет текстовые маркеры для вопроса возраста формы.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionAgeFormCues(question: string): string[] | null {
   const normalized = normalizeForSearch(question);
   if (!containsNormalizedPhrase(normalized, "\u0432\u043e\u0437\u0440\u0430\u0441\u0442") || !containsNormalizedPhrase(normalized, "\u0444\u043e\u0440\u043c")) return null;
   if (containsNormalizedPhrase(normalized, "\u043f\u043e\u0434\u0440\u043e\u0441\u0442") || containsNormalizedPhrase(normalized, "\u0432\u0437\u0440\u043e\u0441\u043b")) {
@@ -40,7 +68,15 @@ function questionAgeFormCues(question) {
   return null;
 }
 
-function ageFormLabelIndex(normalized, cues) {
+/**
+ * Находит позицию возраста формы метки в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param cues Значение `cues`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function ageFormLabelIndex(normalized: string, cues: string[]): number {
   if (cues.length === 1) return normalized.indexOf(cues[0]);
   let best = -1;
   const primary = cues[0];
@@ -83,7 +119,16 @@ const AGE_FORM_BOUNDARY_CUES = [
   "\u0432\u0437\u0440\u043e\u0441\u043b",
 ].map((item) => normalizeForSearch(item));
 
-function nextAgeFormBoundary(normalized, labelIndex, cues) {
+/**
+ * Находит структурную границу для следующей границы возраста формы.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param labelIndex Позиция соответствующего элемента в локальной структуре.
+ * @param cues Значение `cues`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nextAgeFormBoundary(normalized: string, labelIndex: number, cues: string[]): number {
   let best = -1;
   for (const cue of AGE_FORM_BOUNDARY_CUES) {
     let index = normalized.indexOf(cue, labelIndex + 8);
@@ -99,7 +144,15 @@ function nextAgeFormBoundary(normalized, labelIndex, cues) {
   return best;
 }
 
-function answerComparatorMismatch(answerText, window) {
+/**
+ * Определяет явное несовпадение варианта ответа компаратора.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param window Значение `window`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function answerComparatorMismatch(answerText: string, window: string): boolean {
   const numbers = extractNumbers(answerText);
   if (!numbers.length) return false;
   const firstNumber = expandNumberToken(numbers[0])[0] ?? numbers[0];
@@ -136,7 +189,16 @@ function answerComparatorMismatch(answerText, window) {
   return false;
 }
 
-function ageAnswerSupport(window, answer, answerTokens) {
+/**
+ * Выполняет внутренний этап `ageAnswerSupport`, подготавливающий возраста варианта ответа поддержки ответа для основного scorer-а.
+ *
+ * @param window Значение `window`, необходимое этому этапу scorer-а.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ageAnswerSupport(window: string, answer: AnswerOption, answerTokens: string[]): AgeAnswerSupport | null {
   if (answerComparatorMismatch(answer.text, window)) return null;
   const phraseHit = answerSearchPhrases(answer.text)
     .map((phrase) => normalizeForSearch(phrase))
@@ -149,7 +211,20 @@ function ageAnswerSupport(window, answer, answerTokens) {
   return { phraseHit, tokenCoverage, numberHit };
 }
 
-export function bestAgeFormSupport({ mode, pages, question, answer, answerTokens }) {
+/**
+ * Ищет локальное совпадение возрастной формы ответа с формой, названной в вопросе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestAgeFormSupport(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const cues = questionAgeFormCues(question);
   if (!cues) return null;
@@ -183,25 +258,48 @@ export function bestAgeFormSupport({ mode, pages, question, answer, answerTokens
   return best;
 }
 
-function questionRomanStage(question) {
+/**
+ * Извлекает из вопроса номер стадии, записанный римскими или арабскими цифрами.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionRomanStage(question: string): string | null {
   const tokens = rawTokens(question);
   const index = tokens.findIndex((token) => token.startsWith("\u0441\u0442\u0430\u0434\u0438"));
   const next = index >= 0 ? tokens[index + 1] : null;
   const previous = index > 0 ? tokens[index - 1] : null;
-  if (/^(?:[ivx]+|\d+)$/iu.test(next ?? "")) return next.toLowerCase();
-  if (/^(?:[ivx]+|\d+)$/iu.test(previous ?? "")) return previous.toLowerCase();
+  if (next && /^(?:[ivx]+|\d+)$/iu.test(next)) return next.toLowerCase();
+  if (previous && /^(?:[ivx]+|\d+)$/iu.test(previous)) return previous.toLowerCase();
   return null;
 }
 
 
-function nextRomanStageRowIndex(normalized, start) {
+/**
+ * Находит позицию следующей границы римского значения стадии строки в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function nextRomanStageRowIndex(normalized: string, start: number): number {
   const pattern = /(?:^|\s)(?:[ivx]{1,5}|\d{1,2})(?:\s|$)/giu;
   pattern.lastIndex = start;
   const match = pattern.exec(normalized);
   return match?.index ?? -1;
 }
 
-function romanStageWindow(normalized, stage) {
+/**
+ * Строит ограниченное локальное окно для римского значения стадии.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param stage Значение `stage`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function romanStageWindow(normalized: string, stage: string): string | null {
   const stageCue = normalizeForSearch("\u0441\u0442\u0430\u0434\u0438\u044f");
   for (const variant of romanStageVariants(stage)) {
     const cues = [normalizeForSearch(`\u0441\u0442\u0430\u0434\u0438\u044f ${variant}`), normalizeForSearch(`${variant} \u0441\u0442\u0430\u0434\u0438\u044f`)];
@@ -248,7 +346,20 @@ function romanStageWindow(normalized, stage) {
   return null;
 }
 
-export function bestRomanStageSupport({ mode, pages, question, answer, answerTokens }) {
+/**
+ * Сопоставляет арабскую или римскую стадию ответа со строкой шкалы в PDF.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestRomanStageSupport(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const stage = questionRomanStage(question);
   if (!stage) return null;
@@ -277,10 +388,17 @@ export function bestRomanStageSupport({ mode, pages, question, answer, answerTok
   return best;
 }
 
-function answerOrdinalLabel(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа порядкового значения метки в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerOrdinalLabel(answerText: string): AnswerOrdinalLabel | null {
   const normalized = normalizeForSearch(answerText);
   const tokens = normalized.split(/\s+/u).filter(Boolean);
-  const kinds = [
+  const kinds: Array<{kind: AnswerOrdinalKind; cue: string}> = [
     { kind: "stage", cue: normalizeForSearch("\u0441\u0442\u0430\u0434\u0438") },
     { kind: "degree", cue: normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d") },
     { kind: "type", cue: normalizeForSearch("\u0442\u0438\u043f") },
@@ -297,19 +415,43 @@ function answerOrdinalLabel(answerText) {
   return { kind: kind.kind, cue: kind.cue, number: [...values][0] };
 }
 
-function ordinalKindCue(kind) {
+/**
+ * Выполняет внутренний этап `ordinalKindCue`, подготавливающий порядкового значения типа маркера для основного scorer-а.
+ *
+ * @param kind Значение `kind`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalKindCue(kind: AnswerOrdinalKind): string {
   if (kind === "stage") return normalizeForSearch("\u0441\u0442\u0430\u0434\u0438");
   if (kind === "degree") return normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d");
   if (kind === "type") return normalizeForSearch("\u0442\u0438\u043f");
   return normalizeForSearch("\u043a\u043b\u0430\u0441\u0441");
 }
 
-function hasOrdinalKindCue(normalized, kind) {
+/**
+ * Проверяет наличие или совместимость порядкового значения типа маркера.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param kind Значение `kind`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasOrdinalKindCue(normalized: string, kind: AnswerOrdinalKind): boolean {
   const cue = ordinalKindCue(kind);
   return new RegExp(`(?:^|\\s)${escapeRegExp(cue)}\\S*(?:\\s|$)`, "iu").test(normalized);
 }
 
-function nextAnswerOrdinalIndex(normalized, start, label) {
+/**
+ * Находит позицию следующей границы варианта ответа порядкового значения в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function nextAnswerOrdinalIndex(normalized: string, start: number, label: AnswerOrdinalLabel): number {
   const cue = ordinalKindCue(label.kind);
   let best = -1;
   for (let number = 1; number <= 10; number += 1) {
@@ -329,24 +471,58 @@ function nextAnswerOrdinalIndex(normalized, start, label) {
   return best;
 }
 
-function nearestTokenBefore(normalized, index) {
+/**
+ * Находит ближайшее значение для ближайшего токена перед целевым фрагментом.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearestTokenBefore(normalized: string, index: number): string {
   const tokens = normalized.slice(0, index).trim().match(/\S+/gu) ?? [];
   return tokens[tokens.length - 1] ?? "";
 }
 
-function nearestTokenAfter(normalized, index, length) {
+/**
+ * Находит ближайшее значение для ближайшего токена `after`.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param index Позиция текущего элемента или совпадения.
+ * @param length Длина проверяемого диапазона или токена.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearestTokenAfter(normalized: string, index: number, length: number): string {
   const tokens = normalized.slice(index + length).trim().match(/\S+/gu) ?? [];
   return tokens[0] ?? "";
 }
 
-function isRomanOneConjunctionMatch(normalized, index, variant) {
+/**
+ * Проверяет совпадение римского значения `one` `conjunction`.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param index Позиция текущего элемента или совпадения.
+ * @param variant Значение `variant`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function isRomanOneConjunctionMatch(normalized: string, index: number, variant: string): boolean {
   if (variant !== "i") return false;
   const before = ordinalValueToNumber(nearestTokenBefore(normalized, index));
   const after = ordinalValueToNumber(nearestTokenAfter(normalized, index, variant.length));
   return Boolean(before && after);
 }
 
-function answerOrdinalRowWindows(source, label) {
+/**
+ * Строит ограниченные локальные окна для варианта ответа порядкового значения строки.
+ *
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function answerOrdinalRowWindows(source: OrdinalWindowSource, label: AnswerOrdinalLabel): string[] {
   const normalized = source.normalized;
   const cue = ordinalKindCue(label.kind);
   const windows = [];
@@ -401,7 +577,15 @@ function answerOrdinalRowWindows(source, label) {
   return windows;
 }
 
-function ordinalRangeIncludesValue(normalized, label) {
+/**
+ * Выполняет внутренний этап `ordinalRangeIncludesValue`, подготавливающий порядкового значения диапазона `includes` значения для основного scorer-а.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalRangeIncludesValue(normalized: string, label: AnswerOrdinalLabel): boolean {
   if (!hasOrdinalKindCue(normalized, label.kind)) return false;
   const number = label.number;
   const digitPatterns = [
@@ -442,14 +626,30 @@ const ANSWER_ORDINAL_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function specificAnswerOrdinalFocusTokens(focusTokens, answerTokens) {
+/**
+ * Выделяет специфичные токены для специфичных варианта ответа порядкового значения фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function specificAnswerOrdinalFocusTokens(focusTokens: string[], answerTokens: string[]): string[] {
   const answerSet = new Set(answerTokens ?? []);
   return (focusTokens ?? []).filter(
     (token) => token.length >= 4 && !/^\d/.test(token) && !answerSet.has(token) && !ANSWER_ORDINAL_GENERIC_FOCUS.has(token),
   );
 }
 
-function orderedFocusPairHits(focusTokens, documentTokens) {
+/**
+ * Определяет локальные совпадения для `ordered` фокуса вопроса пары условий.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param documentTokens Токены анализируемого документа или сегмента.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function orderedFocusPairHits(focusTokens: string[], documentTokens: string[]): number {
   if ((focusTokens?.length ?? 0) < 2 || !documentTokens?.length) return 0;
   const seen = new Set<string>();
   let hits = 0;
@@ -465,7 +665,22 @@ function orderedFocusPairHits(focusTokens, documentTokens) {
   return hits;
 }
 
-export function bestAnswerOrdinalRowSupport({ mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
+/**
+ * Возвращает поддержку прямой порядковой метки ответа из строки классификации.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestAnswerOrdinalRowSupport(
+  {mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const label = answerOrdinalLabel(answer.text);
   if (!label) return null;
   if (!answerOrdinalRowApplicable({ question, answerText: answer.text, label })) return null;

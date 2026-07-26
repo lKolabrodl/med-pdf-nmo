@@ -1,6 +1,12 @@
-import { normalizeForSearch } from "../../../normalize.js";
+import {normalizeForSearch} from "../../../normalize.js";
 
-export function ordinalValueToNumber(value) {
+/**
+ * Преобразует арабское или римское порядковое значение I–X в число.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function ordinalValueToNumber(value: string | number): number | null {
   const normalized = normalizeForSearch(value);
   if (/^\d{1,2}$/.test(normalized)) return Number(normalized);
   const roman = new Map([
@@ -18,7 +24,13 @@ export function ordinalValueToNumber(value) {
   return roman.get(normalized) ?? null;
 }
 
-export function romanStageVariants(stage) {
+/**
+ * Возвращает нормализованные арабскую и римскую формы стадии.
+ *
+ * @param stage Значение `stage`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function romanStageVariants(stage: string): string[] {
   const romanMap = new Map([
     ["1", "i"],
     ["2", "ii"],
@@ -28,8 +40,8 @@ export function romanStageVariants(stage) {
     ["6", "vi"],
   ]);
   const reverse = new Map([...romanMap.entries()].map(([number, roman]) => [roman, number]));
-  const variants = new Set([stage]);
-  if (romanMap.has(stage)) variants.add(romanMap.get(stage));
-  if (reverse.has(stage)) variants.add(reverse.get(stage));
+  const variants = new Set<string>([stage]);
+  if (romanMap.has(stage)) variants.add(romanMap.get(stage)!);
+  if (reverse.has(stage)) variants.add(reverse.get(stage)!);
   return [...variants].map((item) => normalizeForSearch(item));
 }

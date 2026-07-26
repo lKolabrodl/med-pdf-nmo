@@ -1,7 +1,18 @@
-import { extractNumbers, normalizeForSearch } from "../../../normalize.js";
-import { betterEvidence, containsNormalizedPhrase, rawTokens } from "../../text-utils.js";
+import {extractNumbers, normalizeForSearch} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import {betterEvidence, containsNormalizedPhrase, rawTokens} from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
 
-function fibrosisDescriptorKey(text) {
+type FibrosisDescriptor = "none" | "mild" | "moderate" | "marked" | "severe" | "cirrhosis";
+
+/**
+ * Выполняет внутренний этап `fibrosisDescriptorKey`, подготавливающий стадии фиброза описания `key` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function fibrosisDescriptorKey(text: string): FibrosisDescriptor | null {
   const normalized = normalizeForSearch(text);
   const metavir = normalized.match(/^f\s*([0-4])\b/iu);
   if (metavir?.[1] === "0" && containsNormalizedPhrase(normalized, "\u043e\u0442\u0441\u0443\u0442")) return "none";
@@ -20,7 +31,14 @@ function fibrosisDescriptorKey(text) {
   return null;
 }
 
-function questionFibrosisStage(question) {
+/**
+ * Извлекает из вопроса номер стадии фиброза в форме `F1`–`F4`.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionFibrosisStage(question: string): string | null {
   const tokens = rawTokens(question);
   const stageIndex = tokens.findIndex((token) => token.startsWith("\u0441\u0442\u0430\u0434"));
   for (let index = Math.max(0, stageIndex); index >= 0 && index < Math.min(tokens.length, stageIndex + 4); index += 1) {
@@ -32,7 +50,14 @@ function questionFibrosisStage(question) {
   return fStage?.[1] ?? null;
 }
 
-function answerFibrosisStage(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа стадии фиброза стадии в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerFibrosisStage(answerText: string): string | null {
   const normalized = normalizeForSearch(answerText);
   const exact = normalized.match(/^(?:f\s*)?([0-4])$/iu);
   if (exact) return exact[1];
@@ -41,7 +66,14 @@ function answerFibrosisStage(answerText) {
   return stageNumbers.length === 1 ? stageNumbers[0] : null;
 }
 
-function fibrosisRowStage(line) {
+/**
+ * Выполняет внутренний этап `fibrosisRowStage`, подготавливающий стадии фиброза строки стадии для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function fibrosisRowStage(line: string): string | null {
   const normalized = normalizeForSearch(line).trim();
   const numeric = normalized.match(/^([0-4])\s*-/u);
   if (numeric) return numeric[1];
@@ -49,7 +81,17 @@ function fibrosisRowStage(line) {
   return metavir?.[1] ?? null;
 }
 
-export function bestFibrosisStageSupport({ mode, pages, question, answer }) {
+/**
+ * Связывает номер стадии фиброза с её описанием в одной строке шкалы.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestFibrosisStageSupport({mode, pages, question, answer}: AnswerScoringContext): EvidenceItem | null {
   if (mode !== "single") return null;
   const questionNorm = normalizeForSearch(question);
   if (

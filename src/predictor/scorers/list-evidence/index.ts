@@ -14,8 +14,52 @@ import {
   tokenizeNormalized,
 } from "../../text-utils.js";
 import { ordinalValueToNumber, romanStageVariants } from "../ordinal-utils/index.js";
+import type {PdfPage} from "../../../pdf.js";
+import type {AnswerScoringContext, ContextSegment, PredictionContext, QuestionIntent} from "../../contracts.js";
+import type {AnswerMode, EvidenceItem} from "../../types.js";
 
-function boundedListQuestion({ mode, question, intent }) {
+type EvidenceAdjustment = {
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
+
+type SupportAdjustment = EvidenceAdjustment & {
+  support: EvidenceItem | null;
+};
+
+type LineWindowSource = {
+  normalized: string;
+  text: string;
+};
+
+type BoundedListSegment = ContextSegment & {
+  normalized: string;
+  outside: string;
+  anchor: string;
+  priority: number;
+};
+
+type OrdinalKind = "line" | "stage" | "step" | "degree";
+type OrdinalWordKind = "line" | "degree";
+
+type OrdinalTarget = {
+  number: number;
+  kind: OrdinalKind;
+};
+
+type OrdinalForms = Record<OrdinalWordKind, Partial<Record<number, string[]>>>;
+
+/**
+ * Выполняет внутренний этап `boundedListQuestion`, подготавливающий ограниченного списка вопроса для основного scorer-а.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function boundedListQuestion({mode, question, intent}: Pick<PredictionContext, "mode" | "question" | "intent">): boolean {
   if (mode !== "multi" || intent.negative || intent.exception) return false;
   const normalized = normalizeForSearch(question);
   return (
@@ -28,10 +72,17 @@ function boundedListQuestion({ mode, question, intent }) {
   );
 }
 
-function boundedListAnchors(question) {
+/**
+ * Выполняет внутренний этап `boundedListAnchors`, подготавливающий ограниченного списка якорей для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function boundedListAnchors(question: string): string[] {
   const tokens = rawTokens(question);
-  const anchors = new Set();
-  const addTokens = (items) => {
+  const anchors = new Set<string>();
+  const addTokens = (items: string[]): void => {
     const cleaned = items.filter(Boolean).join(" ").trim();
     if (cleaned.length >= 3) anchors.add(cleaned);
   };
@@ -67,7 +118,14 @@ function boundedListAnchors(question) {
   return [...anchors].slice(0, 6);
 }
 
-function boundedListBoundary(after) {
+/**
+ * Находит структурную границу для ограниченного списка.
+ *
+ * @param after Значение `after`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function boundedListBoundary(after: string): number {
   const boundaries = [
     "\u0438 \u0441",
     "\u043e\u0431\u0449\u0438\u0435 \u0441\u0438\u043c\u043f\u0442\u043e\u043c\u044b",
@@ -84,12 +142,28 @@ function boundedListBoundary(after) {
   return Math.max(90, end);
 }
 
-export function findBoundedListSegments(pages, question, topQuestionPages, mode, intent) {
+/**
+ * Находит элементы списка, ограниченного релевантным заголовком и секцией.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param question Исходный текст вопроса.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param mode Режим выбора ответа: `single` или `multi`.
+ * @param intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function findBoundedListSegments(
+  pages: PdfPage[],
+  question: string,
+  topQuestionPages: Set<number>,
+  mode: AnswerMode,
+  intent: QuestionIntent,
+): BoundedListSegment[] {
   if (!boundedListQuestion({ mode, question, intent })) return [];
   const anchors = boundedListAnchors(question);
   if (!anchors.length) return [];
-  const segments = [];
-  const seen = new Set();
+  const segments: BoundedListSegment[] = [];
+  const seen = new Set<string>();
   const triadCue = normalizeForSearch("\u0434\u043e\u043c\u0438\u043d\u0438\u0440\u0443\u0435\u0442 \u0442\u0440\u0438\u0430\u0434\u0430");
 
   for (const page of pages) {
@@ -126,13 +200,25 @@ export function findBoundedListSegments(pages, question, topQuestionPages, mode,
   return segments.sort((a, b) => b.priority - a.priority).slice(0, 40);
 }
 
-export function bestBoundedListSupport({ boundedListSegments, answer, answerTokens }) {
-  if (!boundedListSegments?.length) return { support: null, adjustment: 0, evidence: null };
+/**
+ * Оценивает присутствие ответа внутри или вне найденной границы списка.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.boundedListSegments Ограниченные текстовые сегменты для анализа.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestBoundedListSupport(
+  {boundedListSegments, answer, answerTokens}: AnswerScoringContext,
+): SupportAdjustment {
+  const segments = boundedListSegments as BoundedListSegment[];
+  if (!segments.length) return {support: null, adjustment: 0, evidence: null};
   const answerPhrases = answerSearchPhrases(answer.text).slice(0, 16);
   let bestSupport = null;
   let bestPenalty = null;
 
-  for (const segment of boundedListSegments) {
+  for (const segment of segments) {
     const segmentTokens = tokenizeNormalized(segment.normalized);
     const outsideTokens = tokenizeNormalized(segment.outside);
     const answerCoverage = strictSoftCoverage(answerTokens, segmentTokens);
@@ -166,7 +252,14 @@ export function bestBoundedListSupport({ boundedListSegments, answer, answerToke
   return bestPenalty ? { support: null, adjustment: -4.8, evidence: bestPenalty } : { support: null, adjustment: 0, evidence: null };
 }
 
-function ordinalTarget(question) {
+/**
+ * Выполняет внутренний этап `ordinalTarget`, подготавливающий порядкового значения целевого объекта для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalTarget(question: string): OrdinalTarget | null {
   const normalized = normalizeForSearch(question);
   const hasStage = containsNormalizedPhrase(normalized, "\u044d\u0442\u0430\u043f");
   const hasLine = containsNormalizedPhrase(normalized, "\u043b\u0438\u043d\u0438");
@@ -200,8 +293,16 @@ function ordinalTarget(question) {
   return null;
 }
 
-function ordinalWordForms(number, kind = "line") {
-  const formsByKind = {
+/**
+ * Строит допустимые формы записи для порядкового значения словесной формы.
+ *
+ * @param number Каноническое числовое значение.
+ * @param kind Значение `kind`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function ordinalWordForms(number: number, kind: OrdinalWordKind = "line"): string[] {
+  const formsByKind: OrdinalForms = {
     line: {
       1: [
       "\u043f\u0435\u0440\u0432\u043e\u0439 \u043b\u0438\u043d\u0438\u0438",
@@ -250,7 +351,16 @@ function ordinalWordForms(number, kind = "line") {
   return formsByKind[kind]?.[number] ?? formsByKind.line[number] ?? [];
 }
 
-function nextOrdinalIndex(normalized, start, number) {
+/**
+ * Находит позицию следующей границы порядкового значения в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function nextOrdinalIndex(normalized: string, start: number, number: number): number {
   let best = -1;
   for (const nextNumber of [number + 1, number + 2]) {
     const pattern = new RegExp(`(?:^|[ .])${nextNumber}(?:[ .]|$)`, "u");
@@ -263,7 +373,16 @@ function nextOrdinalIndex(normalized, start, number) {
   return best;
 }
 
-function nextStepOrdinalIndex(normalized, start, number) {
+/**
+ * Находит позицию следующей границы `step` порядкового значения в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function nextStepOrdinalIndex(normalized: string, start: number, number: number): number {
   const stepCue = normalizeForSearch("\u0441\u0442\u0443\u043f\u0435\u043d");
   let best = -1;
   for (const nextNumber of [number + 1, number + 2, number + 3]) {
@@ -278,7 +397,16 @@ function nextStepOrdinalIndex(normalized, start, number) {
 }
 
 
-function nextDegreeOrdinalIndex(normalized, start, number) {
+/**
+ * Находит позицию следующей границы степени порядкового значения в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function nextDegreeOrdinalIndex(normalized: string, start: number, number: number): number {
   const degreeCue = normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d");
   let best = -1;
   for (const nextNumber of [number + 1, number + 2, number + 3]) {
@@ -296,9 +424,17 @@ function nextDegreeOrdinalIndex(normalized, start, number) {
   return best;
 }
 
-function ordinalWindows(source, target) {
+/**
+ * Строит ограниченные локальные окна для порядкового значения.
+ *
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function ordinalWindows(source: LineWindowSource, target: OrdinalTarget): string[] {
   const normalized = source.normalized;
-  const windows = [];
+  const windows: string[] = [];
   if (target.kind === "degree") {
     const degreeCue = normalizeForSearch("\u0441\u0442\u0435\u043f\u0435\u043d");
     for (const variant of romanStageVariants(String(target.number))) {
@@ -388,13 +524,29 @@ function ordinalWindows(source, target) {
   return windows;
 }
 
-function lineOrdinalWindowStart(normalized, index) {
+/**
+ * Выполняет внутренний этап `lineOrdinalWindowStart`, подготавливающий строки порядкового значения локального окна `start` для основного scorer-а.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineOrdinalWindowStart(normalized: string, index: number): number {
   const before = normalized.slice(Math.max(0, index - 80), index);
   if (containsNormalizedPhrase(before, "\u0442\u0435\u0440\u0430\u043f")) return Math.max(0, index - 24);
   return Math.max(0, index - 110);
 }
 
-function abbreviationSupport(answerText, window) {
+/**
+ * Выполняет внутренний этап `abbreviationSupport`, подготавливающий сокращения поддержки ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param window Значение `window`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function abbreviationSupport(answerText: string, window: string): number {
   const answerNorm = normalizeForSearch(answerText);
   if (containsNormalizedPhrase(window, "\u0441\u0433\u043a\u0441") && containsNormalizedPhrase(answerNorm, "\u043a\u043e\u0440\u0442\u0438\u043a\u043e\u0441\u0442\u0435\u0440\u043e\u0438\u0434")) return 1;
   return 0;
@@ -430,11 +582,26 @@ const ORDINAL_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function specificOrdinalFocusTokens(focusTokens) {
+/**
+ * Выделяет специфичные токены для специфичных порядкового значения фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function specificOrdinalFocusTokens(focusTokens: string[]): string[] {
   return (focusTokens ?? []).filter((token) => token.length >= 4 && !/^\d/.test(token) && !ORDINAL_GENERIC_FOCUS.has(token));
 }
 
-function ordinalWindowNegatesSpecificFocus(window, specificTokens) {
+/**
+ * Выполняет внутренний этап `ordinalWindowNegatesSpecificFocus`, подготавливающий порядкового значения локального окна `negates` специфичных фокуса вопроса для основного scorer-а.
+ *
+ * @param window Значение `window`, необходимое этому этапу scorer-а.
+ * @param specificTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalWindowNegatesSpecificFocus(window: string, specificTokens: string[]): boolean {
   for (const token of specificTokens ?? []) {
     if (token.length < 6) continue;
     const stem = token.slice(0, Math.min(8, token.length));
@@ -456,7 +623,21 @@ function ordinalWindowNegatesSpecificFocus(window, specificTokens) {
   return false;
 }
 
-export function bestOrdinalListSupport({ mode, pages, question, answer, answerTokens, focusTokens }) {
+/**
+ * Сопоставляет порядковый номер вопроса с содержимым соответствующего пункта.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestOrdinalListSupport(
+  {mode, pages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const target = ordinalTarget(question);
   if (!target) return null;
   if (mode !== "single" && target.kind !== "degree") return null;
@@ -502,7 +683,14 @@ export function bestOrdinalListSupport({ mode, pages, question, answer, answerTo
   return best;
 }
 
-function typeOrdinalNumber(question) {
+/**
+ * Выполняет внутренний этап `typeOrdinalNumber`, подготавливающий типа порядкового значения числа для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function typeOrdinalNumber(question: string): number | null {
   const normalized = normalizeForSearch(question);
   if (!containsNormalizedPhrase(normalized, "\u0442\u0438\u043f")) return null;
   if (
@@ -517,13 +705,29 @@ function typeOrdinalNumber(question) {
   return null;
 }
 
-function typeOrdinalForms(number) {
+/**
+ * Строит допустимые формы записи для типа порядкового значения.
+ *
+ * @param number Каноническое числовое значение.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function typeOrdinalForms(number: number): string[] {
   if (number === 1) return ["\u043f\u0435\u0440\u0432\u044b\u0439", "\u043f\u0435\u0440\u0432\u043e\u0433\u043e", "\u043f\u0435\u0440\u0432\u044b\u043c"];
   if (number === 2) return ["\u0432\u0442\u043e\u0440\u043e\u0439", "\u0432\u0442\u043e\u0440\u043e\u0433\u043e", "\u0432\u0442\u043e\u0440\u044b\u043c"];
   return ["\u0442\u0440\u0435\u0442\u0438\u0439", "\u0442\u0440\u0435\u0442\u044c\u0435\u0433\u043e", "\u0442\u0440\u0435\u0442\u044c\u0438\u043c"];
 }
 
-function nextTypeOrdinalBoundary(normalized, start, number) {
+/**
+ * Находит структурную границу для следующей границы типа порядкового значения.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nextTypeOrdinalBoundary(normalized: string, start: number, number: number): number {
   let best = -1;
   for (const otherNumber of [1, 2, 3]) {
     if (otherNumber === number) continue;
@@ -544,8 +748,16 @@ function nextTypeOrdinalBoundary(normalized, start, number) {
   return best;
 }
 
-function typeOrdinalWindows(source, number) {
-  const windows = [];
+/**
+ * Строит ограниченные локальные окна для типа порядкового значения.
+ *
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @param number Каноническое числовое значение.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function typeOrdinalWindows(source: LineWindowSource, number: number): string[] {
+  const windows: string[] = [];
   const normalized = source.normalized;
   for (const form of typeOrdinalForms(number)) {
     const formNorm = normalizeForSearch(form);
@@ -567,7 +779,15 @@ function typeOrdinalWindows(source, number) {
   return windows;
 }
 
-function typeAbbreviationSupport(answerText, window) {
+/**
+ * Выполняет внутренний этап `typeAbbreviationSupport`, подготавливающий типа сокращения поддержки ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param window Значение `window`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function typeAbbreviationSupport(answerText: string, window: string): number {
   const answerNorm = normalizeForSearch(answerText);
   let support = 0;
   if (
@@ -601,11 +821,30 @@ const TYPE_ORDINAL_GENERIC_ANSWER = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function typeDistinctiveAnswerTokens(answerTokens) {
+/**
+ * Выделяет специфичные токены для типа различающих варианта ответа.
+ *
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function typeDistinctiveAnswerTokens(answerTokens: string[]): string[] {
   return answerTokens.filter((token) => token.length >= 4 && !TYPE_ORDINAL_GENERIC_ANSWER.has(token));
 }
 
-export function bestTypeOrdinalSupport({ pages, question, answer, answerTokens }) {
+/**
+ * Ищет вариант ответа в строке явно названного типа или стадии.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestTypeOrdinalSupport(
+  {pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const number = typeOrdinalNumber(question);
   if (!number) return null;
   const answerPhrases = answerSearchPhrases(answer.text).slice(0, 16);
@@ -653,7 +892,14 @@ const INDICATION_LABEL_STOPS = new Set(
   ].flatMap((item) => rawTokens(item)),
 );
 
-function questionIndicationLabel(question) {
+/**
+ * Извлекает из вопроса метку показания или противопоказания.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionIndicationLabel(question: string): string | null {
   const tokens = rawTokens(question);
   const indicationIndex = tokens.findIndex((token) => token.startsWith("\u043f\u043e\u043a\u0430\u0437\u0430\u043d"));
   if (indicationIndex < 0) return null;
@@ -680,11 +926,27 @@ function questionIndicationLabel(question) {
   return label.length ? label.join(" ") : null;
 }
 
-function dischargeIndicationLabel(label) {
+/**
+ * Выполняет внутренний этап `dischargeIndicationLabel`, подготавливающий `discharge` показания метки для основного scorer-а.
+ *
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function dischargeIndicationLabel(label: string): boolean {
   return rawTokens(label).some((token) => token.startsWith("\u0432\u044b\u043f\u0438\u0441\u043a"));
 }
 
-function indicationLineMatches(line, labelTokens, strictScope = false) {
+/**
+ * Проверяет совпадение показания строки.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param labelTokens Нормализованные токены соответствующего текста.
+ * @param strictScope Значение `strictScope`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function indicationLineMatches(line: string, labelTokens: string[], strictScope: boolean = false): boolean {
   const lineTokens = tokenizeNormalized(normalizeForSearch(line));
   if (strictScope) {
     const exactHits = tokenHitCount(labelTokens, lineTokens);
@@ -705,7 +967,14 @@ function indicationLineMatches(line, labelTokens, strictScope = false) {
   );
 }
 
-function indicationHeading(line) {
+/**
+ * Выполняет внутренний этап `indicationHeading`, подготавливающий показания `heading` для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function indicationHeading(line: string): boolean {
   const normalized = normalizeForSearch(line);
   if (!containsNormalizedPhrase(normalized, "\u043f\u043e\u043a\u0430\u0437\u0430\u043d")) return false;
   return (
@@ -716,14 +985,23 @@ function indicationHeading(line) {
   );
 }
 
-function buildIndicationSegment(lines, index, extendedScope = false) {
+/**
+ * Строит структуру показания сегмента из переданного локального контекста.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @param extendedScope Значение `extendedScope`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function buildIndicationSegment(lines: string[], index: number, extendedScope: boolean = false): string {
   const current = normalizeForSearch(lines[index]);
   const before = normalizeForSearch(lines.slice(Math.max(0, index - 2), index).join(" "));
   let start = index;
   if (!containsNormalizedPhrase(current, "\u0433\u043e\u0441\u043f\u0438\u0442\u0430\u043b") && containsNormalizedPhrase(before, "\u043e\u0442\u0441\u0443\u0442")) {
     start = Math.max(0, index - 2);
   }
-  const out = [];
+  const out: string[] = [];
   const end = extendedScope ? index + 20 : index + 5;
   for (let cursor = start; cursor < Math.min(lines.length, end); cursor += 1) {
     if (cursor > index) {
@@ -742,7 +1020,20 @@ function buildIndicationSegment(lines, index, extendedScope = false) {
   return out.join(" ");
 }
 
-export function indicationScopeAdjustment({ mode, pages, question, answer, answerTokens }) {
+/**
+ * Штрафует совпадение ответа в соседней, но не целевой секции показаний.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function indicationScopeAdjustment(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceAdjustment {
   if (mode !== "multi") return { adjustment: 0, evidence: null };
   const label = questionIndicationLabel(question);
   if (!label || !dischargeIndicationLabel(label)) return { adjustment: 0, evidence: null };
@@ -782,7 +1073,15 @@ export function indicationScopeAdjustment({ mode, pages, question, answer, answe
   return { adjustment: -8.5, evidence: siblingEvidence };
 }
 
-function indicationSemanticSupport(answerText, segment) {
+/**
+ * Выполняет внутренний этап `indicationSemanticSupport`, подготавливающий показания `semantic` поддержки ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param segment Значение `segment`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function indicationSemanticSupport(answerText: string, segment: string): number {
   const answerNorm = normalizeForSearch(answerText);
   const segmentNorm = normalizeForSearch(segment);
   if (
@@ -805,7 +1104,15 @@ function indicationSemanticSupport(answerText, segment) {
   return 0;
 }
 
-function indicationContrastMismatch(answerText, segment) {
+/**
+ * Определяет явное несовпадение показания контраста.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param segment Значение `segment`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function indicationContrastMismatch(answerText: string, segment: string): boolean {
   const answerNorm = normalizeForSearch(answerText);
   const segmentNorm = normalizeForSearch(segment);
   if (
@@ -819,7 +1126,20 @@ function indicationContrastMismatch(answerText, segment) {
   return false;
 }
 
-export function bestIndicationSegmentSupport({ mode, pages, question, answer, answerTokens }) {
+/**
+ * Ищет ответ внутри сегмента показания, названного в вопросе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestIndicationSegmentSupport(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const label = questionIndicationLabel(question);
   if (!label) return null;
   const strictScope = dischargeIndicationLabel(label);
@@ -857,7 +1177,16 @@ export function bestIndicationSegmentSupport({ mode, pages, question, answer, an
   return best;
 }
 
-export function ageEligibilityAdjustment({ pages, question, answer }) {
+/**
+ * Возвращает штраф при явном возрастном противопоказании выбранного ответа.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function ageEligibilityAdjustment({pages, question, answer}: AnswerScoringContext): EvidenceAdjustment {
   const questionNorm = normalizeForSearch(question);
   const answerNorm = normalizeForSearch(answer.text);
   if (

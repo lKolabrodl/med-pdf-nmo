@@ -1,5 +1,6 @@
-import { coverage, normalizeForSearch, tokenize, uniqueTokens } from "../../../normalize.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
+import {coverage, normalizeForSearch, tokenize, uniqueTokens} from "../../../normalize.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   answerSearchPhrases,
   betterEvidence,
@@ -12,12 +13,42 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
-import { latinAnswerTokens } from "../biomedical-symbols/index.js";
+import type {EvidenceItem} from "../../types.js";
+import {latinAnswerTokens} from "../biomedical-symbols/index.js";
+
+type DirectionPolarity = "up" | "down";
+type TemporalCue = "night" | "day";
+
+type EvidenceAdjustment = {
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
+
+type SupportAdjustment = EvidenceAdjustment & {
+  support: EvidenceItem | null;
+};
+
+type ClinicalCourseCueGroup = {
+  target: string;
+  opposite: string[];
+};
+
+type ClinicalCourseBinding = {
+  type: "target" | "opposite";
+  distance: number;
+};
 
 const POLARITY_UP_CUES = ["повыш", "увелич", "возраста", "рост", "высок", "более", "выше"].map((item) => normalizeForSearch(item));
 const POLARITY_DOWN_CUES = ["сниж", "уменьш", "низк", "менее", "ниже"].map((item) => normalizeForSearch(item));
 
-function detectPolarity(text) {
+/**
+ * Определяет полярности по общим текстовым маркерам.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function detectPolarity(text: string): DirectionPolarity | null {
   const normalized = normalizeForSearch(text);
   if (containsNormalizedPhrase(normalized, "менее высокий") || containsNormalizedPhrase(normalized, "менее высок") || containsNormalizedPhrase(normalized, "ниже")) {
     return "down";
@@ -32,9 +63,17 @@ function detectPolarity(text) {
   return null;
 }
 
-function nearestPolarityBefore(pageNorm, hit) {
+/**
+ * Находит ближайшее значение для ближайшего полярности перед целевым фрагментом.
+ *
+ * @param pageNorm Значение `pageNorm`, необходимое этому этапу scorer-а.
+ * @param hit Значение `hit`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearestPolarityBefore(pageNorm: string, hit: number): DirectionPolarity | null {
   const before = pageNorm.slice(Math.max(0, hit - 140), hit);
-  let best = null;
+  let best: {type: DirectionPolarity; index: number} | null = null;
   for (const cue of POLARITY_UP_CUES) {
     const index = before.lastIndexOf(cue);
     if (index >= 0 && (!best || index > best.index)) best = { type: "up", index };
@@ -49,13 +88,24 @@ function nearestPolarityBefore(pageNorm, hit) {
 /**
  * Сопоставляет направление (рост/снижение) в вопросе и в локальном контексте
  * найденного варианта; штрафует противоположную полярность.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function polarityAdjustment({ pages, topQuestionPages, mode, question, questionTokens, answer }) {
+export function polarityAdjustment(
+  {pages, topQuestionPages, mode, question, questionTokens, answer}: AnswerScoringContext,
+): EvidenceAdjustment {
   const targetPolarity = detectPolarity(question) ?? detectPolarity(answer.text);
   if (!targetPolarity) return { adjustment: 0, evidence: null };
   const phrases = [...new Set([...latinAnswerTokens(answer.text), ...answerSearchPhrases(answer.text)])].slice(0, 14);
-  let bestMatch = null;
-  let bestMismatch = null;
+  let bestMatch: EvidenceItem | null = null;
+  let bestMismatch: EvidenceItem | null = null;
 
   for (const page of pages) {
     if (topQuestionPages?.size && !topQuestionPages.has(page.page)) continue;
@@ -90,14 +140,28 @@ export function polarityAdjustment({ pages, topQuestionPages, mode, question, qu
   return { adjustment: 0, evidence: null };
 }
 
-function temporalCue(text) {
+/**
+ * Извлекает временной маркер из нормализованного текста.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function temporalCue(text: string): TemporalCue | null {
   const normalized = normalizeForSearch(text);
   if (containsNormalizedPhrase(normalized, "ноч")) return "night";
   if (containsNormalizedPhrase(normalized, "днем") || containsNormalizedPhrase(normalized, "днев")) return "day";
   return null;
 }
 
-function nearestTemporalCue(local) {
+/**
+ * Находит ближайший временной маркер перед указанной позицией.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearestTemporalCue(local: string): TemporalCue | null {
   return nearestCueName(local, [
     ["night", ["ноч"]],
     ["day", ["днем", "днев"]],
@@ -107,14 +171,25 @@ function nearestTemporalCue(local) {
 /**
  * Различает дневные и ночные подсказки для single-вопросов и штрафует
  * вариант с противоположным временем суток рядом с фокусом вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function temporalCueAdjustment({ mode, pages, topQuestionPages, answer, focusTokens, questionTokens }) {
+export function temporalCueAdjustment(
+  {mode, pages, topQuestionPages, answer, focusTokens, questionTokens}: AnswerScoringContext,
+): SupportAdjustment {
   if (mode !== "single") return { support: null, adjustment: 0, evidence: null };
   const cue = temporalCue(answer.text);
   if (!cue) return { support: null, adjustment: 0, evidence: null };
   const usefulFocus = focusTokens?.length ? focusTokens : questionTokens;
-  let bestMatch = null;
-  let bestMismatch = null;
+  let bestMatch: EvidenceItem | null = null;
+  let bestMismatch: EvidenceItem | null = null;
 
   for (const page of pages) {
     const topPage = topQuestionPages?.has(page.page);
@@ -156,7 +231,14 @@ const CLINICAL_COURSE_CUE_GROUPS = [
   opposite: group.opposite.map((item) => normalizeForSearch(item)),
 }));
 
-function clinicalCourseCue(question) {
+/**
+ * Выполняет внутренний этап `clinicalCourseCue`, подготавливающий клинического признака течения маркера для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clinicalCourseCue(question: string): ClinicalCourseCueGroup | null {
   const tokens = tokenize(question);
   for (const group of CLINICAL_COURSE_CUE_GROUPS) {
     if (tokens.some((token) => token.startsWith(group.target))) return group;
@@ -164,7 +246,14 @@ function clinicalCourseCue(question) {
   return null;
 }
 
-function clinicalCourseRelationQuestion(question) {
+/**
+ * Выполняет внутренний этап `clinicalCourseRelationQuestion`, подготавливающий клинического признака течения связанного отношения вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clinicalCourseRelationQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   if (containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") || containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u043d\u0430\u0447")) {
     return false;
@@ -194,7 +283,15 @@ const CLINICAL_COURSE_GENERIC_BINDING_TOKENS = new Set(
   ].flatMap((item) => tokenize(item)),
 );
 
-function clinicalCourseBindingTokens(answerTokens, questionTokens) {
+/**
+ * Выделяет специфичные токены для клинического признака течения `binding`.
+ *
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @param questionTokens Нормализованные токены вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function clinicalCourseBindingTokens(answerTokens: string[], questionTokens: string[]): string[] {
   const questionSet = new Set(questionTokens);
   return answerTokens.filter(
     (token) =>
@@ -206,8 +303,21 @@ function clinicalCourseBindingTokens(answerTokens, questionTokens) {
   );
 }
 
-function nearestClinicalCourseCueBeforeAnswer(tokens, bindingTokens, cueGroup) {
-  let best = null;
+/**
+ * Находит ближайшее значение для ближайшего клинического признака течения маркера перед целевым фрагментом варианта ответа.
+ *
+ * @param tokens Набор токенов для локального сопоставления.
+ * @param bindingTokens Нормализованные токены соответствующего текста.
+ * @param cueGroup Значение `cueGroup`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearestClinicalCourseCueBeforeAnswer(
+  tokens: string[],
+  bindingTokens: string[],
+  cueGroup: ClinicalCourseCueGroup,
+): ClinicalCourseBinding | null {
+  let best: ClinicalCourseBinding | null = null;
   if (!bindingTokens.length) return null;
 
   for (let index = 0; index < tokens.length; index += 1) {
@@ -217,7 +327,7 @@ function nearestClinicalCourseCueBeforeAnswer(tokens, bindingTokens, cueGroup) {
     for (let cursor = index - 1; cursor >= start; cursor -= 1) {
       const beforeToken = tokens[cursor];
       const distance = index - cursor;
-      let type = null;
+      let type: ClinicalCourseBinding["type"] | null = null;
       if (beforeToken.startsWith(cueGroup.target)) type = "target";
       else if (cueGroup.opposite.some((opposite) => beforeToken.startsWith(opposite))) type = "opposite";
       if (!type) continue;
@@ -232,8 +342,21 @@ function nearestClinicalCourseCueBeforeAnswer(tokens, bindingTokens, cueGroup) {
 /**
  * Привязывает вариант ответа к ближайшему маркеру клинического течения
  * (`острый`/`хронический`) внутри локального фрагмента PDF.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function clinicalCourseCueAdjustment({ mode, pages, topQuestionPages, question, questionTokens, focusTokens, answer, answerTokens }) {
+export function clinicalCourseCueAdjustment(
+  {mode, pages, topQuestionPages, question, questionTokens, focusTokens, answer, answerTokens}: AnswerScoringContext,
+): SupportAdjustment {
   if (mode !== "single") return { support: null, adjustment: 0, evidence: null };
   if (!clinicalCourseRelationQuestion(question)) return { support: null, adjustment: 0, evidence: null };
   const cueGroup = clinicalCourseCue(question);
@@ -241,8 +364,8 @@ export function clinicalCourseCueAdjustment({ mode, pages, topQuestionPages, que
   const bindingTokens = clinicalCourseBindingTokens(answerTokens, questionTokens);
   if (!bindingTokens.length) return { support: null, adjustment: 0, evidence: null };
   const usefulFocus = focusTokens?.length ? focusTokens : questionTokens;
-  let bestMatch = null;
-  let bestMismatch = null;
+  let bestMatch: EvidenceItem | null = null;
+  let bestMismatch: EvidenceItem | null = null;
 
   for (const page of pages) {
     const topPage = topQuestionPages?.has(page.page);
@@ -317,7 +440,15 @@ const MODIFIER_TARGET_CONTRAST_GROUPS = [
   opposite: new Set(tokenize(group.opposite)),
 }));
 
-function modifierTargetContrastMismatch(answerText, sourceText) {
+/**
+ * Определяет явное несовпадение модификатора целевого объекта контраста.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function modifierTargetContrastMismatch(answerText: string, sourceText: string): boolean {
   const answerTokens = tokenize(answerText);
   const sourceTokens = tokenize(sourceText);
   for (const group of MODIFIER_TARGET_CONTRAST_GROUPS) {
@@ -340,8 +471,17 @@ function modifierTargetContrastMismatch(answerText, sourceText) {
  * Штрафует multi-вариант, у которого сильнейшее evidence содержит
  * противоположную подсказку (верх/низ, рост/снижение, порядок дистальный/
  * проксимальный) либо противоположный модификатор у того же целевого слова.
+ *
+ * @param params1 Контекстные параметры текущего scorer-этапа.
+ * @param params1.mode Режим выбора ответа: `single` или `multi`.
+ * @param params1.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param evidence Evidence, уже найденные для варианта ответа.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function contrastCueMismatchAdjustment({ mode, answer }, evidence) {
+export function contrastCueMismatchAdjustment(
+  {mode, answer}: AnswerScoringContext,
+  evidence: EvidenceItem[],
+): EvidenceAdjustment {
   if (mode !== "multi" || !evidence?.length) return { adjustment: 0, evidence: null };
   const answerNorm = normalizeForSearch(answer.text);
   const group = CONTRAST_CUE_GROUPS.find((item) => item.answer.some((cue) => answerNorm.includes(cue)));
@@ -405,8 +545,12 @@ const CONDITION_POSITIVE_CUES = [
 /**
  * Достает короткое условие из формулировок вида `без цирроза`, чтобы отличать
  * рекомендации для исключенной подгруппы от рекомендаций для этой подгруппы.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function excludedConditionTokens(question) {
+function excludedConditionTokens(question: string): string[] {
   const normalized = normalizeForSearch(question);
   if (
     containsNormalizedPhrase(normalized, "без проведен") ||
@@ -417,7 +561,7 @@ function excludedConditionTokens(question) {
   }
   const tokens = tokenize(question);
   const withoutCue = normalizeForSearch("без");
-  const out = [];
+  const out: string[] = [];
   for (let index = 0; index < tokens.length - 1; index += 1) {
     if (tokens[index] !== withoutCue) continue;
     const next = tokens.slice(index + 1, index + 4).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token));
@@ -429,7 +573,20 @@ function excludedConditionTokens(question) {
   return [...new Set(out)];
 }
 
-function evidenceHasExcludedConditionBeforeAnswer(answerText, evidenceText, conditionTokens) {
+/**
+ * Проверяет, стоит ли исключённое условие перед вариантом ответа в evidence.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param evidenceText Исходный текст соответствующего объекта.
+ * @param conditionTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function evidenceHasExcludedConditionBeforeAnswer(
+  answerText: string,
+  evidenceText: string,
+  conditionTokens: string[],
+): boolean {
   if (!conditionTokens.length || !evidenceText) return false;
   const normalized = normalizeForSearch(evidenceText);
   const phrases = answerSearchPhrases(answerText)
@@ -448,8 +605,18 @@ function evidenceHasExcludedConditionBeforeAnswer(answerText, evidenceText, cond
 /**
  * Штрафует вариант, чье локальное evidence относится к исключенной подгруппе
  * (`при X` рядом с фразой ответа), когда вопрос явно про `без X`.
+ *
+ * @param params1 Контекстные параметры текущего scorer-этапа.
+ * @param params1.mode Режим выбора ответа: `single` или `multi`.
+ * @param params1.question Исходный текст вопроса.
+ * @param params1.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param evidence Evidence, уже найденные для варианта ответа.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function excludedConditionMismatchAdjustment({ mode, question, answer }, evidence) {
+export function excludedConditionMismatchAdjustment(
+  {mode, question, answer}: AnswerScoringContext,
+  evidence: EvidenceItem[],
+): EvidenceAdjustment {
   const conditionTokens = excludedConditionTokens(question);
   if (!conditionTokens.length) return { adjustment: 0, evidence: null };
 

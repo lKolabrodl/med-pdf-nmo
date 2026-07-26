@@ -1,5 +1,7 @@
-import { coverage, normalizeForSearch, normalizeText, tokenize, uniqueTokens } from "../../../normalize.js";
-import { SECTION_GENERIC_TOKENS } from "../../constants.js";
+import {coverage, normalizeForSearch, normalizeText, tokenize, uniqueTokens} from "../../../normalize.js";
+import type {PdfPage} from "../../../pdf.js";
+import {SECTION_GENERIC_TOKENS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   answerHasQuestionNumbers,
   answerSearchPhrases,
@@ -17,11 +19,34 @@ import {
   tokenizeNormalized,
   tokenSequenceIncludes,
 } from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
+
+type SearchSegment = {
+  page: number;
+  text: string;
+  normalized: string;
+  anchor: string;
+};
+
+type RowSegment = {
+  page: number;
+  text: string;
+  normalized: string;
+  cueScore: number;
+  cues: string[];
+};
 
 const ROW_LABEL_RE =
   /(локализован[а-яa-z0-9-]*|генерализован[а-яa-z0-9-]*|редк[а-яa-z0-9-]*|перинатальн[а-яa-z0-9-]*|ранн[а-яa-z0-9-]*\s+младенческ[а-яa-z0-9-]*|поздн[а-яa-z0-9-]*\s+младенческ[а-яa-z0-9-]*|ювенильн[а-яa-z0-9-]*|подростков[а-яa-z0-9-]*|взросл[а-яa-z0-9-]*|положительн[а-яa-z0-9-]*|сомнительн[а-яa-z0-9-]*|отрицательн[а-яa-z0-9-]*|планов[а-яa-z0-9-]*|экстренн[а-яa-z0-9-]*|неотложн[а-яa-z0-9-]*|перв[а-яa-z0-9-]*\s+лини[ияею]|втор[а-яa-z0-9-]*\s+лини[ияею]|треть[а-яa-z0-9-]*\s+лини[ияею]|не\s+имеющ[а-яa-z0-9-]*\s+фактор[а-яa-z0-9-]*\s+риска|при\s+наличи[а-яa-z0-9-]*\s+фактор[а-яa-z0-9-]*\s+риска)/giu;
 
-function questionAnchorPhrases(question) {
+/**
+ * Строит набор поисковых фраз для вопроса якоря.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function questionAnchorPhrases(question: string): string[] {
   const raw = normalizeText(question);
   const normalized = normalizeForSearch(question);
   const phrases = new Set([raw, normalized]);
@@ -48,9 +73,16 @@ function questionAnchorPhrases(question) {
   return [...phrases].filter((phrase) => phrase.length >= 4);
 }
 
-export function findAnchorSegments(pages, question) {
+/**
+ * Строит компактные сегменты после точного или близкого якоря вопроса.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function findAnchorSegments(pages: PdfPage[], question: string): SearchSegment[] {
   const anchors = questionAnchorPhrases(question);
-  const segments = [];
+  const segments: SearchSegment[] = [];
   for (const page of pages) {
     for (const anchor of anchors) {
       const normalizedAnchor = normalizeForSearch(anchor);
@@ -75,18 +107,32 @@ export function findAnchorSegments(pages, question) {
   return segments.slice(0, 12);
 }
 
-function questionSectionAnchor(question) {
+/**
+ * Извлекает из вопроса фразу-якорь для поиска соответствующей секции PDF.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionSectionAnchor(question: string): string | null {
   const raw = normalizeText(question);
   const match = raw.match(/по\s+([а-яa-z0-9 -]{4,64}?)(?:\s+выдел|\s+отно|\s+явля|\s+различ|\s+классифиц|$)/u);
   if (!match?.[1]) return null;
   return `по ${match[1].trim()}`;
 }
 
-export function findSectionSegments(pages, question) {
+/**
+ * Находит ограниченные содержанием вопроса секции и их элементы списка.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function findSectionSegments(pages: PdfPage[], question: string): SearchSegment[] {
   const anchor = questionSectionAnchor(question);
   if (!anchor) return [];
   const anchorNorm = normalizeForSearch(anchor);
-  const segments = [];
+  const segments: SearchSegment[] = [];
   for (const page of pages) {
     const lines = page.lines ?? [];
     for (let index = 0; index < lines.length; index += 1) {
@@ -111,7 +157,14 @@ export function findSectionSegments(pages, question) {
   return segments.slice(0, 8);
 }
 
-function findAnchorBoundary(normalizedAfter) {
+/**
+ * Находит структурную границу для якоря.
+ *
+ * @param normalizedAfter Значение `normalizedAfter`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function findAnchorBoundary(normalizedAfter: string): number {
   let boundary = Math.min(normalizedAfter.length, 750);
   for (let pos = normalizedAfter.indexOf(" k ", 50); pos >= 0; pos = normalizedAfter.indexOf(" k ", pos + 3)) {
     const local = normalizedAfter.slice(pos, pos + 170);
@@ -128,11 +181,25 @@ function findAnchorBoundary(normalizedAfter) {
   return Math.max(80, boundary);
 }
 
-export function bestPhraseSupport({ pages, question, answer, questionTokens, answerTokens, intent }) {
+/**
+ * Возвращает лучшее локальное лексическое совпадение вопроса и ответа.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestPhraseSupport(
+  {pages, question, answer, questionTokens, answerTokens, intent}: AnswerScoringContext,
+): EvidenceItem | null {
   const answerPhrases = answerSearchPhrases(answer.text);
   const joinedPhrases = answerPhrases.map((phrase) => `${question} ${phrase}`);
   const normalizedQuestion = normalizeForSearch(question);
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const pageNorm = page.normalized;
@@ -233,14 +300,24 @@ export function bestPhraseSupport({ pages, question, answer, questionTokens, ans
  * дословно цитирует только описание. Обычный поиск после вопроса в таком случае
  * может выбрать следующий заголовок, поэтому этот scorer ищет вариант ответа
  * непосредственно перед найденным фрагментом вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestPrecedingQuestionLabelSupport({ mode, pages, question, answer, answerTokens }) {
+export function bestPrecedingQuestionLabelSupport(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const normalizedQuestion = normalizeForSearch(question);
   if (normalizedQuestion.length < 90) return null;
 
   const answerPhrases = answerSearchPhrases(answer.text);
-  let best = null;
+  let best: EvidenceItem | null = null;
   for (const page of pages) {
     const pageNorm = page.normalized;
     let qStart = 0;
@@ -252,7 +329,7 @@ export function bestPrecedingQuestionLabelSupport({ mode, pages, question, answe
         const normalizedAnswer = normalizeForSearch(phrase);
         if (!normalizedAnswer || normalizedAnswer.length < 5) continue;
         const answerIndex = before.lastIndexOf(normalizedAnswer);
-        let tailTokens = [];
+        let tailTokens: string[] = [];
         if (answerIndex >= 0) {
           const tail = before.slice(answerIndex + normalizedAnswer.length).trim();
           tailTokens = tokenize(tail, { keepStopwords: true });
@@ -275,11 +352,22 @@ export function bestPrecedingQuestionLabelSupport({ mode, pages, question, answe
   return best;
 }
 
-export function bestAnchorSupport({ anchorSegments, answer, answerTokens }) {
+/**
+ * Оценивает ответ внутри заранее найденного question-anchor сегмента.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.anchorSegments Ограниченные текстовые сегменты для анализа.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestAnchorSupport(
+  {anchorSegments, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!anchorSegments?.length) return null;
   const answerPhrases = answerSearchPhrases(answer.text);
-  let best = null;
-  for (const segment of anchorSegments) {
+  let best: EvidenceItem | null = null;
+  for (const segment of anchorSegments as SearchSegment[]) {
     let phraseHit = false;
     for (const phrase of answerPhrases) {
       const normalizedPhrase = normalizeForSearch(phrase);
@@ -305,12 +393,23 @@ export function bestAnchorSupport({ anchorSegments, answer, answerTokens }) {
   return best;
 }
 
-export function bestSectionSupport({ sectionSegments, answer, answerTokens }) {
+/**
+ * Оценивает ответ внутри списка целевой секции.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.sectionSegments Ограниченные текстовые сегменты для анализа.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestSectionSupport(
+  {sectionSegments, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!sectionSegments?.length) return null;
   const answerPhrases = answerSearchPhrases(answer.text);
   const distinctiveTokens = answerTokens.filter((token) => !SECTION_GENERIC_TOKENS.has(token));
-  let best = null;
-  for (const segment of sectionSegments) {
+  let best: EvidenceItem | null = null;
+  for (const segment of sectionSegments as SearchSegment[]) {
     let phraseHit = false;
     for (const phrase of answerPhrases) {
       const normalizedPhrase = normalizeForSearch(phrase);
@@ -336,10 +435,17 @@ export function bestSectionSupport({ sectionSegments, answer, answerTokens }) {
   return best;
 }
 
-function questionRowCues(question) {
+/**
+ * Выделяет текстовые маркеры для вопроса строки.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionRowCues(question: string): string[] {
   const raw = normalizeText(question);
-  const cues = new Set();
-  const add = (value) => {
+  const cues = new Set<string>();
+  const add = (value: string): void => {
     const cleaned = normalizeText(value).replace(/\s+/g, " ").trim();
     if (cleaned.length >= 3) cues.add(cleaned);
   };
@@ -363,7 +469,15 @@ function questionRowCues(question) {
   return [...cues].slice(0, 8);
 }
 
-function rowCueMatch(line, cues) {
+/**
+ * Проверяет совпадение строки маркера.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param cues Значение `cues`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function rowCueMatch(line: string, cues: string[]): number {
   const lineRawTokens = rawTokens(line);
   const lineTokens = tokenize(line);
   let best = 0;
@@ -378,12 +492,27 @@ function rowCueMatch(line, cues) {
   return best;
 }
 
-function rowBoundary(line) {
+/**
+ * Находит структурную границу для строки.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function rowBoundary(line: string): boolean {
   const raw = normalizeText(line);
   return /^(?:[ivx]+\.\s+|[0-9]+(?:\.[0-9]+)*\s+|уровень\b|комментарии\b|примечание\b)/iu.test(raw);
 }
 
-function rowSegmentText(lines, startIndex) {
+/**
+ * Выполняет внутренний этап `rowSegmentText`, подготавливающий строки сегмента текста для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param startIndex Позиция соответствующего элемента в локальной структуре.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function rowSegmentText(lines: string[], startIndex: number): string {
   const current = normalizeText(lines[startIndex]);
   const extendsForward = /[:：]$/u.test(current) || /^стади[яи]\s+[ivx0-9]+/iu.test(current);
   if (!extendsForward) return lines[startIndex];
@@ -401,12 +530,24 @@ function rowSegmentText(lines, startIndex) {
   return out.join(" ");
 }
 
-export function findRowSegments(pages, question, topQuestionPages) {
+/**
+ * Находит строки вида «метка — значение», релевантные вопросу.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param question Исходный текст вопроса.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function findRowSegments(
+  pages: PdfPage[],
+  question: string,
+  topQuestionPages: Set<number>,
+): RowSegment[] {
   const cues = questionRowCues(question);
   if (!cues.length) return [];
   const mcbCodeQuestion = /мкб/u.test(normalizeText(question)) && /кодир/u.test(normalizeText(question));
-  const segments = [];
-  const seen = new Set();
+  const segments: RowSegment[] = [];
+  const seen = new Set<string>();
   for (const page of pages) {
     const lines = page.lines ?? [];
     for (let index = 0; index < lines.length; index += 1) {
@@ -429,7 +570,14 @@ export function findRowSegments(pages, question, topQuestionPages) {
   return segments.sort((a, b) => b.cueScore - a.cueScore).slice(0, 12);
 }
 
-function rowCueSpecificityPenalty(segment) {
+/**
+ * Выполняет внутренний этап `rowCueSpecificityPenalty`, подготавливающий строки маркера специфичности `penalty` для основного scorer-а.
+ *
+ * @param segment Значение `segment`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function rowCueSpecificityPenalty(segment: RowSegment): number {
   const raw = normalizeText(segment.text);
   let penalty = 0;
   for (const cue of segment.cues ?? []) {
@@ -458,9 +606,16 @@ function rowCueSpecificityPenalty(segment) {
   return penalty;
 }
 
-function answerCodeVariants(answerText) {
+/**
+ * Строит допустимые варианты записи для варианта ответа кода.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function answerCodeVariants(answerText: string): string[] {
   const normalized = normalizeForSearch(answerText);
-  const variants = new Set();
+  const variants = new Set<string>();
   for (const match of normalized.matchAll(/\b([a-zа-я])?0?(\d{2}[.]\d)\b/giu)) {
     const code = match[2];
     variants.add(code);
@@ -470,15 +625,33 @@ function answerCodeVariants(answerText) {
   return [...variants];
 }
 
-function rowAnswerPhrases(answerText) {
+/**
+ * Строит набор поисковых фраз для строки варианта ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function rowAnswerPhrases(answerText: string): string[] {
   return [...new Set([...answerSearchPhrases(answerText), ...answerCodeVariants(answerText)])].slice(0, 18);
 }
 
-export function bestRowLabelSupport({ rowSegments, answer, answerTokens }) {
+/**
+ * Сопоставляет вариант ответа с меткой или значением найденной строки.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.rowSegments Ограниченные текстовые сегменты для анализа.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestRowLabelSupport(
+  {rowSegments, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!rowSegments?.length) return null;
   const answerPhrases = rowAnswerPhrases(answer.text);
-  let best = null;
-  for (const segment of rowSegments) {
+  let best: EvidenceItem | null = null;
+  for (const segment of rowSegments as RowSegment[]) {
     let phraseHit = false;
     let phraseIndex = -1;
     for (const phrase of answerPhrases) {

@@ -1,4 +1,5 @@
-import { coverage, normalizeForSearch, uniqueTokens } from "../../../normalize.js";
+import {coverage, normalizeForSearch, uniqueTokens} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   betterEvidence,
   evidenceSnippet,
@@ -8,6 +9,7 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
 
 type AbbreviationAlias = {
   abbr: string;
@@ -15,14 +17,30 @@ type AbbreviationAlias = {
   page?: number;
 };
 
-function abbreviationForms(abbr: string) {
+/**
+ * Строит допустимые формы записи для сокращения.
+ *
+ * @param abbr Значение `abbr`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function abbreviationForms(abbr: string): string[] {
   const normalized = normalizeForSearch(abbr);
   const compact = normalized.replace(/\s+/g, "");
   const dashless = normalized.replace(/\s*-\s*/g, "").replace(/\s+/g, "");
   return [...new Set([normalized, compact, dashless])].filter((form) => form.length >= 2);
 }
 
-function answerExpansionSupport(answerText: string, answerTokens: string[], expansion: string) {
+/**
+ * Извлекает или проверяет варианта ответа `expansion` поддержки ответа в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @param expansion Значение `expansion`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerExpansionSupport(answerText: string, answerTokens: string[], expansion: string): number {
   const answerNorm = normalizeForSearch(answerText);
   const expansionNorm = normalizeForSearch(expansion);
   if (!answerNorm || !expansionNorm) return 0;
@@ -33,7 +51,16 @@ function answerExpansionSupport(answerText: string, answerTokens: string[], expa
   return Math.max(coverage(answerTokens, expansionTokens), strictSoftCoverage(answerTokens, expansionTokens));
 }
 
-function aliasMatchesAnswer(alias: AbbreviationAlias, answerText: string, answerTokens: string[]) {
+/**
+ * Выполняет внутренний этап `aliasMatchesAnswer`, подготавливающий алиаса варианта ответа для основного scorer-а.
+ *
+ * @param alias Значение `alias`, необходимое этому этапу scorer-а.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function aliasMatchesAnswer(alias: AbbreviationAlias, answerText: string, answerTokens: string[]): number {
   const compactAbbr = normalizeForSearch(alias.abbr).replace(/[^a-zа-я0-9]+/giu, "");
   if (compactAbbr.length <= 2) return 0;
   if (answerTokens.length < 2) return 0;
@@ -47,8 +74,11 @@ function aliasMatchesAnswer(alias: AbbreviationAlias, answerText: string, answer
  *
  * Список сокращений используется только как словарь: если ответ совпадает с расшифровкой,
  * scorer ищет само сокращение в содержательном фрагменте рядом с токенами вопроса.
+ *
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestAbbreviationAliasSupport(context) {
+export function bestAbbreviationAliasSupport(context: AnswerScoringContext): EvidenceItem | null {
   if (context.mode !== "multi") return null;
   const aliases = (context.pdfText?.abbreviations ?? []) as AbbreviationAlias[];
   if (!aliases.length) return null;

@@ -6,6 +6,7 @@ import { buildRelationTupleFragments } from "../relation-tuple/index.js";
 
 type AnswerOption = { id: string; text: string };
 type CountProof = { answerId: string; page: number; text: string };
+type CountFamilyMember = {answer: AnswerOption; value: string};
 
 const COUNT_QUESTION_CUES = ["\u043a\u043e\u043b\u0438\u0447\u0435\u0441\u0442\u0432", "\u0447\u0438\u0441\u043b\u043e", "\u0441\u043a\u043e\u043b\u044c\u043a"].map(normalizeForSearch);
 const COUNT_SOURCE_CUES = [
@@ -49,22 +50,43 @@ const COUNT_WORD_FORMS = new Map<string, string[]>(
   }).map(([value, forms]) => [value, [...new Set(forms.flatMap((form) => uniqueTokens(form)))]]),
 );
 
-function pureCountValue(text: string) {
+/**
+ * Выполняет внутренний этап `pureCountValue`, подготавливающий `pure` количества значения для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function pureCountValue(text: string): string | null {
   const clean = normalizeText(text).trim();
   if (!/^\d{1,2}$/u.test(clean)) return null;
   const value = String(Number(clean));
   return Number(value) <= 12 ? value : null;
 }
 
-function buildCountFamily(answers: AnswerOption[]) {
+/**
+ * Строит структуру количества семейства вариантов из переданного локального контекста.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function buildCountFamily(answers: AnswerOption[]): CountFamilyMember[] | null {
   if (answers.length < 3) return null;
   const members = answers.map((answer) => ({ answer, value: pureCountValue(answer.text) }));
   if (members.some((member) => member.value == null)) return null;
   if (new Set(members.map((member) => member.value)).size !== members.length) return null;
-  return members as Array<{ answer: AnswerOption; value: string }>;
+  return members as CountFamilyMember[];
 }
 
-function countedObjectTokens(question: string) {
+/**
+ * Выделяет специфичные токены объекта, количество которого требуется определить.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function countedObjectTokens(question: string): string[] {
   return uniqueTokens(question).filter(
     // General search stopwords intentionally include words such as "group".
     // In a count question that word can be the counted-object head, so only
@@ -73,7 +95,15 @@ function countedObjectTokens(question: string) {
   );
 }
 
-function tokenCompatible(target: string, source: string) {
+/**
+ * Проверяет структурную совместимость токена.
+ *
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function tokenCompatible(target: string, source: string): boolean {
   if (target === source) return true;
   if (Math.min(target.length, source.length) < 4) return false;
   const shorter = target.length <= source.length ? target : source;
@@ -81,27 +111,68 @@ function tokenCompatible(target: string, source: string) {
   return longer.endsWith(shorter) && longer.length - shorter.length <= 6;
 }
 
-function objectCoverage(target: string[], source: string[]) {
+/**
+ * Выполняет внутренний этап `objectCoverage`, подготавливающий объекта `coverage` для основного scorer-а.
+ *
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function objectCoverage(target: string[], source: string[]): number {
   if (!target.length) return 0;
   return target.filter((token) => source.some((candidate) => tokenCompatible(token, candidate))).length / target.length;
 }
 
-function countValuePresent(text: string, sourceTokens: string[], value: string) {
+/**
+ * Выполняет внутренний этап `countValuePresent`, подготавливающий количества значения `present` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param sourceTokens Нормализованные токены соответствующего текста.
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function countValuePresent(text: string, sourceTokens: string[], value: string): boolean {
   const normalized = normalizeForSearch(text);
   if (new RegExp(`(?:^|[^0-9])${value}(?![0-9])`, "u").test(normalized)) return true;
   return (COUNT_WORD_FORMS.get(value) ?? []).some((form) => sourceTokens.includes(form));
 }
 
-function countQuestion(text: string) {
+/**
+ * Выполняет внутренний этап `countQuestion`, подготавливающий количества вопроса для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function countQuestion(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return COUNT_QUESTION_CUES.some((cue) => normalized.includes(cue));
 }
 
-function sourceCountCue(text: string) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента количества маркера.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sourceCountCue(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return COUNT_SOURCE_CUES.some((cue) => normalized.includes(cue));
 }
 
+/**
+ * Разрешает уникальное количество, связанное с объектом вопроса в одной клаузе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.fragments Значение `fragments`, необходимое этому этапу scorer-а.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ */
 export function resolveClauseLocalCountTuple({
   mode,
   question,
@@ -137,6 +208,13 @@ export function resolveClauseLocalCountTuple({
   return proofs.find((proof) => proof.answerId === [...ids][0]) ?? null;
 }
 
+/**
+ * Применяет clause-local разрешение к score всех вариантов single-вопроса.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function applyClauseLocalCountTupleResolver(
   answerScores: AnswerScore[],
   context: {
@@ -146,7 +224,7 @@ export function applyClauseLocalCountTupleResolver(
     question: string;
     answers: AnswerOption[];
   },
-) {
+): AnswerScore[] {
   if (context.mode !== "single") return answerScores;
   const proof = resolveClauseLocalCountTuple({
     ...context,

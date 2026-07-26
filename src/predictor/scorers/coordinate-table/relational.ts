@@ -61,9 +61,17 @@ type CoordinateInlineAlias = {
   expansion: string;
 };
 
+/**
+ * Выполняет внутренний этап `clusterCoordinateXs`, подготавливающий `cluster` координатной таблицы `xs` для основного scorer-а.
+ *
+ * @param values Значение `values`, необходимое этому этапу scorer-а.
+ * @param tolerance Значение `tolerance`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clusterCoordinateXs(
   values: CoordinateXValue[],
-  tolerance = 18,
+  tolerance: number = 18,
 ): CoordinateXCluster[] {
   const clusters: CoordinateXCluster[] = [];
   for (const value of [...values].sort((left, right) => left.x - right.x)) {
@@ -79,6 +87,13 @@ function clusterCoordinateXs(
   return clusters;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRelationalAnchors`, подготавливающий координатной таблицы реляционной строки якорей для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateRelationalAnchors(lines: CoordinateTextLine[]): number[] {
   const candidates: Array<{ index: number; cells: CoordinateCell[] }> = [];
   const xValues: CoordinateXValue[] = [];
@@ -112,6 +127,14 @@ function coordinateRelationalAnchors(lines: CoordinateTextLine[]): number[] {
   return alignedCandidateCount >= 2 ? anchors : [];
 }
 
+/**
+ * Находит позицию ближайшего координатной таблицы якоря в локальном тексте или структуре.
+ *
+ * @param anchors Значение `anchors`, необходимое этому этапу scorer-а.
+ * @param x Значение `x`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function nearestCoordinateAnchorIndex(anchors: number[], x: number): number {
   let bestIndex = -1;
   let bestDistance = Infinity;
@@ -125,6 +148,14 @@ function nearestCoordinateAnchorIndex(anchors: number[], x: number): number {
   return bestDistance <= 48 ? bestIndex : -1;
 }
 
+/**
+ * Находит позицию координатной таблицы реляционной строки колонки в локальном тексте или структуре.
+ *
+ * @param anchors Значение `anchors`, необходимое этому этапу scorer-а.
+ * @param x Значение `x`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function coordinateRelationalColumnIndex(anchors: number[], x: number): number {
   if (!anchors.length || x < anchors[0] - 28) return -1;
   for (let index = 0; index < anchors.length - 1; index += 1) {
@@ -134,6 +165,13 @@ function coordinateRelationalColumnIndex(anchors: number[], x: number): number {
   return anchors.length - 1;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRelationalHeader`, подготавливающий координатной таблицы реляционной строки заголовка для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateRelationalHeader(cells: CoordinateCell[]): boolean {
   const raw = cells
     .map((cell) => cell.text)
@@ -157,6 +195,13 @@ function coordinateRelationalHeader(cells: CoordinateCell[]): boolean {
   return explicitFirstColumn || cues.filter((cue) => raw.includes(cue)).length >= 2;
 }
 
+/**
+ * Восстанавливает строки для координатной таблицы реляционной строки.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateRelationalRows(
   page: CoordinatePdfPage,
 ): CoordinateRelationalRow[] {
@@ -246,12 +291,27 @@ function coordinateRelationalRows(
   return bands;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCodeKey`, подготавливающий координатной таблицы кода `key` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateCodeKey(text: string): string {
   return String(text ?? "")
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, "");
 }
 
+/**
+ * Выполняет внутренний этап `coordinateEditSimilarity`, подготавливающий координатной таблицы `edit` сходства для основного scorer-а.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function coordinateEditSimilarity(left: string, right: string): number {
   const a = coordinateCodeKey(left);
   const b = coordinateCodeKey(right);
@@ -274,6 +334,14 @@ function coordinateEditSimilarity(left: string, right: string): number {
   return 1 - previous[b.length] / Math.max(a.length, b.length);
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCodeSimilarity`, подготавливающий координатной таблицы кода сходства для основного scorer-а.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function coordinateCodeSimilarity(left: string, right: string): number {
   const a = coordinateCodeKey(left);
   const b = coordinateCodeKey(right);
@@ -286,6 +354,13 @@ function coordinateCodeSimilarity(left: string, right: string): number {
   return best;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateInlineAliases`, подготавливающий координатной таблицы встроенной группы алиасов для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateInlineAliases(
   pages: CoordinatePdfPage[],
 ): CoordinateInlineAlias[] {
@@ -306,6 +381,15 @@ function coordinateInlineAliases(
   return aliases;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCellAliasText`, подготавливающий координатной таблицы ячейки алиаса текста для основного scorer-а.
+ *
+ * @param cellText Исходный текст соответствующего объекта.
+ * @param pageNumber Номер страницы PDF.
+ * @param aliases Значение `aliases`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateCellAliasText(
   cellText: string,
   pageNumber: number,
@@ -323,6 +407,13 @@ function coordinateCellAliasText(
   return matches[0].alias.expansion;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRelationalAliasFootnote`, подготавливающий координатной таблицы реляционной строки алиаса `footnote` для основного scorer-а.
+ *
+ * @param row Значение `row`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateRelationalAliasFootnote(
   row: CoordinateRelationalRow,
 ): boolean {
@@ -332,6 +423,14 @@ function coordinateRelationalAliasFootnote(
   return first.length > 120 && (separators >= 2 || semicolons >= 2);
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRelationalTableRegion`, подготавливающий координатной таблицы реляционной строки таблицы `region` для основного scorer-а.
+ *
+ * @param rows Значение `rows`, необходимое этому этапу scorer-а.
+ * @param localHeader Значение `localHeader`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateRelationalTableRegion(
   rows: CoordinateRelationalRow[],
   localHeader: CoordinateRelationalRow | undefined,
@@ -350,6 +449,13 @@ function coordinateRelationalTableRegion(
   return kept;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRelationalExplicitHeaderRow`, подготавливающий координатной таблицы реляционной строки явного заголовка строки для основного scorer-а.
+ *
+ * @param row Значение `row`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateRelationalExplicitHeaderRow(
   row: CoordinateRelationalRow,
 ): boolean {
@@ -365,11 +471,16 @@ function coordinateRelationalExplicitHeaderRow(
  * Строит строки обычных многоколоночных таблиц по повторяющимся X-якорям.
  * Вертикальные разрывы отделяют соседние строки, поэтому переносы внутри
  * ячейки не смешиваются со следующей сущностью.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param scanAllExplicitTables Значение `scanAllExplicitTables`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildCoordinateRelationalRowsByPage(
   pages: CoordinatePdfPage[],
   topQuestionPages?: Set<number>,
-  scanAllExplicitTables = false,
+  scanAllExplicitTables: boolean = false,
 ): CoordinateRelationalRowsByPage {
   const byPage: CoordinateRelationalRowsByPage = new Map();
   const aliases = coordinateInlineAliases(pages);
@@ -412,6 +523,15 @@ export function buildCoordinateRelationalRowsByPage(
 }
 
 
+/**
+ * Выделяет специфичные токены для координатной таблицы реляционной строки фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateRelationalFocusTokens(
   question: string,
   focusTokens: string[],
@@ -422,6 +542,13 @@ function coordinateRelationalFocusTokens(
   );
 }
 
+/**
+ * Выделяет специфичные токены для координатной таблицы сравнения целевого объекта.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateComparisonTargetTokens(question: string): string[] {
   const raw = String(question ?? "");
   const match = raw.match(/отлич\p{L}*\s+(.+?)\s+от\s+.+?\s+(?:явля\p{L}*|служ\p{L}*|составля\p{L}*)/iu);
@@ -435,6 +562,14 @@ function coordinateComparisonTargetTokens(question: string): string[] {
   );
 }
 
+/**
+ * Проверяет структурную совместимость координатной таблицы сравнения полярности.
+ *
+ * @param question Исходный текст вопроса.
+ * @param valueText Исходный текст соответствующего объекта.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
 function coordinateComparisonPolarityCompatible(
   question: string,
   valueText: string,
@@ -457,6 +592,15 @@ function coordinateComparisonPolarityCompatible(
 /**
  * Связывает single-answer вариант с другой колонкой той же визуальной строки.
  * Совпадение ответа и фокуса в одной ячейке не считается доказательством.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.coordinateRelationalRowsByPage Реляционные табличные строки по страницам.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCoordinateRelationalRowSupport({
   mode,

@@ -1,3 +1,4 @@
+/** Публичный facade числовых scorer-ов, используемых центральным агрегатором. */
 export {bestClozeGapSupport} from "./cloze.js";
 export {conditionPairAdjustment} from "./condition-pair.js";
 export {bestExactHourAliasOptionSupport, bestExactNumericOptionSupport} from "./exact-option.js";

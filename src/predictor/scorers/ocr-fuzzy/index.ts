@@ -1,22 +1,59 @@
-import { coverage, tokenize } from "../../../normalize.js";
+import {coverage, tokenize} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   betterEvidence,
   cachedLineWindowSegments,
   tokenHitCount,
 } from "../../text-utils.js";
+import type {AnswerOption, EvidenceItem} from "../../types.js";
 
-function rawLetterTokens(text: string) {
+type CyrillicOcrLocalMatch = {
+  fragment: string;
+  match: CyrillicOcrCoverage;
+  focusHits: number;
+  focusCoverage: number;
+  strength: number;
+};
+
+type CyrillicOcrSupportContext = Pick<
+  AnswerScoringContext,
+  "mode" | "pages" | "topQuestionPages" | "answer" | "answers" | "focusTokens"
+>;
+
+/**
+ * Выделяет специфичные токены для исходного текста `letter`.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function rawLetterTokens(text: string): string[] {
   return String(text ?? "")
     .normalize("NFKC")
     .toLowerCase()
     .match(/[a-zа-яё0-9]+/giu) ?? [];
 }
 
-function hasCyrillic(value: string) {
+/**
+ * Проверяет наличие или совместимость кириллического OCR.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasCyrillic(value: string): boolean {
   return /[а-яё]/iu.test(value);
 }
 
-function editDistance(left: string, right: string) {
+/**
+ * Выполняет внутренний этап `editDistance`, подготавливающий `edit` `distance` для основного scorer-а.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function editDistance(left: string, right: string): number {
   if (left === right) return 0;
   if (!left.length) return right.length;
   if (!right.length) return left.length;
@@ -39,8 +76,12 @@ function editDistance(left: string, right: string) {
 /**
  * Нормированное сходство длинных кириллических токенов по edit distance.
  * Короткие слова намеренно не сравниваются нечетко.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
  */
-export function cyrillicOcrTokenSimilarity(left: string, right: string) {
+export function cyrillicOcrTokenSimilarity(left: string, right: string): number {
   const a = rawLetterTokens(left).join("");
   const b = rawLetterTokens(right).join("");
   if (!hasCyrillic(a) || !hasCyrillic(b) || Math.min(a.length, b.length) < 7) return 0;
@@ -49,13 +90,28 @@ export function cyrillicOcrTokenSimilarity(left: string, right: string) {
   return 1 - editDistance(a, b) / Math.max(a.length, b.length);
 }
 
-function similarityThreshold(length: number) {
+/**
+ * Выполняет внутренний этап `similarityThreshold`, подготавливающий сходства `threshold` для основного scorer-а.
+ *
+ * @param length Длина проверяемого диапазона или токена.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function similarityThreshold(length: number): number {
   if (length >= 15) return 0.78;
   if (length >= 10) return 0.8;
   return 0.84;
 }
 
-function hasInteriorDifference(left: string, right: string) {
+/**
+ * Проверяет наличие или совместимость внутреннего различия `difference`.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasInteriorDifference(left: string, right: string): boolean {
   const comparable = Math.max(1, Math.min(left.length, right.length) - 3);
   for (let index = 0; index < comparable; index += 1) {
     if (left[index] !== right[index]) return true;
@@ -63,7 +119,15 @@ function hasInteriorDifference(left: string, right: string) {
   return false;
 }
 
-function sourceTokenCandidates(sourceText: string, targetLength: number) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента токена `candidates`.
+ *
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @param targetLength Значение `targetLength`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sourceTokenCandidates(sourceText: string, targetLength: number): string[] {
   const sourceTokens = rawLetterTokens(sourceText);
   const candidates = new Set<string>();
   for (let start = 0; start < sourceTokens.length; start += 1) {
@@ -77,6 +141,7 @@ function sourceTokenCandidates(sourceText: string, targetLength: number) {
   return [...candidates];
 }
 
+/** Сводка точных и нечётких совпадений длинных кириллических токенов. */
 export type CyrillicOcrCoverage = {
   coverage: number;
   fuzzyMatches: number;
@@ -85,7 +150,15 @@ export type CyrillicOcrCoverage = {
   totalTokens: number;
 };
 
-function hasLongTokenCollision(answer, answers) {
+/**
+ * Проверяет, конфликтует ли длинный OCR-токен с другим допустимым совпадением.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasLongTokenCollision(answer: AnswerOption, answers: AnswerOption[]): boolean {
   const answerTokens = rawLetterTokens(answer.text).filter((token) => hasCyrillic(token) && token.length >= 7);
   for (const candidate of answers ?? []) {
     if (candidate.id === answer.id) continue;
@@ -100,6 +173,10 @@ function hasLongTokenCollision(answer, answers) {
 /**
  * Сопоставляет длинные слова ответа с обычными или разорванными OCR-токенами
  * одного ограниченного фрагмента.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
  */
 export function cyrillicOcrCoverage(answerText: string, sourceText: string): CyrillicOcrCoverage {
   const answerTokens = rawLetterTokens(answerText).filter((token) => hasCyrillic(token) && token.length >= 7);
@@ -145,6 +222,15 @@ export function cyrillicOcrCoverage(answerText: string, sourceText: string): Cyr
 /**
  * OCR-fallback для single-answer: длинный термин должен нечетко совпасть
  * внутри короткого окна, которое одновременно содержит фокус вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCyrillicOcrSupport({
   mode,
@@ -153,10 +239,10 @@ export function bestCyrillicOcrSupport({
   answer,
   answers,
   focusTokens,
-}) {
+}: CyrillicOcrSupportContext): EvidenceItem | null {
   if (mode !== "single") return null;
   if (hasLongTokenCollision(answer, answers)) return null;
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const nearQuestionPage =
@@ -166,7 +252,7 @@ export function bestCyrillicOcrSupport({
       topQuestionPages.has(page.page + 1);
     if (!nearQuestionPage) continue;
     for (const segment of cachedLineWindowSegments(page)) {
-      let local = null;
+      let local: CyrillicOcrLocalMatch | null = null;
       for (const fragment of String(segment.text ?? "").split(/(?<=[.!?;])\s+/u)) {
         if (fragment.length < 12 || fragment.length > 620) continue;
         const match = cyrillicOcrCoverage(answer.text, fragment);

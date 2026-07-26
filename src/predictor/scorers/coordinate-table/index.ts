@@ -1,3 +1,9 @@
+/**
+ * Публичный facade координатных table-scorer-ов.
+ *
+ * Внутренние геометрические helpers остаются в специализированных файлах,
+ * чтобы runtime использовал только явно перечисленные точки входа.
+ */
 export {
   bestCoordinateTableRowSupport,
   buildCoordinateTableRowsByPage,

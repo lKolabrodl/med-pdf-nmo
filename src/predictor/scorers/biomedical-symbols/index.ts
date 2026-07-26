@@ -1,4 +1,6 @@
-import { coverage, normalizeForSearch, tokenize, uniqueTokens } from "../../../normalize.js";
+import type {PdfPage} from "../../../pdf.js";
+import {coverage, normalizeForSearch, tokenize, uniqueTokens} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   betterEvidence,
   cachedPageTokens,
@@ -7,6 +9,16 @@ import {
   tokenizeNormalized,
   tokenHitCount,
 } from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
+
+type CachedLatinPage = PdfPage & {
+  __latinTokens?: string[];
+};
+
+type GeneSentenceHit = {
+  token: string;
+  variant: string;
+};
 
 const OCR_LATIN_MAP = new Map(
   Object.entries({
@@ -78,16 +90,23 @@ const OCR_LATIN_MAP = new Map(
 /**
  * Возвращает короткие латинские/буквенно-цифровые токены из варианта ответа:
  * гены, маркеры, коды и похожие biomedical-обозначения.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
  */
-export function latinAnswerTokens(text) {
+export function latinAnswerTokens(text: string): string[] {
   return String(text ?? "").match(/[A-Za-z][A-Za-z0-9-]{1,}/g) ?? [];
 }
 
 /**
  * Генерирует безопасные варианты написания латинского токена без медицинских
  * знаний: чистая форма и несколько частых OCR/типографских сокращений.
+ *
+ * @param token Отдельный нормализуемый или сравниваемый токен.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function latinTokenVariants(token) {
+function latinTokenVariants(token: string): string[] {
   const normalized = token.toLowerCase().replace(/[^a-z0-9]/g, "");
   const variants = new Set([normalized]);
   const th = normalized.match(/^th(\d+)$/);
@@ -101,13 +120,17 @@ function latinTokenVariants(token) {
 /**
  * Расширяет латинский gene-token набором OCR-подмен, которые часто возникают
  * при смешении кириллицы, латиницы и цифр в PDF.
+ *
+ * @param token Отдельный нормализуемый или сравниваемый токен.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function geneTokenVariants(token) {
+function geneTokenVariants(token: string): string[] {
   const normalized = token.toLowerCase().replace(/[^a-z0-9]/g, "");
   const variants = new Set(latinTokenVariants(normalized));
   if (!normalized || normalized.length > 10) return [...variants].filter(Boolean);
 
-  const alternatives = {
+  const alternatives: Record<string, string[]> = {
     f: ["f", "p"],
     g: ["g", "o", "q"],
     r: ["r", "k"],
@@ -140,8 +163,12 @@ function geneTokenVariants(token) {
 /**
  * Переводит визуально похожие кириллические символы в латинские аналоги и
  * оставляет только буквы/цифры, чтобы сравнивать OCR-искаженные коды.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
  */
-function relaxedLatinText(text) {
+function relaxedLatinText(text: string): string {
   let out = "";
   for (const char of String(text ?? "").normalize("NFKC")) {
     out += OCR_LATIN_MAP.get(char) ?? char;
@@ -152,10 +179,14 @@ function relaxedLatinText(text) {
 /**
  * Возвращает нормализованные латинские токены страницы и дополнительно склеивает
  * случаи вида `N 0 0 2`, которые PDF extractor часто разрывает по символам.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function relaxedLatinTokens(text) {
+function relaxedLatinTokens(text: string): string[] {
   const rawTokens = relaxedLatinText(text).match(/[a-z0-9]+/g) ?? [];
-  const joined = [];
+  const joined: string[] = [];
   for (let index = 0; index < rawTokens.length - 1; index += 1) {
     if (/^[a-z]+$/.test(rawTokens[index]) && /^\d+$/.test(rawTokens[index + 1])) joined.push(`${rawTokens[index]}${rawTokens[index + 1]}`);
     if (/^[a-z]{1,5}$/.test(rawTokens[index])) {
@@ -171,17 +202,28 @@ function relaxedLatinTokens(text) {
   return [...tokens, ...joined];
 }
 
-/** Кеширует relaxed Latin tokens на странице, чтобы scorer'ы не пересчитывали OCR-формы. */
-function cachedLatinTokens(page) {
+/**
+ * Кеширует relaxed Latin tokens на странице, чтобы scorer'ы не пересчитывали OCR-формы.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function cachedLatinTokens(page: CachedLatinPage): string[] {
   if (!page.__latinTokens) Object.defineProperty(page, "__latinTokens", { value: relaxedLatinTokens(page.text), enumerable: false });
-  return page.__latinTokens;
+  return page.__latinTokens!;
 }
 
 /**
  * Считает мягкое сходство двух коротких латинских токенов по биграммам.
  * Для очень коротких токенов намеренно используется только строгий prefix-match.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
  */
-function diceSimilarity(left, right) {
+function diceSimilarity(left: string, right: string): number {
   const a = String(left ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const b = String(right ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
   if (!a || !b) return 0;
@@ -190,7 +232,7 @@ function diceSimilarity(left, right) {
     if (/\d/.test(a) || /\d/.test(b)) return 0;
     return a.startsWith(b) || b.startsWith(a) ? 0.72 : 0;
   }
-  const counts = new Map();
+  const counts = new Map<string, number>();
   for (let index = 0; index < a.length - 1; index += 1) {
     const gram = a.slice(index, index + 2);
     counts.set(gram, (counts.get(gram) ?? 0) + 1);
@@ -210,11 +252,20 @@ function diceSimilarity(left, right) {
 /**
  * Ищет OCR-поддержку латинского варианта ответа на релевантных страницах.
  * Это общий fallback для коротких biomedical-кодов, а не медицинский словарь.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestLatinFuzzySupport({ pages, topQuestionPages, questionTokens, answer }) {
+export function bestLatinFuzzySupport(
+  {pages, topQuestionPages, questionTokens, answer}: AnswerScoringContext,
+): EvidenceItem | null {
   const latinTokens = latinAnswerTokens(answer.text);
   if (!latinTokens.length) return null;
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     if (topQuestionPages?.size && !topQuestionPages.has(page.page)) continue;
@@ -269,8 +320,11 @@ const GENE_QUESTION_GENERIC_TOKENS = new Set(
 /**
  * Проверяет, что вопрос действительно про мутации/полиморфизмы генов.
  * Такой gate нужен, чтобы gene-specific OCR-логика не влияла на обычные вопросы.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
-export function geneMutationQuestion(question) {
+export function geneMutationQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   const tokens = new Set(tokenize(question, { keepStopwords: true }));
   const geneRoot = normalizeForSearch("\u0433\u0435\u043d");
@@ -281,8 +335,14 @@ export function geneMutationQuestion(question) {
   return hasGeneToken && hasMutationCue;
 }
 
-/** Оставляет из вопроса только негeneric-токены для привязки gene-предложения. */
-function geneQuestionFocusTokens(question) {
+/**
+ * Оставляет из вопроса только негeneric-токены для привязки gene-предложения.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function geneQuestionFocusTokens(question: string): string[] {
   return uniqueTokens(question).filter((token) => token.length >= 4 && !GENE_QUESTION_GENERIC_TOKENS.has(token));
 }
 
@@ -290,8 +350,11 @@ function geneQuestionFocusTokens(question) {
  * Делит текст PDF на достаточно длинные предложения. Для biomedical-symbol
  * задач предложение часто надежнее широкого окна, потому что список генов
  * обычно находится в одной фразе.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
  */
-export function sentenceSegments(text) {
+export function sentenceSegments(text: string): string[] {
   return String(text ?? "")
     .replace(/\s+/g, " ")
     .split(/(?<=[.!?])\s+/u)
@@ -299,8 +362,15 @@ export function sentenceSegments(text) {
     .filter((segment) => segment.length >= 24);
 }
 
-/** Возвращает точное или OCR-вариантное попадание gene-token в предложении. */
-function geneSentenceHit(sentence, answerText) {
+/**
+ * Возвращает точное или OCR-вариантное попадание gene-token в предложении.
+ *
+ * @param sentence Значение `sentence`, необходимое этому этапу scorer-а.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function geneSentenceHit(sentence: string, answerText: string): GeneSentenceHit | null {
   const answerTokens = latinAnswerTokens(answerText);
   if (!answerTokens.length || answerTokens.length > 2) return null;
   const sentenceTokens = new Set(relaxedLatinTokens(sentence));
@@ -320,11 +390,20 @@ function geneSentenceHit(sentence, answerText) {
 /**
  * Для вопросов про мутации генов выбирает предложение с фокусом вопроса и
  * проверяет, есть ли в нем вариант ответа как латинский или OCR-искаженный код.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestGeneSentenceSupport({ pages, topQuestionPages, question, answer }) {
+export function bestGeneSentenceSupport(
+  {pages, topQuestionPages, question, answer}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!geneMutationQuestion(question)) return null;
   const focusTokens = geneQuestionFocusTokens(question);
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const nearTopPage =

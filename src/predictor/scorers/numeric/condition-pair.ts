@@ -18,6 +18,13 @@ type AnswerValueCondition = {
   family: ConditionFamily;
 };
 
+/**
+ * Извлекает или проверяет варианта ответа значения условия в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function answerValueCondition(answerText: string): AnswerValueCondition | null {
   const raw = normalizeText(answerText);
   const match = raw.match(/^(.{2,90}?)\s+для\s+(.{3,120})$/u);
@@ -30,6 +37,15 @@ function answerValueCondition(answerText: string): AnswerValueCondition | null {
   return { value, condition, family };
 }
 
+/**
+ * Проверяет совместимость числового ответа с парным условием меньше/больше.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
 export function conditionPairAdjustment({pages,topQuestionPages,answer}: ConditionPairInput): ScoreAdjustment {
   const pair = answerValueCondition(answer.text);
   if (!pair) return { adjustment: 0, evidence: null };

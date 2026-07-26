@@ -1,11 +1,17 @@
 import { extractNumbers, normalizeForSearch, uniqueTokens } from "../../../normalize.js";
 import { containsNormalizedPhrase } from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
 
 type ComparatorDirection = "less" | "greater";
 
 type ComparatorSpec = {
   number: string;
   direction: ComparatorDirection;
+};
+
+type OptionFamilyAdjustment = {
+  adjustment: number;
+  evidence: EvidenceItem | null;
 };
 
 const LESS_CUES = ["\u0434\u043e", "\u043c\u0435\u043d\u0435\u0435", "\u043c\u0435\u043d\u044c\u0448\u0435", "\u043d\u0438\u0436\u0435", "\u043c\u043e\u043b\u043e\u0436\u0435"].map((item) =>
@@ -45,6 +51,10 @@ const COMBO_UNIT_PARTS = new Set(["m\u0433", "m\u043b", "k\u0433", "me", "mm", "
  *
  * \u042d\u0442\u043e \u043d\u0435 \u0437\u043d\u0430\u043d\u0438\u0435 \u043e \u043a\u043e\u043d\u043a\u0440\u0435\u0442\u043d\u043e\u0439 \u0431\u043e\u043b\u0435\u0437\u043d\u0438: \u043c\u044b \u043b\u0438\u0448\u044c \u043f\u043e\u043d\u0438\u043c\u0430\u0435\u043c, \u0447\u0442\u043e \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b \u043e\u0434\u043d\u043e\u0433\u043e
  * \u0447\u0438\u0441\u043b\u043e\u0432\u043e\u0433\u043e \u0441\u0435\u043c\u0435\u0439\u0441\u0442\u0432\u0430 \u043c\u043e\u0433\u0443\u0442 \u043e\u0442\u043b\u0438\u0447\u0430\u0442\u044c\u0441\u044f \u0442\u043e\u043b\u044c\u043a\u043e \u0437\u043d\u0430\u043a\u043e\u043c \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u044f.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
  */
 function answerComparatorSpecs(answerText: string): ComparatorSpec[] {
   const normalized = normalizeForSearch(answerText);
@@ -62,18 +72,46 @@ function answerComparatorSpecs(answerText: string): ComparatorSpec[] {
   return specs;
 }
 
+/**
+ * Выполняет внутренний этап `opposite`, подготавливающий `opposite` для основного scorer-а.
+ *
+ * @param direction Ожидаемое направление сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function opposite(direction: ComparatorDirection): ComparatorDirection {
   return direction === "less" ? "greater" : "less";
 }
 
-function answerFamilyHasOppositeComparator(answer: { id: string; text: string }, answers: Array<{ id: string; text: string }>, spec: ComparatorSpec) {
+/**
+ * Извлекает или проверяет варианта ответа семейства вариантов `opposite` компаратора в варианте ответа.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param spec Значение `spec`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerFamilyHasOppositeComparator(
+  answer: {id: string; text: string},
+  answers: Array<{id: string; text: string}>,
+  spec: ComparatorSpec,
+): boolean {
   return answers.some((candidate) => {
     if (candidate.id === answer.id) return false;
     return answerComparatorSpecs(candidate.text).some((candidateSpec) => candidateSpec.number === spec.number && candidateSpec.direction === opposite(spec.direction));
   });
 }
 
-function sourceDirectionsForNumber(text: string, number: string) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента `directions` `for` числа.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sourceDirectionsForNumber(text: string, number: string): Set<ComparatorDirection> {
   const normalized = normalizeForSearch(text).replace(/\u2264/gu, "<").replace(/\u2265/gu, ">");
   const escaped = number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const directions = new Set<ComparatorDirection>();
@@ -98,6 +136,12 @@ function sourceDirectionsForNumber(text: string, number: string) {
 /**
  * \u0428\u0442\u0440\u0430\u0444\u0443\u0435\u0442 \u0432\u0430\u0440\u0438\u0430\u043d\u0442, \u0435\u0441\u043b\u0438 \u043e\u043d \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0441\u044f \u043a \u043f\u043b\u043e\u0442\u043d\u043e\u043c\u0443 \u0447\u0438\u0441\u043b\u043e\u0432\u043e\u043c\u0443 \u0441\u0435\u043c\u0435\u0439\u0441\u0442\u0432\u0443 \u0438 \u0435\u0433\u043e
  * evidence \u043f\u043e\u0434\u0434\u0435\u0440\u0436\u0438\u0432\u0430\u0435\u0442 \u043f\u0440\u043e\u0442\u0438\u0432\u043e\u043f\u043e\u043b\u043e\u0436\u043d\u044b\u0439 \u0437\u043d\u0430\u043a \u0441\u0440\u0430\u0432\u043d\u0435\u043d\u0438\u044f \u0434\u043b\u044f \u0442\u043e\u0433\u043e \u0436\u0435 \u0447\u0438\u0441\u043b\u0430.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.evidence Evidence, уже найденные для варианта ответа.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
 export function optionFamilyComparatorAdjustment({
   answer,
@@ -107,7 +151,7 @@ export function optionFamilyComparatorAdjustment({
   answer: { id: string; text: string };
   answers: Array<{ id: string; text: string }>;
   evidence: Array<{ answerId?: string; page: number; text: string; score: number; kind: string }>;
-}) {
+}): OptionFamilyAdjustment {
   const answerSpecs = answerComparatorSpecs(answer.text);
   if (answerSpecs.length !== 1) return { adjustment: 0, evidence: null };
   const specs = answerSpecs.filter((spec) => answerFamilyHasOppositeComparator(answer, answers, spec));
@@ -135,7 +179,14 @@ export function optionFamilyComparatorAdjustment({
   return { adjustment: 0, evidence: null };
 }
 
-function compactComboPhrases(answerText: string) {
+/**
+ * Строит набор поисковых фраз для компактной записи комбинации вариантов.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function compactComboPhrases(answerText: string): string[] {
   const normalized = normalizeForSearch(answerText);
   const phrases = new Set<string>();
   for (const match of normalized.matchAll(/[a-z\u0430-\u044f0-9]{2,}(?:[+/][a-z\u0430-\u044f0-9]{2,})+/giu)) {
@@ -144,25 +195,54 @@ function compactComboPhrases(answerText: string) {
   return [...phrases].filter((phrase) => phrase.length >= 5);
 }
 
-function validCompactComboPhrase(phrase: string) {
+/**
+ * Проверяет наличие или совместимость компактной записи комбинации вариантов фразы.
+ *
+ * @param phrase Значение `phrase`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function validCompactComboPhrase(phrase: string): boolean {
   const parts = phrase.split(/[+/]/u).filter(Boolean);
   if (parts.length < 2) return false;
   return parts.every((part) => part.length >= 3 && part.length <= 10 && !COMBO_UNIT_PARTS.has(part) && !/^\d/u.test(part));
 }
 
-function comboQuestion(question: string) {
+/**
+ * Выполняет внутренний этап `comboQuestion`, подготавливающий комбинации вариантов вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function comboQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   return COMBO_QUESTION_CUES.some((cue) => normalized.includes(cue));
 }
 
-function alternativeComboTokens(answerText: string) {
+/**
+ * Выделяет специфичные токены для альтернативы комбинации вариантов.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function alternativeComboTokens(answerText: string): string[] {
   const normalized = normalizeForSearch(answerText);
   const alternative = containsNormalizedPhrase(normalized, "\u0438\u043b\u0438") || containsNormalizedPhrase(normalized, "\u043c\u043e\u043d\u043e\u0442\u0435\u0440\u0430\u043f");
   if (!alternative) return [];
   return uniqueTokens(answerText).filter((token) => token.length >= 3 && !/^\d/u.test(token) && !COMBO_GENERIC_TOKENS.has(token)).slice(0, 8);
 }
 
-function evidenceHasCompactTokenPair(text: string, tokens: string[]) {
+/**
+ * Выполняет внутренний этап `evidenceHasCompactTokenPair`, подготавливающий evidence компактной записи токена пары условий для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param tokens Набор токенов для локального сопоставления.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function evidenceHasCompactTokenPair(text: string, tokens: string[]): boolean {
   const normalized = normalizeForSearch(text);
   if (!/[+/]/u.test(normalized)) return false;
   for (let leftIndex = 0; leftIndex < tokens.length - 1; leftIndex += 1) {
@@ -187,6 +267,12 @@ function evidenceHasCompactTokenPair(text: string, tokens: string[]) {
  *
  * \u041f\u0440\u0430\u0432\u0438\u043b\u043e \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442 \u0442\u043e\u043b\u044c\u043a\u043e \u0432 \u0432\u043e\u043f\u0440\u043e\u0441\u0430\u0445 \u043e \u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0438/\u0442\u0435\u0440\u0430\u043f\u0438\u0438 \u0438 \u0438\u0449\u0435\u0442 \u0441\u0430\u043c\u0443 \u0444\u043e\u0440\u043c\u0443
  * \u0437\u0430\u043f\u0438\u0441\u0438, \u0430 \u043d\u0435 \u043c\u0435\u0434\u0438\u0446\u0438\u043d\u0441\u043a\u0438\u0439 \u0444\u0430\u043a\u0442.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.evidence Evidence, уже найденные для варианта ответа.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
 export function optionFamilyCompactComboAdjustment({
   question,
@@ -196,7 +282,7 @@ export function optionFamilyCompactComboAdjustment({
   question: string;
   answer: { id: string; text: string };
   evidence: Array<{ answerId?: string; page: number; text: string; score: number; kind: string }>;
-}) {
+}): OptionFamilyAdjustment {
   if (!comboQuestion(question)) return { adjustment: 0, evidence: null };
   const comboPhrases = compactComboPhrases(answer.text);
   const alternativeTokens = alternativeComboTokens(answer.text);

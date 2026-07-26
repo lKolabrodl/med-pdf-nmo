@@ -39,6 +39,13 @@ import {
   severityCue,
 } from "./shared.js";
 
+/**
+ * Выполняет внутренний этап `coordinateGroupLineLooksLikeStart`, подготавливающий координатной таблицы группы строки `looks` `like` `start` для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateGroupLineLooksLikeStart(
   cells: CoordinateCell[],
 ): boolean {
@@ -50,6 +57,13 @@ function coordinateGroupLineLooksLikeStart(
   return lastX - firstX >= 85;
 }
 
+/**
+ * Находит структурную границу для координатной таблицы `looks` `like` таблицы.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateLooksLikeTableBoundary(
   line: CoordinateTextLine | null | undefined,
 ): boolean {
@@ -62,6 +76,13 @@ function coordinateLooksLikeTableBoundary(
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateShortCodeLike`, подготавливающий координатной таблицы короткой формы кода `like` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateShortCodeLike(text: string): boolean {
   const value = String(text ?? "").replace(/\s+/g, " ").trim();
   if (!value) return false;
@@ -72,6 +93,15 @@ function coordinateShortCodeLike(text: string): boolean {
   return /^[A-Z\u0410-\u042f0-9./+-]{2,}(?:\s+[A-Z\u0410-\u042f0-9./+-]{2,}){0,2}$/u.test(value);
 }
 
+/**
+ * Выполняет внутренний этап `coordinateLabelContinuationLikely`, подготавливающий координатной таблицы метки продолжения для основного scorer-а.
+ *
+ * @param labelText Исходный текст соответствующего объекта.
+ * @param nextLabelText Исходный текст соответствующего объекта.
+ * @param nextValueText Исходный текст соответствующего объекта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateLabelContinuationLikely(
   labelText: string,
   nextLabelText: string,
@@ -85,6 +115,13 @@ function coordinateLabelContinuationLikely(
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateGroupHeaderCells`, подготавливающий координатной таблицы группы заголовка ячеек для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateGroupHeaderCells(cells: CoordinateCell[]): boolean {
   const text = cells
     .map((cell) => cell.text)
@@ -108,6 +145,14 @@ function coordinateGroupHeaderCells(cells: CoordinateCell[]): boolean {
   return columnCueCount >= 2 && cells.every((cell) => coordinateCellText(cell).length <= 70);
 }
 
+/**
+ * Выполняет внутренний этап `coordinateSplitGroupCells`, подготавливающий координатной таблицы `split` группы ячеек для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @param valueX Значение `valueX`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateSplitGroupCells(
   cells: CoordinateCell[],
   valueX: number,
@@ -126,6 +171,14 @@ function coordinateSplitGroupCells(
   return { labelCells, valueCells };
 }
 
+/**
+ * Выполняет внутренний этап `coordinateAppendGroupText`, подготавливающий координатной таблицы `append` группы текста для основного scorer-а.
+ *
+ * @param parts Значение `parts`, необходимое этому этапу scorer-а.
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Ничего не возвращает; результат применяется через переданный изменяемый объект.
+ * @internal
+ */
 function coordinateAppendGroupText(
   parts: string[],
   cells: CoordinateCell[],
@@ -136,6 +189,13 @@ function coordinateAppendGroupText(
   }
 }
 
+/**
+ * Строит группы связанных ячеек координатной таблицы для одной страницы.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateTableGroups(
   page: CoordinatePdfPage,
 ): CoordinateTableGroup[] {
@@ -218,6 +278,10 @@ function coordinateTableGroups(
 /**
  * Строит группы вида `левая метка -> правые значения` для multi-вопросов, где
  * несколько правильных вариантов перечислены в одной строке или ее продолжениях.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildCoordinateTableGroupsByPage(
   pages: CoordinatePdfPage[],
@@ -234,6 +298,13 @@ export function buildCoordinateTableGroupsByPage(
   return byPage;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateMultiCellHeaderRow`, подготавливающий координатной таблицы multi-answer набора ячейки заголовка строки для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateMultiCellHeaderRow(cells: CoordinateCell[]): boolean {
   const first = normalizeForSearch(cells[0]?.text ?? "");
   const rest = normalizeForSearch(
@@ -257,6 +328,13 @@ function coordinateMultiCellHeaderRow(cells: CoordinateCell[]): boolean {
   return firstHeader && restHeader;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateMultiCellGenericLabel`, подготавливающий координатной таблицы multi-answer набора ячейки общих токенов метки для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateMultiCellGenericLabel(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return [
@@ -270,6 +348,13 @@ function coordinateMultiCellGenericLabel(text: string): boolean {
   ].some((cue) => containsNormalizedPhrase(normalized, cue));
 }
 
+/**
+ * Выполняет внутренний этап `coordinateMultiCellGenericValue`, подготавливающий координатной таблицы multi-answer набора ячейки общих токенов значения для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateMultiCellGenericValue(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return [
@@ -279,6 +364,13 @@ function coordinateMultiCellGenericValue(text: string): boolean {
   ].some((cue) => containsNormalizedPhrase(normalized, cue));
 }
 
+/**
+ * Восстанавливает строки для координатной таблицы multi-answer набора ячейки.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateMultiCellRows(
   page: CoordinatePdfPage,
 ): CoordinateMultiCellRow[] {
@@ -356,6 +448,10 @@ function coordinateMultiCellRows(
 /**
  * Строит multi-cell rows для таблиц, где одна строка содержит несколько
  * самостоятельных значений/кандидатов, связанных общей меткой и заголовком.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildCoordinateMultiCellRowsByPage(
   pages: CoordinatePdfPage[],
@@ -376,6 +472,15 @@ export function buildCoordinateMultiCellRowsByPage(
 /**
  * Оценивает multi-answer поддержку из явной табличной группы и допускает
  * обратное связывание `value -> label`, когда значение находится в вопросе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.coordinateTableGroupsByPage Табличные группы, сгруппированные по страницам.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCoordinateTableGroupSupport({
   mode,
@@ -481,6 +586,15 @@ export function bestCoordinateTableGroupSupport({
 /**
  * Оценивает multi-cell row, где правильный ответ может находиться в любой
  * ячейке строки, но строка должна быть привязана к фокусу вопроса и заголовку.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.coordinateMultiCellRowsByPage Многоячейковые строки, сгруппированные по страницам.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCoordinateMultiCellRowSupport({
   mode,

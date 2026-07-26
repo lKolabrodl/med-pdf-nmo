@@ -17,6 +17,12 @@ const CONDITION_NUMBER_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
+/**
+ * Оставляет специфичные токены условия, нужные для привязки числа.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
 export function specificConditionNumberFocusTokens(focusTokens: string[]): string[] {
   return (focusTokens ?? []).filter((token) => token.length >= 4 && !/^\d/.test(token) && !CONDITION_NUMBER_GENERIC_FOCUS.has(token));
 }

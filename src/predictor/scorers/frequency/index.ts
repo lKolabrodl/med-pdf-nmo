@@ -1,15 +1,40 @@
-import { coverage, extractNumbers, normalizeForSearch, normalizeText, tokenize, uniqueTokens } from "../../../normalize.js";
-import { betterEvidence, containsNormalizedPhrase, numberCoverage, tokenHitCount } from "../../text-utils.js";
+import type {PdfPage} from "../../../pdf.js";
+import {coverage, extractNumbers, normalizeForSearch, normalizeText, tokenize, uniqueTokens} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import {betterEvidence, containsNormalizedPhrase, numberCoverage, tokenHitCount} from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
 
-export function frequencyAnswer(answerText) {
+type FrequencyLineSegment = {
+  text: string;
+  normalized: string;
+  tokens: string[];
+};
+
+type CachedFrequencyPage = PdfPage & {
+  __lineWindowSegments?: FrequencyLineSegment[];
+};
+
+/**
+ * Проверяет, содержит ли ответ число вместе с единицей времени или кратности.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function frequencyAnswer(answerText: string): boolean {
   const raw = normalizeText(answerText);
   return /\d|один|два|три|четыре|пять|шесть|семь|восемь|девять/u.test(raw) && /(год|месяц|недел|дн|сут|час|(?:^|\s)ч\.?(?:\s|$)|раз)/u.test(raw);
 }
 
-export function frequencySearchPhrases(answerText) {
+/**
+ * Строит нормализуемые словоформы частоты и длительности для поиска в PDF.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function frequencySearchPhrases(answerText: string): string[] {
   const raw = normalizeText(answerText);
   const numbers = extractNumbers(answerText);
-  const phrases = new Set();
+  const phrases = new Set<string>();
   if (answerText && /(год|месяц|недел|дн|сут|час|(?:^|\s)ч\.?(?:\s|$)|раз|\d)/u.test(raw)) phrases.add(answerText);
   for (const number of numbers) {
     if (/год/u.test(raw)) {
@@ -51,7 +76,15 @@ export function frequencySearchPhrases(answerText) {
   });
 }
 
-function lineWindowSegments(page, radius = 2) {
+/**
+ * Строит ограниченные текстовые сегменты для строки локального окна.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @param radius Радиус локального окна вокруг совпадения.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function lineWindowSegments(page: PdfPage, radius: number = 2): FrequencyLineSegment[] {
   const lines = page.lines ?? [];
   const segments = [];
   for (let index = 0; index < lines.length; index += 1) {
@@ -67,14 +100,21 @@ function lineWindowSegments(page, radius = 2) {
   return segments;
 }
 
-function cachedLineWindowSegments(page) {
+/**
+ * Строит ограниченные текстовые сегменты для кешированных строки локального окна.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function cachedLineWindowSegments(page: CachedFrequencyPage): FrequencyLineSegment[] {
   if (!page.__lineWindowSegments) {
     Object.defineProperty(page, "__lineWindowSegments", {
       value: lineWindowSegments(page, 3),
       enumerable: false,
     });
   }
-  return page.__lineWindowSegments;
+  return page.__lineWindowSegments!;
 }
 
 const FREQUENCY_GENERIC_FOCUS = new Set(
@@ -150,7 +190,14 @@ const FREQUENCY_ANSWER_GENERIC = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function specificFrequencyFocusTokens(focusTokens) {
+/**
+ * Выделяет специфичные токены для специфичных частоты фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function specificFrequencyFocusTokens(focusTokens: string[]): string[] {
   return focusTokens.filter((token) => token.length >= 4 && !/^\d/.test(token) && !FREQUENCY_GENERIC_FOCUS.has(token));
 }
 
@@ -158,21 +205,47 @@ function specificFrequencyFocusTokens(focusTokens) {
  * Выделяет из числового варианта предмет назначения: препарат, действующее вещество
  * или медицинское средство. Это защищает scorer от ложных совпадений, когда в PDF
  * рядом найден только срок или кратность, но указан другой препарат.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function frequencyAnswerSubjectTokens(answerText) {
+function frequencyAnswerSubjectTokens(answerText: string): string[] {
   const tokens = uniqueTokens(answerText).filter(
     (token) => token.length >= 5 && !/^\d/u.test(token) && !/[/%]/u.test(token) && !FREQUENCY_ANSWER_GENERIC.has(token),
   );
   return tokens.slice(0, 5);
 }
 
-function frequencySubjectCompatible(answerText, segmentTokens) {
+/**
+ * Проверяет структурную совместимость частоты субъекта.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param segmentTokens Нормализованные токены соответствующего текста.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function frequencySubjectCompatible(answerText: string, segmentTokens: string[]): boolean {
   const subjectTokens = frequencyAnswerSubjectTokens(answerText);
   if (!subjectTokens.length) return true;
   return tokenHitCount(subjectTokens, segmentTokens) > 0;
 }
 
-export function bestFrequencyRecommendationSupport({ mode, pages, topQuestionPages, question, answer, focusTokens }) {
+/**
+ * Ищет частоту ответа в той же строке рекомендации и у того же предмета.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestFrequencyRecommendationSupport(
+  {mode, pages, topQuestionPages, question, answer, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   if (!frequencyAnswer(answer.text)) return null;
   const questionRaw = normalizeText(question);

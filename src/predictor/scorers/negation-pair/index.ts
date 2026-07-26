@@ -21,15 +21,36 @@ const QUESTION_GENERIC = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function explicitNegativeWord(word: string) {
+/**
+ * Выполняет внутренний этап `explicitNegativeWord`, подготавливающий явного отрицания словесной формы для основного scorer-а.
+ *
+ * @param word Значение `word`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function explicitNegativeWord(word: string): boolean {
   return NEGATIVE_WORDS.has(word) || NEGATIVE_PREFIXES.some((prefix) => word.startsWith(prefix));
 }
 
-function hasExplicitNegation(text: string) {
+/**
+ * Проверяет наличие или совместимость явного пары с отрицанием.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasExplicitNegation(text: string): boolean {
   return rawTokens(text).some(explicitNegativeWord);
 }
 
-function optionSkeleton(text: string) {
+/**
+ * Выполняет внутренний этап `optionSkeleton`, подготавливающий варианта ответа лексического каркаса для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function optionSkeleton(text: string): string[] {
   return rawTokens(text)
     .filter((word) => !explicitNegativeWord(word) && !RUSSIAN_STOPWORDS.has(word))
     .map(stemToken)
@@ -37,6 +58,13 @@ function optionSkeleton(text: string) {
     .sort();
 }
 
+/**
+ * Строит структуру пары с отрицанием пары условий из переданного локального контекста.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function buildNegationPair(answers: AnswerOption[]): NegationPair | null {
   if (answers.length < 2) return null;
   const members = answers.map((answer) => ({
@@ -58,25 +86,56 @@ function buildNegationPair(answers: AnswerOption[]): NegationPair | null {
   return pairs.length === 1 ? pairs[0] : null;
 }
 
-function tokenCompatible(target: string, source: string) {
+/**
+ * Проверяет структурную совместимость токена.
+ *
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function tokenCompatible(target: string, source: string): boolean {
   if (target === source) return true;
   if (Math.min(target.length, source.length) < 5) return false;
   return target.startsWith(source.slice(0, Math.min(6, source.length))) || source.startsWith(target.slice(0, Math.min(6, target.length)));
 }
 
-function rawCoverage(target: string[], source: string[]) {
+/**
+ * Выполняет внутренний этап `rawCoverage`, подготавливающий исходного текста `coverage` для основного scorer-а.
+ *
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function rawCoverage(target: string[], source: string[]): number {
   if (!target.length) return 0;
   return target.filter((token) => source.some((candidate) => tokenCompatible(token, candidate))).length / target.length;
 }
 
-function atomicPolarityClauses(text: string) {
+/**
+ * Выполняет внутренний этап `atomicPolarityClauses`, подготавливающий атомарной рекомендации полярности клауз для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function atomicPolarityClauses(text: string): string[] {
   return String(text ?? "")
     .split(/(?<=[.!?;])\s+|\s+(?:\u043d\u043e|\u043e\u0434\u043d\u0430\u043a\u043e|\u0437\u0430\u0442\u043e)\s+/giu)
     .map((item) => item.trim())
     .filter((item) => item.length >= 6);
 }
 
-function clausePairPolarity(clause: string, skeleton: string[]) {
+/**
+ * Выполняет внутренний этап `clausePairPolarity`, подготавливающий клаузы пары условий полярности для основного scorer-а.
+ *
+ * @param clause Значение `clause`, необходимое этому этапу scorer-а.
+ * @param skeleton Значение `skeleton`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clausePairPolarity(clause: string, skeleton: string[]): PairMember["polarity"] | null {
   const words = rawTokens(clause);
   const stems = words.map(stemToken);
   const skeletonPositions = stems
@@ -94,12 +153,28 @@ function clausePairPolarity(clause: string, skeleton: string[]) {
   return associatedNegation ? ("negative" as const) : ("positive" as const);
 }
 
-function questionFocusTokens(question: string, supplied?: string[]) {
+/**
+ * Выделяет специфичные токены для вопроса фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @param supplied Значение `supplied`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function questionFocusTokens(question: string, supplied?: string[]): string[] {
   const tokens = supplied?.length ? supplied : uniqueTokens(question);
   return tokens.filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !QUESTION_GENERIC.has(token));
 }
 
-function focusCompatible(text: string, focus: string[]) {
+/**
+ * Проверяет структурную совместимость фокуса вопроса.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param focus Значение `focus`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function focusCompatible(text: string, focus: string[]): boolean {
   if (!focus.length) return false;
   const source = tokenizeNormalized(normalizeForSearch(text));
   const hits = focus.filter((token) => source.some((candidate) => tokenCompatible(token, candidate))).length;
@@ -107,6 +182,17 @@ function focusCompatible(text: string, focus: string[]) {
   return focus.length <= 2 ? hits === focus.length : hits >= 2 && coverage >= 0.3;
 }
 
+/**
+ * Разрешает единственную пару вариантов по локальной положительной или отрицательной клаузе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.fragments Значение `fragments`, необходимое этому этапу scorer-а.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ */
 export function resolveNegationPairClause({
   mode,
   question,
@@ -145,6 +231,13 @@ export function resolveNegationPairClause({
   return proofs.find((proof) => proof.answerId === [...ids][0]) ?? null;
 }
 
+/**
+ * Применяет структурное разрешение negation-пары к score вариантов.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function applyNegationPairClauseResolver(
   answerScores: AnswerScore[],
   context: {
@@ -155,7 +248,7 @@ export function applyNegationPairClauseResolver(
     answers: AnswerOption[];
     focusTokens?: string[];
   },
-) {
+): AnswerScore[] {
   if (context.mode !== "single") return answerScores;
   const proof = resolveNegationPairClause({
     ...context,

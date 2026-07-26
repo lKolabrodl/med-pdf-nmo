@@ -6,6 +6,7 @@ import { containsNormalizedPhrase, strictSoftCoverage, tokenizeNormalized, token
 
 type AnswerOption = { id: string; text: string };
 
+/** Evidence и поправка для ответов из повторяющегося набора рекомендаций. */
 export type RepeatedRecommendationSetResolution = Map<
   string,
   {
@@ -38,7 +39,15 @@ const TARGET_GENERIC = new Set(
   ),
 );
 
-function repeatedRecommendationQuestion(mode: string, question: string) {
+/**
+ * Проверяет, запрашивает ли вопрос повторяющийся набор рекомендаций.
+ *
+ * @param mode Режим выбора ответа: `single` или `multi`.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function repeatedRecommendationQuestion(mode: string, question: string): boolean {
   if (mode !== "multi") return false;
   const clean = rawRussianText(question);
   return (
@@ -48,7 +57,14 @@ function repeatedRecommendationQuestion(mode: string, question: string) {
   );
 }
 
-function rawRussianText(text: string) {
+/**
+ * Восстанавливает читаемый кириллический текст из исходного PDF-фрагмента.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function rawRussianText(text: string): string {
   return String(text ?? "")
     .toLowerCase()
     .replace(/ё/gu, "е")
@@ -56,13 +72,27 @@ function rawRussianText(text: string) {
     .trim();
 }
 
-function recommendationContextTokens(question: string) {
+/**
+ * Выделяет специфичные токены для рекомендации `context`.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function recommendationContextTokens(question: string): string[] {
   return uniqueTokens(question).filter(
     (token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !QUESTION_GENERIC.has(token) && !/^\d+$/u.test(token),
   );
 }
 
-function recommendationTargetText(text: string) {
+/**
+ * Выполняет внутренний этап `recommendationTargetText`, подготавливающий рекомендации целевого объекта текста для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationTargetText(text: string): string {
   const clean = rawRussianText(text);
   const cue = clean.match(/(?:не\s+)?рекоменд(?:овано|уется|ованы|ован|овать)?\s+/u);
   const start = cue?.index == null ? 0 : cue.index + cue[0].length;
@@ -71,7 +101,15 @@ function recommendationTargetText(text: string) {
   return (audience >= 12 ? tail.slice(0, audience) : tail.slice(0, 260)).trim();
 }
 
-function commonPrefixLength(left: string, right: string) {
+/**
+ * Выполняет внутренний этап `commonPrefixLength`, подготавливающий общих префикса длины для основного scorer-а.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function commonPrefixLength(left: string, right: string): number {
   const limit = Math.min(left.length, right.length);
   let index = 0;
   while (index < limit && left[index] === right[index]) index += 1;
@@ -82,14 +120,27 @@ function commonPrefixLength(left: string, right: string) {
  * Названия диагностического метода и его результата часто отличаются только
  * продуктивным окончанием: "…графия" / "…грамма". Для длинных терминов
  * безопаснее сравнить общий уникальный префикс, чем заводить словарь фактов.
+ *
+ * @param answerToken Значение `answerToken`, необходимое этому этапу scorer-а.
+ * @param targetToken Значение `targetToken`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
  */
-function longMedicalTokenMatch(answerToken: string, targetToken: string) {
+function longMedicalTokenMatch(answerToken: string, targetToken: string): boolean {
   if (answerToken.length < 12 || targetToken.length < 12) return false;
   const prefix = commonPrefixLength(answerToken, targetToken);
   return prefix >= 11 && prefix / Math.min(answerToken.length, targetToken.length) >= 0.72;
 }
 
-function answerTargetSupport(answer: AnswerOption, targetText: string) {
+/**
+ * Извлекает или проверяет варианта ответа целевого объекта поддержки ответа в варианте ответа.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param targetText Исходный текст соответствующего объекта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerTargetSupport(answer: AnswerOption, targetText: string): {matched: boolean; coverage: number} {
   const answerNorm = normalizeForSearch(answer.text);
   const targetNorm = normalizeForSearch(targetText);
   const answerTokens = uniqueTokens(answer.text).filter((token) => token.length >= 4 && !TARGET_GENERIC.has(token));
@@ -115,6 +166,13 @@ function answerTargetSupport(answer: AnswerOption, targetText: string) {
  * Декодирует несколько независимых рекомендаций с одинаковой популяцией:
  * каждый вариант должен совпасть с целевой частью собственного атомарного
  * пункта, а не с общим широким окном страницы.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
  */
 export function resolveRepeatedRecommendationSet({
   mode,

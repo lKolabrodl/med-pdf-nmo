@@ -105,7 +105,16 @@ import {
   bestRowLabelSupport,
   bestSectionSupport,
 } from "../search/index.js";
+import type {EvidenceItem} from "../../types.js";
 
+/**
+ * Собирает evidence всех scorer-модулей и вычисляет сырой score одного ответа.
+ *
+ * Функция не калибрует score и не выбирает итоговый вариант.
+ *
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function scoreAnswer(
   context: AnswerScoringContext,
 ): AnswerScoreResult {
@@ -274,7 +283,7 @@ export function scoreAnswer(
     raw *= 0.72;
   }
 
-  let evidence = [
+  let evidence: EvidenceItem[] = [
     anchor,
     section,
     rowLabel,
@@ -350,7 +359,7 @@ export function scoreAnswer(
     exactShortLabelRow,
     shortLabelRow,
     siblingList.evidence,
-  ].filter(Boolean);
+  ].filter((item): item is EvidenceItem => Boolean(item));
   const definitionCompletion = definitionCompletionAdjustment(context, evidence);
   raw += definitionCompletion.adjustment;
   if (definitionCompletion.evidence) evidence.push(definitionCompletion.evidence);

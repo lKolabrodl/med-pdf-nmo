@@ -14,7 +14,11 @@ type HierarchyParent = {
   labelTokens: string[];
   children: HierarchyChild[];
 };
+type ChildTokenFrequency = {frequency: Map<string, number>; total: number};
+type ChildAnswerMatch = {matched: boolean; quality: number};
+type BestChildMatch = ChildAnswerMatch & {child: HierarchyChild};
 
+/** Поправка и evidence для каждого ответа, разрешённого по иерархии списка. */
 export type HierarchicalListResolution = Map<
   string,
   {
@@ -31,7 +35,14 @@ const GENERIC = new Set(
   ),
 );
 
-function flattenLines(pages: PdfLinePage[]) {
+/**
+ * Выполняет внутренний этап `flattenLines`, подготавливающий `flatten` строк для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function flattenLines(pages: PdfLinePage[]): FlatLine[] {
   const out: FlatLine[] = [];
   let flatIndex = 0;
   for (const page of pages ?? []) {
@@ -43,17 +54,38 @@ function flattenLines(pages: PdfLinePage[]) {
   return out;
 }
 
-function parentLabel(text: string) {
+/**
+ * Выполняет внутренний этап `parentLabel`, подготавливающий родительского пункта метки для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function parentLabel(text: string): string | null {
   const match = ROMAN_PARENT.exec(String(text ?? ""));
   return match?.[1]?.replace(/\s+/gu, " ").trim() ?? null;
 }
 
-function childStart(text: string) {
+/**
+ * Выполняет внутренний этап `childStart`, подготавливающий дочернего пункта `start` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function childStart(text: string): string | null {
   const match = NUMBERED_CHILD.exec(String(text ?? ""));
   return match?.[1]?.replace(/\s+/gu, " ").trim() ?? null;
 }
 
-function childBoundary(text: string) {
+/**
+ * Находит структурную границу для дочернего пункта.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function childBoundary(text: string): boolean {
   const clean = normalizeForSearch(text);
   return (
     /^\s*[-\u2010-\u2015\u2022\u25aa\u25e6*]\s+/u.test(String(text ?? "")) ||
@@ -62,7 +94,12 @@ function childBoundary(text: string) {
   );
 }
 
-/** Reconstructs consecutive `I. parent -> 1) child` physical-line trees. */
+/**
+ * Reconstructs consecutive `I. parent -> 1) child` physical-line trees.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function buildHierarchicalListClusters(
   pages: PdfLinePage[],
 ): HierarchyParent[][] {
@@ -118,11 +155,25 @@ export function buildHierarchicalListClusters(
   return clusters.filter((cluster) => cluster.length >= 2);
 }
 
-function informative(tokens: string[]) {
+/**
+ * Выполняет внутренний этап `informative`, подготавливающий информативных токенов для основного scorer-а.
+ *
+ * @param tokens Набор токенов для локального сопоставления.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function informative(tokens: string[]): string[] {
   return tokens.filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token) && !GENERIC.has(token) && !/^\d+$/u.test(token));
 }
 
-function commonLabelTokens(cluster: HierarchyParent[]) {
+/**
+ * Выделяет специфичные токены для общих метки.
+ *
+ * @param cluster Значение `cluster`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function commonLabelTokens(cluster: HierarchyParent[]): Set<string> {
   const common = new Set(informative(cluster[0].labelTokens));
   for (const parent of cluster.slice(1)) {
     const tokens = new Set(informative(parent.labelTokens));
@@ -131,7 +182,16 @@ function commonLabelTokens(cluster: HierarchyParent[]) {
   return common;
 }
 
-function parentQuestionMatch(question: string, parent: HierarchyParent, common: Set<string>) {
+/**
+ * Проверяет совпадение родительского пункта вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @param parent Значение `parent`, необходимое этому этапу scorer-а.
+ * @param common Значение `common`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function parentQuestionMatch(question: string, parent: HierarchyParent, common: Set<string>): number {
   const questionNegated = /(?:^|\s)не\s+\S/iu.test(String(question ?? "").toLowerCase());
   const labelNegated = /(?:^|\s)не\s+\S/iu.test(String(parent.label ?? "").toLowerCase());
   if (questionNegated !== labelNegated) return 0;
@@ -150,11 +210,25 @@ function parentQuestionMatch(question: string, parent: HierarchyParent, common: 
   return Math.max(phrase ? 1 : 0, coverage) + Math.min(0.35, hits * 0.08);
 }
 
-function baseChildText(text: string) {
+/**
+ * Выполняет внутренний этап `baseChildText`, подготавливающий `base` дочернего пункта текста для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function baseChildText(text: string): string {
   return text.replace(/\s*\([^)]*\)\s*[;.]?\s*$/u, "").trim();
 }
 
-function childTokenFrequency(cluster: HierarchyParent[]) {
+/**
+ * Выполняет внутренний этап `childTokenFrequency`, подготавливающий дочернего пункта токена частоты для основного scorer-а.
+ *
+ * @param cluster Значение `cluster`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function childTokenFrequency(cluster: HierarchyParent[]): ChildTokenFrequency {
   const frequency = new Map<string, number>();
   const children = cluster.flatMap((parent) => parent.children);
   for (const child of children) {
@@ -165,18 +239,37 @@ function childTokenFrequency(cluster: HierarchyParent[]) {
   return { frequency, total: children.length };
 }
 
-function distinctiveChildTokens(text: string, frequency: Map<string, number>, total: number) {
+/**
+ * Выделяет специфичные токены для различающих дочернего пункта.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param frequency Значение `frequency`, необходимое этому этапу scorer-а.
+ * @param total Значение `total`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function distinctiveChildTokens(text: string, frequency: Map<string, number>, total: number): string[] {
   const tokens = informative(uniqueTokens(baseChildText(text)));
   const distinctive = tokens.filter((token) => (frequency.get(token) ?? 0) < Math.max(2, Math.ceil(total * 0.55)));
   return distinctive.length ? distinctive : tokens;
 }
 
+/**
+ * Проверяет совпадение дочернего пункта варианта ответа.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param child Значение `child`, необходимое этому этапу scorer-а.
+ * @param frequency Значение `frequency`, необходимое этому этапу scorer-а.
+ * @param total Значение `total`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function childAnswerMatch(
   answer: AnswerOption,
   child: HierarchyChild,
   frequency: Map<string, number>,
   total: number,
-) {
+): ChildAnswerMatch {
   const childText = baseChildText(child.text);
   const childTokens = distinctiveChildTokens(childText, frequency, total);
   const answerTokens = distinctiveChildTokens(answer.text, frequency, total);
@@ -200,18 +293,38 @@ function childAnswerMatch(
   };
 }
 
+/**
+ * Проверяет совпадение дочернего пункта.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param children Значение `children`, необходимое этому этапу scorer-а.
+ * @param frequency Значение `frequency`, необходимое этому этапу scorer-а.
+ * @param total Значение `total`, необходимое этому этапу scorer-а.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ * @internal
+ */
 function bestChildMatch(
   answer: AnswerOption,
   children: HierarchyChild[],
   frequency: Map<string, number>,
   total: number,
-) {
+): BestChildMatch | null {
   return children
     .map((child) => ({ child, ...childAnswerMatch(answer, child, frequency, total) }))
     .filter((item) => item.matched)
     .sort((left, right) => right.quality - left.quality)[0] ?? null;
 }
 
+/**
+ * Выбирает дочерние элементы родительского пункта, названного в multi-вопросе.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ */
 export function resolveHierarchicalList({
   mode,
   pages,

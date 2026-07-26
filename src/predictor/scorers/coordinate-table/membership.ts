@@ -26,6 +26,13 @@ import {
   coordinateTextHasExplicitTableCaption,
 } from "./shared.js";
 
+/**
+ * Собирает блоки координатной таблицы, пригодные для проверки принадлежности.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateTableMembershipBlocks(
   page: CoordinatePdfPage,
 ): CoordinateTableMembership[] {
@@ -70,6 +77,10 @@ function coordinateTableMembershipBlocks(
 /**
  * Строит membership-блоки явных таблиц. В отличие от row-scorer'ов, этот слой
  * отвечает на вопрос "входит ли вариант в релевантную таблицу целиком".
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildCoordinateTableMembershipsByPage(
   pages: CoordinatePdfPage[],
@@ -86,6 +97,15 @@ export function buildCoordinateTableMembershipsByPage(
   return byPage;
 }
 
+/**
+ * Выделяет фокус вопроса для проверки принадлежности элемента категории таблицы.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateTableMembershipFocus(
   question: string,
   focusTokens: string[],
@@ -96,6 +116,14 @@ function coordinateTableMembershipFocus(
   );
 }
 
+/**
+ * Оценивает локальное совпадение варианта ответа с элементом категории таблицы.
+ *
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateTableMembershipAnswerHit(
   block: CoordinateTableMembership,
   answerText: string,
@@ -106,6 +134,13 @@ function coordinateTableMembershipAnswerHit(
   });
 }
 
+/**
+ * Проверяет конфликт действия или длительности между ответом и табличной категорией.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateTableMembershipHasOpposingActionDuration(
   answers: AnswerOption[],
 ): boolean {
@@ -119,6 +154,17 @@ function coordinateTableMembershipHasOpposingActionDuration(
  * Ищет multi-вариант внутри тела явной таблицы, caption/заголовок которой
  * совпадает с фокусом вопроса. Это помогает полным table-list вопросам, где
  * несколько правильных ответов находятся в разных строках одной таблицы.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @param context.coordinateTableMembershipsByPage Структуры принадлежности к таблицам по страницам.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCoordinateTableMembershipSupport({
   mode,

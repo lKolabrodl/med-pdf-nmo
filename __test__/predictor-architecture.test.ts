@@ -1,5 +1,6 @@
-import {existsSync, readdirSync} from "node:fs";
+import {existsSync, readFileSync, readdirSync} from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import {describe, expect, it} from "vitest";
 import {BM25Index} from "../src/bm25.js";
 import * as coordinateTable from "../src/predictor/scorers/coordinate-table/index.js";
@@ -244,6 +245,119 @@ describe("scorer feature folders", () => {
 
     expect(flatModules).toEqual([]);
     expect(missingFacades).toEqual([]);
+  });
+
+  it("documents every scorer module next to its implementation", () => {
+    const missingReadmes = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => !existsSync(path.join(scorersRoot, name, "README.md")));
+
+    expect(missingReadmes).toEqual([]);
+  });
+
+  it("tests every scorer module next to its implementation", () => {
+    const missingTests = entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => !existsSync(path.join(scorersRoot, name, "index.test.ts")));
+
+    expect(missingTests).toEqual([]);
+  });
+
+  it("gives every named scorer function explicit parameter and return types", () => {
+    const missingTypes: string[] = [];
+
+    for (const entry of entries.filter((item) => item.isDirectory())) {
+      const moduleDir = path.join(scorersRoot, entry.name);
+      const sourceFiles = readdirSync(moduleDir)
+        .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"));
+
+      for (const fileName of sourceFiles) {
+        const filePath = path.join(moduleDir, fileName);
+        const text = readFileSync(filePath, "utf8");
+        const source = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+        for (const statement of source.statements) {
+          const callables: Array<{name: string; node: ts.FunctionLikeDeclaration}> = [];
+          if (ts.isFunctionDeclaration(statement) && statement.name) {
+            callables.push({name: statement.name.text, node: statement});
+          }
+          if (ts.isVariableStatement(statement)) {
+            for (const declaration of statement.declarationList.declarations) {
+              if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+              if (!ts.isArrowFunction(declaration.initializer) && !ts.isFunctionExpression(declaration.initializer)) continue;
+              callables.push({name: declaration.name.text, node: declaration.initializer});
+            }
+          }
+
+          for (const callable of callables) {
+            const key = `${entry.name}/${fileName}:${callable.name}`;
+            if (!callable.node.type) missingTypes.push(`${key}:return`);
+            for (const [index, parameter] of callable.node.parameters.entries()) {
+              if (!parameter.type) missingTypes.push(`${key}:parameter-${index + 1}`);
+            }
+          }
+        }
+      }
+    }
+
+    expect(missingTypes).toEqual([]);
+  });
+
+  it("explicitly names every scorer function in its colocated test", () => {
+    const mismatches: string[] = [];
+
+    for (const entry of entries.filter((item) => item.isDirectory())) {
+      const moduleDir = path.join(scorersRoot, entry.name);
+      const sourceKeys: string[] = [];
+      for (const fileName of readdirSync(moduleDir)
+        .filter((name) => name.endsWith(".ts") && !name.endsWith(".test.ts"))) {
+        const filePath = path.join(moduleDir, fileName);
+        const text = readFileSync(filePath, "utf8");
+        const source = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+        for (const statement of source.statements) {
+          if (ts.isFunctionDeclaration(statement) && statement.name) {
+            sourceKeys.push(`${fileName}:${statement.name.text}`);
+          }
+          if (!ts.isVariableStatement(statement)) continue;
+          for (const declaration of statement.declarationList.declarations) {
+            if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+            if (!ts.isArrowFunction(declaration.initializer) && !ts.isFunctionExpression(declaration.initializer)) continue;
+            sourceKeys.push(`${fileName}:${declaration.name.text}`);
+          }
+        }
+      }
+
+      const testPath = path.join(moduleDir, "index.test.ts");
+      const testText = readFileSync(testPath, "utf8");
+      const testSource = ts.createSourceFile(testPath, testText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+      const testKeys: string[] = [];
+      for (const statement of testSource.statements) {
+        if (!ts.isExpressionStatement(statement) || !ts.isCallExpression(statement.expression)) continue;
+        const call = statement.expression;
+        if (!ts.isIdentifier(call.expression) || call.expression.text !== "defineScorerFunctionContract") continue;
+        const manifest = call.arguments[1];
+        if (!manifest || !ts.isObjectLiteralExpression(manifest)) continue;
+        for (const property of manifest.properties) {
+          if (!ts.isPropertyAssignment(property) || !ts.isStringLiteralLike(property.name)) continue;
+          if (!ts.isArrayLiteralExpression(property.initializer)) continue;
+          for (const element of property.initializer.elements) {
+            if (ts.isStringLiteralLike(element)) testKeys.push(`${property.name.text}:${element.text}`);
+          }
+        }
+      }
+
+      const expected = [...sourceKeys].sort();
+      const actual = [...testKeys].sort();
+      if (JSON.stringify(actual) !== JSON.stringify(expected)) {
+        const missing = expected.filter((key) => !actual.includes(key));
+        const unexpected = actual.filter((key) => !expected.includes(key));
+        mismatches.push(`${entry.name}: missing [${missing.join(", ")}], unexpected [${unexpected.join(", ")}]`);
+      }
+    }
+
+    expect(mismatches).toEqual([]);
   });
 
   it("keeps the numeric public scorer surface explicit", () => {

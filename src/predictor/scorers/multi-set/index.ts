@@ -7,6 +7,14 @@ import type { AnswerScore } from "../../types.js";
 
 type AnswerOption = { id: string; text: string };
 type OrdinalFamilyMember = { answer: AnswerOption; value: number; suffix: string };
+type OrdinalSuffix = "" | "stage" | "degree" | "class" | "type";
+type RecommendationPolarity = "negative" | "positive";
+type ExplicitOrdinalRangeResolution = {
+  answerIds: string[];
+  page: number;
+  text: string;
+  key: string;
+};
 
 const ORDINAL_GENERIC_TOKENS = new Set(
   uniqueTokens(
@@ -14,17 +22,38 @@ const ORDINAL_GENERIC_TOKENS = new Set(
   ),
 );
 
-function romanValue(value: string) {
+/**
+ * Преобразует поддерживаемую римскую запись в числовое значение.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function romanValue(value: string): number | null {
   const normalized = value.toLowerCase();
   const values: Record<string, number> = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
   return values[normalized] ?? null;
 }
 
-function ordinalValue(value: string) {
+/**
+ * Преобразует арабскую или римскую порядковую метку в число.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalValue(value: string): number | null {
   return /^\d+$/u.test(value) ? Number(value) : romanValue(value);
 }
 
-function canonicalSuffix(value: string) {
+/**
+ * Возвращает каноническое представление суффикса.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalSuffix(value: string): OrdinalSuffix {
   if (value.startsWith("стад")) return "stage";
   if (value.startsWith("степ")) return "degree";
   if (value.startsWith("класс")) return "class";
@@ -32,6 +61,13 @@ function canonicalSuffix(value: string) {
   return "";
 }
 
+/**
+ * Разбирает входной текст и выделяет порядкового значения семейства вариантов.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function parseOrdinalFamily(answers: AnswerOption[]): OrdinalFamilyMember[] | null {
   if (answers.length < 3) return null;
   const members = [];
@@ -49,14 +85,29 @@ function parseOrdinalFamily(answers: AnswerOption[]): OrdinalFamilyMember[] | nu
   return members;
 }
 
-function sourceSuffixPattern(suffix: string) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента суффикса `pattern`.
+ *
+ * @param suffix Значение `suffix`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sourceSuffixPattern(suffix: string): string {
   if (suffix === "stage") return "стади\\S*";
   if (suffix === "degree") return "степен\\S*";
   if (suffix === "class") return "класс\\S*";
   return "тип\\S*";
 }
 
-function encodedOrdinalSets(text: string, suffix: string) {
+/**
+ * Выполняет внутренний этап `encodedOrdinalSets`, подготавливающий закодированных порядкового значения `sets` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param suffix Значение `suffix`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function encodedOrdinalSets(text: string, suffix: string): number[][] {
   const clean = normalizeText(text)
     .replace(/\[[^\]]*\]/gu, " ")
     .replace(/(?:уровень\s+(?:достоверности|убедительности|доказательности)|ууд|уур)[^.!?;]{0,140}/gu, " ")
@@ -82,13 +133,27 @@ function encodedOrdinalSets(text: string, suffix: string) {
   return sets;
 }
 
-function questionFocusTokens(question: string) {
+/**
+ * Выделяет специфичные токены для вопроса фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function questionFocusTokens(question: string): string[] {
   return uniqueTokens(question).filter(
     (token) => token.length >= 4 && !/^\d/u.test(token) && !FOCUS_STOPWORDS.has(token) && !ORDINAL_GENERIC_TOKENS.has(token),
   );
 }
 
-function mandatoryConditionTokens(question: string) {
+/**
+ * Выделяет специфичные токены для `mandatory` условия.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function mandatoryConditionTokens(question: string): string[] {
   const clean = normalizeText(question);
   const values = [];
   const patterns = [
@@ -101,7 +166,14 @@ function mandatoryConditionTokens(question: string) {
   return [...new Set(values)].filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !ORDINAL_GENERIC_TOKENS.has(token));
 }
 
-function recommendationPolarity(text: string) {
+/**
+ * Выполняет внутренний этап `recommendationPolarity`, подготавливающий рекомендации полярности для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationPolarity(text: string): RecommendationPolarity | null {
   const clean = normalizeText(text);
   if (
     /(?:^|\s)не\s+(?:рекоменду|рекомендова|показан|назнач)|(?:^|\s)нерекоменду/u.test(clean) ||
@@ -117,7 +189,14 @@ function recommendationPolarity(text: string) {
   return null;
 }
 
-function interventionTargetTokens(question: string) {
+/**
+ * Выделяет специфичные токены для `intervention` целевого объекта.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function interventionTargetTokens(question: string): string[] {
   const clean = normalizeText(question);
   const cue = clean.match(/(?:рекоменду\S*|рекомендова\S*|показан\S*|назнача\S*)/u);
   if (!cue || cue.index == null) return [];
@@ -131,12 +210,27 @@ function interventionTargetTokens(question: string) {
     .slice(0, 3);
 }
 
-function tokenHit(tokens: string[], sourceTokens: string[]) {
+/**
+ * Определяет локальные совпадения для токена.
+ *
+ * @param tokens Набор токенов для локального сопоставления.
+ * @param sourceTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function tokenHit(tokens: string[], sourceTokens: string[]): number {
   const source = new Set(sourceTokens);
   return tokens.filter((token) => source.has(token)).length;
 }
 
-function sourceClauses(text: string) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента клауз.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function sourceClauses(text: string): string[] {
   const protectedText = String(text ?? "").replace(/(мм\s*рт)\.\s*(ст)\./giu, "$1§ $2§");
   return protectedText
     .split(/\s*;\s*|,\s*(?:а|но)\s+|(?<=[.!?])\s+/u)
@@ -144,6 +238,17 @@ function sourceClauses(text: string) {
     .filter((item) => item.length >= 20);
 }
 
+/**
+ * Декодирует полный multi-набор из одного явного диапазона порядковых значений.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ */
 export function resolveExplicitOrdinalRangeSet({
   mode,
   pages,
@@ -156,7 +261,7 @@ export function resolveExplicitOrdinalRangeSet({
   topQuestionPages?: Set<number>;
   question: string;
   answers: AnswerOption[];
-}) {
+}): ExplicitOrdinalRangeResolution | null {
   if (mode !== "multi") return null;
   if (recommendationPolarity(question) !== "positive") return null;
   const family = parseOrdinalFamily(answers);
@@ -168,7 +273,7 @@ export function resolveExplicitOrdinalRangeSet({
   const conditions = mandatoryConditionTokens(question);
   const optionValues = new Set(family.map((member) => member.value));
   const suffix = family[0].suffix;
-  const matches = [];
+  const matches: ExplicitOrdinalRangeResolution[] = [];
 
   for (const segment of buildAtomicRecommendationSegments(pages)) {
     const nearTop =
@@ -197,7 +302,17 @@ export function resolveExplicitOrdinalRangeSet({
   return matches[0];
 }
 
-export function applyExplicitOrdinalRangeSetScores(answerScores: AnswerScore[], resolved: { answerIds: string[]; page: number; text: string }) {
+/**
+ * Применяет точное set-level разрешение к score и evidence всех вариантов.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param resolved Значение `resolved`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function applyExplicitOrdinalRangeSetScores(
+  answerScores: AnswerScore[],
+  resolved: {answerIds: string[]; page: number; text: string},
+): AnswerScore[] {
   const selected = new Set(resolved.answerIds);
   const trustedKinds = new Set(["coordinate_table_group", "coordinate_table_group_inverse", "coordinate_table_multicell_row", "coordinate_table_membership", "fibrosis_stage_row"]);
   const trustedConflict = answerScores.some(

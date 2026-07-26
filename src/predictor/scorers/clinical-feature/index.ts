@@ -1,5 +1,6 @@
-import { normalizeForSearch, uniqueTokens } from "../../../normalize.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
+import {normalizeForSearch, uniqueTokens} from "../../../normalize.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   betterEvidence,
   containsNormalizedPhrase,
@@ -9,7 +10,24 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
-import { sentenceSegments } from "../biomedical-symbols/index.js";
+import type {EvidenceItem} from "../../types.js";
+import {sentenceSegments} from "../biomedical-symbols/index.js";
+
+type ClinicalFeatureQuestionContext = Pick<AnswerScoringContext, "mode" | "question" | "intent">;
+
+type ClinicalFeatureSentence = {
+  sentence: string;
+  normalized: string;
+  tokens: string[];
+  focusHits: number;
+  distance: number;
+};
+
+type ClinicalFeatureAdjustment = {
+  support: EvidenceItem | null;
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
 
 const CLINICAL_FEATURE_GENERIC_TOKENS = new Set(
   [
@@ -32,7 +50,17 @@ const CLINICAL_FEATURE_ANSWER_GENERIC_TOKENS = new Set(
   ["\u043e\u0431\u044b\u0447\u043d\u043e", "\u0442\u0438\u043f\u0438\u0447\u043d\u043e", "\u0446\u0432\u0435\u0442\u0430", "\u0446\u0432\u0435\u0442"].flatMap((item) => uniqueTokens(item)),
 );
 
-function clinicalFeatureQuestion({ mode, question, intent }) {
+/**
+ * Проверяет, относится ли вопрос к перечислению клинических признаков.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clinicalFeatureQuestion({mode, question, intent}: ClinicalFeatureQuestionContext): boolean {
   if (mode !== "multi" || intent.negative || intent.exception) return false;
   const normalized = normalizeForSearch(question);
   return (
@@ -43,15 +71,36 @@ function clinicalFeatureQuestion({ mode, question, intent }) {
   );
 }
 
-function clinicalFeatureFocusTokens(question) {
+/**
+ * Выделяет специфичные токены заболевания и клинического контекста из вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function clinicalFeatureFocusTokens(question: string): string[] {
   return uniqueTokens(question).filter((token) => token.length >= 4 && !CLINICAL_FEATURE_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
 }
 
-function clinicalFeatureAnswerTokens(answerText) {
+/**
+ * Выделяет содержательные токены клинического признака из варианта ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function clinicalFeatureAnswerTokens(answerText: string): string[] {
   return uniqueTokens(answerText).filter((token) => token.length >= 4 && !CLINICAL_FEATURE_ANSWER_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
 }
 
-function answerHasNegativeClinicalCue(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа отрицания клинического признака маркера в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerHasNegativeClinicalCue(answerText: string): boolean {
   const normalized = normalizeForSearch(answerText);
   return (
     containsNormalizedPhrase(normalized, "\u043d\u0435 ") ||
@@ -61,7 +110,14 @@ function answerHasNegativeClinicalCue(answerText) {
   );
 }
 
-function clinicalFeatureSentenceNegative(normalizedSentence) {
+/**
+ * Определяет, отрицает ли локальное предложение наличие клинического признака.
+ *
+ * @param normalizedSentence Значение `normalizedSentence`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clinicalFeatureSentenceNegative(normalizedSentence: string): boolean {
   return (
     containsNormalizedPhrase(normalizedSentence, "\u043d\u0435 \u0442\u0438\u043f\u0438\u0447") ||
     containsNormalizedPhrase(normalizedSentence, "\u043d\u0435\u0442\u0438\u043f\u0438\u0447") ||
@@ -72,7 +128,15 @@ function clinicalFeatureSentenceNegative(normalizedSentence) {
   );
 }
 
-function clinicalFeatureCandidateSentences(pageText, focusTokens) {
+/**
+ * Отбирает предложения-кандидаты рядом с фокусом вопроса о клинических признаках.
+ *
+ * @param pageText Исходный текст соответствующего объекта.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function clinicalFeatureCandidateSentences(pageText: string, focusTokens: string[]): ClinicalFeatureSentence[] {
   const sentences = sentenceSegments(pageText).map((sentence) => {
     const normalized = normalizeForSearch(sentence);
     const tokens = tokenizeNormalized(normalized);
@@ -89,16 +153,22 @@ function clinicalFeatureCandidateSentences(pageText, focusTokens) {
     .filter((item) => item.focusHits > 0 || item.distance <= 4);
 }
 
-export function clinicalFeatureAdjustment(context) {
-  const { pages, topQuestionPages, mode, question, answer, intent } = context;
-  if (!clinicalFeatureQuestion({ mode, question, intent })) return { support: null, adjustment: 0, evidence: null };
+/**
+ * Возвращает поддержку клинического признака либо штраф за его явное отрицание.
+ *
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function clinicalFeatureAdjustment(context: AnswerScoringContext): ClinicalFeatureAdjustment {
+  const {pages, mode, question, answer, intent} = context;
+  if (!clinicalFeatureQuestion({mode, question, intent})) return {support: null, adjustment: 0, evidence: null};
   const focusTokens = clinicalFeatureFocusTokens(question);
   if (!focusTokens.length) return { support: null, adjustment: 0, evidence: null };
   const answerTokens = clinicalFeatureAnswerTokens(answer.text);
   if (answerTokens.length < 2) return { support: null, adjustment: 0, evidence: null };
   const answerNegative = answerHasNegativeClinicalCue(answer.text);
-  let bestSupport = null;
-  let bestNegated = null;
+  let bestSupport: EvidenceItem | null = null;
+  let bestNegated: EvidenceItem | null = null;
 
   for (const page of pages) {
     for (const item of clinicalFeatureCandidateSentences(page.text, focusTokens)) {
@@ -121,7 +191,7 @@ export function clinicalFeatureAdjustment(context) {
   }
 
   if (bestNegated && (!bestSupport || bestNegated.score >= bestSupport.score - 0.8)) {
-    return { support: null, adjustment: -8.4, evidence: bestNegated };
+    return {support: null, adjustment: -8.4, evidence: bestNegated};
   }
-  return bestSupport ? { support: bestSupport, adjustment: 0, evidence: null } : { support: null, adjustment: 0, evidence: null };
+  return bestSupport ? {support: bestSupport, adjustment: 0, evidence: null} : {support: null, adjustment: 0, evidence: null};
 }

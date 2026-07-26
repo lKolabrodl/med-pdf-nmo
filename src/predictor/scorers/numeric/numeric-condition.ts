@@ -47,6 +47,13 @@ type NumericConditionSource = {
   normalized: string;
 };
 
+/**
+ * Извлекает из вопроса маркеры числового условия и сравнения.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function questionMarkerConditions(question: string): MarkerCondition[] {
   const normalized = normalizeForSearch(question);
   const conditions: MarkerCondition[] = [];
@@ -62,6 +69,14 @@ function questionMarkerConditions(question: string): MarkerCondition[] {
   return conditions;
 }
 
+/**
+ * Проверяет совпадение числового маркера условий.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @param conditions Значение `conditions`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function markerConditionsMatch(local: string, conditions: MarkerCondition[]): boolean {
   for (const condition of conditions) {
     if (condition.type === "hbeag") {
@@ -81,6 +96,13 @@ function markerConditionsMatch(local: string, conditions: MarkerCondition[]): bo
   return true;
 }
 
+/**
+ * Строит набор поисковых фраз для условного числа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function conditionedNumberPhrases(answerText: string): string[] {
   const phrases = new Set<string>();
   for (const number of extractNumbers(answerText)) {
@@ -93,6 +115,13 @@ function conditionedNumberPhrases(answerText: string): string[] {
   return [...phrases].map((phrase) => normalizeForSearch(phrase)).filter((phrase) => phrase.length >= 1).slice(0, 18);
 }
 
+/**
+ * Строит допустимые формы записи для точного совпадения числового значения.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function exactNumericForms(text: string): string[] {
   const forms = new Set<string>();
   for (const number of extractNumbers(text)) {
@@ -105,6 +134,15 @@ function exactNumericForms(text: string): string[] {
   return [...forms].filter(Boolean);
 }
 
+/**
+ * Находит структурную границу для числового значения поиска.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param hit Значение `hit`, необходимое этому этапу scorer-а.
+ * @param length Длина проверяемого диапазона или токена.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericSearchBoundary(normalizedText: string, hit: number, length: number): boolean {
   const before = hit > 0 ? normalizedText[hit - 1] : "";
   const after = hit + length < normalizedText.length ? normalizedText[hit + length] : "";
@@ -118,6 +156,14 @@ function numericSearchBoundary(normalizedText: string, hit: number, length: numb
   return true;
 }
 
+/**
+ * Определяет локальные совпадения для числового значения формы.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param form Значение `form`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function findNumericFormHits(normalizedText: string, form: string): NumericHit[] {
   const hits: NumericHit[] = [];
   if (!form) return hits;
@@ -132,6 +178,14 @@ function findNumericFormHits(normalizedText: string, form: string): NumericHit[]
   return hits;
 }
 
+/**
+ * Определяет локальные совпадения для исходного фрагмента условия.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param anchor Значение `anchor`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function sourceConditionHits(normalizedText: string, anchor: NumericConditionAnchor): NumericHit[] {
   if (anchor.pattern) {
     const hits: NumericHit[] = [];
@@ -155,6 +209,15 @@ function sourceConditionHits(normalizedText: string, anchor: NumericConditionAnc
   return hits;
 }
 
+/**
+ * Определяет локальные совпадения для следующей границы условия.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param anchor Значение `anchor`, необходимое этому этапу scorer-а.
+ * @param start Начальная позиция рассматриваемого диапазона.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function nextConditionHit(normalizedText: string, anchor: NumericConditionAnchor, start: number): number {
   if (!anchor.nextPattern) return -1;
   anchor.nextPattern.lastIndex = start;
@@ -163,10 +226,27 @@ function nextConditionHit(normalizedText: string, anchor: NumericConditionAnchor
   return match?.index ?? -1;
 }
 
+/**
+ * Выполняет внутренний этап `interveningNumberCount`, подготавливающий `intervening` числа количества для основного scorer-а.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function interveningNumberCount(normalizedText: string): number {
   return extractNumbers(normalizedText).length;
 }
 
+/**
+ * Выполняет внутренний этап `numericConditionDirectionOk`, подготавливающий числового значения условия направления `ok` для основного scorer-а.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param conditionHit Значение `conditionHit`, необходимое этому этапу scorer-а.
+ * @param answerHit Значение `answerHit`, необходимое этому этапу scorer-а.
+ * @param anchor Значение `anchor`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericConditionDirectionOk(normalizedText: string, conditionHit: NumericHit, answerHit: NumericHit, anchor: NumericConditionAnchor): boolean {
   const conditionEnd = conditionHit.index + conditionHit.length;
   const answerEnd = answerHit.index + answerHit.length;
@@ -184,6 +264,14 @@ function numericConditionDirectionOk(normalizedText: string, conditionHit: Numer
   return true;
 }
 
+/**
+ * Выполняет внутренний этап `numericConditionAnchorSatisfied`, подготавливающий числового значения условия якоря `satisfied` для основного scorer-а.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @param anchor Значение `anchor`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericConditionAnchorSatisfied(local: string, anchor: NumericConditionAnchor): boolean {
   if (!anchor.phrases?.length || !anchor.minPhraseHits) return true;
   let hits = 0;
@@ -193,6 +281,13 @@ function numericConditionAnchorSatisfied(local: string, anchor: NumericCondition
   return hits >= anchor.minPhraseHits;
 }
 
+/**
+ * Извлекает из вопроса якоря, связывающие числовое значение с условием.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function questionNumericConditionAnchors(question: string): NumericConditionAnchor[] {
   const raw = normalizeText(question);
   const normalized = normalizeForSearch(question);
@@ -262,6 +357,14 @@ function questionNumericConditionAnchors(question: string): NumericConditionAnch
   return anchors;
 }
 
+/**
+ * Выполняет внутренний этап `numericConditionSources`, подготавливающий числового значения условия `sources` для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function numericConditionSources(pages: NumericConditionInput["pages"], topQuestionPages: NumericConditionInput["topQuestionPages"]): NumericConditionSource[] {
   const sources: NumericConditionSource[] = [];
   for (const page of pages) {
@@ -276,6 +379,19 @@ function numericConditionSources(pages: NumericConditionInput["pages"], topQuest
   return sources;
 }
 
+/**
+ * Ищет значение ответа рядом с совместимым направлением числового сравнения.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
 export function bestNumericConditionSupport({mode,pages,topQuestionPages,question,answer,answerTokens,focusTokens}: NumericConditionInput): NumericEvidence {
   if (mode !== "single") return null;
   const answerForms = exactNumericForms(answer.text);
@@ -321,6 +437,19 @@ export function bestNumericConditionSupport({mode,pages,topQuestionPages,questio
   return best;
 }
 
+/**
+ * Связывает точное число с дополнительным условием вопроса в одном сегменте.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
 export function bestConditionedNumberSupport({mode,pages,topQuestionPages,question,answer,answerTokens,focusTokens}: NumericConditionInput): NumericEvidence {
   if (mode !== "single") return null;
   if (!extractNumbers(answer.text).length && !frequencyAnswer(answer.text)) return null;

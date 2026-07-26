@@ -1,7 +1,26 @@
-import { extractNumbers, normalizeForSearch, normalizeText, uniqueTokens } from "../../../normalize.js";
-import type { PdfLinePage } from "../../../pdf.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
-import { answerSearchPhrases, betterEvidence, containsNormalizedPhrase, numberCoverage, strictSoftCoverage, tokenizeNormalized, tokenHitCount } from "../../text-utils.js";
+import {extractNumbers, normalizeForSearch, normalizeText, uniqueTokens} from "../../../normalize.js";
+import type {PdfLinePage} from "../../../pdf.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import {answerSearchPhrases, betterEvidence, containsNormalizedPhrase, numberCoverage, strictSoftCoverage, tokenizeNormalized, tokenHitCount} from "../../text-utils.js";
+import type {AnswerOption, EvidenceItem} from "../../types.js";
+
+type SupportAdjustment = {
+  support: EvidenceItem | null;
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
+
+type RecommendationSegmentAnswerHit = {
+  phraseHit: boolean;
+  strongPhraseHit: boolean;
+  answerCoverage: number;
+  numericCoverage: number;
+  supportHit: boolean;
+  mismatchHit: boolean;
+};
+
+type AnticoagulationContraPolarity = "absence" | "presence";
 
 const RECOMMENDATION_QUESTION_GENERIC = new Set(
   [
@@ -42,7 +61,14 @@ const RECOMMENDATION_TARGET_GENERIC = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function recommendationItemQuestion(question) {
+/**
+ * Выполняет внутренний этап `recommendationItemQuestion`, подготавливающий рекомендации пункта рекомендации вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationItemQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   const firstLineTherapy = containsNormalizedPhrase(normalized, "\u043f\u0435\u0440\u0432\u043e\u0439 \u043b\u0438\u043d\u0438\u0438");
   const valveProsthesisChoice =
@@ -56,23 +82,58 @@ function recommendationItemQuestion(question) {
   return firstLineTherapy || valveProsthesisChoice || universalInstrumental;
 }
 
-function recommendationQuestionTokens(question) {
+/**
+ * Выделяет специфичные токены для рекомендации вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function recommendationQuestionTokens(question: string): string[] {
   return uniqueTokens(question).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !RECOMMENDATION_QUESTION_GENERIC.has(token));
 }
 
-function isPageNumberOnly(line) {
+/**
+ * Проверяет наличие или совместимость `page` числа `only`.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function isPageNumberOnly(line: string): boolean {
   return /^\s*\d+\s*$/u.test(String(line ?? ""));
 }
 
-function startsBullet(line) {
+/**
+ * Проверяет наличие или совместимость пункта списка.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function startsBullet(line: string): boolean {
   return /^\s*[•*\-]\s*/u.test(String(line ?? ""));
 }
 
-function startsRecommendationBullet(line) {
+/**
+ * Проверяет наличие или совместимость рекомендации пункта списка.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function startsRecommendationBullet(line: string): boolean {
   return /^\s*[•\uF0B7*\-]\s*/u.test(String(line ?? ""));
 }
 
-function recommendationLineStart(line) {
+/**
+ * Выполняет внутренний этап `recommendationLineStart`, подготавливающий рекомендации строки `start` для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationLineStart(line: string): boolean {
   if (isPageNumberOnly(line)) return false;
   const normalized = normalizeForSearch(line);
   return (
@@ -82,7 +143,15 @@ function recommendationLineStart(line) {
   );
 }
 
-function recommendationBoundaryLine(line, isFirstLine) {
+/**
+ * Выполняет внутренний этап `recommendationBoundaryLine`, подготавливающий рекомендации границы строки для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param isFirstLine Значение `isFirstLine`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationBoundaryLine(line: string, isFirstLine: boolean): boolean {
   if (isPageNumberOnly(line)) return true;
   if (!isFirstLine && startsRecommendationBullet(line)) return true;
   const normalized = normalizeForSearch(line);
@@ -95,8 +164,17 @@ function recommendationBoundaryLine(line, isFirstLine) {
   );
 }
 
-function collectRecommendationSegment(pages, pageIndex, lineIndex) {
-  const lines = [];
+/**
+ * Собирает рекомендации сегмента, не выходя за структурные границы текущего блока.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param pageIndex Позиция соответствующего элемента в локальной структуре.
+ * @param lineIndex Позиция соответствующего элемента в локальной структуре.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function collectRecommendationSegment(pages: PdfLinePage[], pageIndex: number, lineIndex: number): string {
+  const lines: string[] = [];
   for (let currentPageIndex = pageIndex; currentPageIndex < Math.min(pages.length, pageIndex + 2); currentPageIndex += 1) {
     const page = pages[currentPageIndex];
     const pageLines = page.lines ?? [];
@@ -116,8 +194,15 @@ function collectRecommendationSegment(pages, pageIndex, lineIndex) {
   return lines.join(" ");
 }
 
-function recommendationSegments(pages) {
-  const segments = [];
+/**
+ * Строит ограниченные текстовые сегменты для рекомендации.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function recommendationSegments(pages: PdfLinePage[]): RecommendationSegment[] {
+  const segments: RecommendationSegment[] = [];
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
     const page = pages[pageIndex];
     const lines = page.lines ?? [];
@@ -135,14 +220,30 @@ function recommendationSegments(pages) {
   return segments;
 }
 
-function explicitRecommendationLineStart(line) {
+/**
+ * Выполняет внутренний этап `explicitRecommendationLineStart`, подготавливающий явного рекомендации строки `start` для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function explicitRecommendationLineStart(line: string): boolean {
   if (isPageNumberOnly(line)) return false;
   const normalized = normalizeForSearch(line);
   return containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u043e\u0432\u0430") || containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434\u0443");
 }
 
-function collectExplicitRecommendationBlock(pages, pageIndex, lineIndex) {
-  const lines = [];
+/**
+ * Собирает явного рекомендации блока, не выходя за структурные границы текущего блока.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param pageIndex Позиция соответствующего элемента в локальной структуре.
+ * @param lineIndex Позиция соответствующего элемента в локальной структуре.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function collectExplicitRecommendationBlock(pages: PdfLinePage[], pageIndex: number, lineIndex: number): string {
+  const lines: string[] = [];
   for (let currentPageIndex = pageIndex; currentPageIndex < Math.min(pages.length, pageIndex + 2); currentPageIndex += 1) {
     const page = pages[currentPageIndex];
     const pageLines = page.lines ?? [];
@@ -160,8 +261,15 @@ function collectExplicitRecommendationBlock(pages, pageIndex, lineIndex) {
   return lines.join(" ");
 }
 
-function explicitRecommendationSegments(pages) {
-  const segments = [];
+/**
+ * Строит ограниченные текстовые сегменты для явного рекомендации.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function explicitRecommendationSegments(pages: PdfLinePage[]): RecommendationSegment[] {
+  const segments: RecommendationSegment[] = [];
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
     const page = pages[pageIndex];
     const lines = page.lines ?? [];
@@ -179,7 +287,15 @@ function explicitRecommendationSegments(pages) {
   return segments;
 }
 
-function atomicRecommendationBoundary(line, isFirstLine) {
+/**
+ * Находит структурную границу одной атомарной рекомендации.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param isFirstLine Значение `isFirstLine`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function atomicRecommendationBoundary(line: string, isFirstLine: boolean): boolean {
   if (isFirstLine) return false;
   if (isPageNumberOnly(line)) return false;
   if (explicitRecommendationLineStart(line) || startsBullet(line)) return true;
@@ -203,6 +319,12 @@ export type RecommendationSegment = {
   normalized: string;
 };
 
+/**
+ * Объединяет переносы рекомендации, сохраняя границы соседних пунктов.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
 export function buildAtomicRecommendationSegments(
   pages: PdfLinePage[],
 ): RecommendationSegment[] {
@@ -213,7 +335,7 @@ export function buildAtomicRecommendationSegments(
     for (let lineIndex = 0; lineIndex < pageLines.length; lineIndex += 1) {
       if (!explicitRecommendationLineStart(pageLines[lineIndex]) && !startsBullet(pageLines[lineIndex])) continue;
       const startedWithBullet = startsBullet(pageLines[lineIndex]);
-      const lines = [];
+      const lines: string[] = [];
       let done = false;
       for (let currentPageIndex = pageIndex; currentPageIndex < Math.min(pages.length, pageIndex + 2) && !done; currentPageIndex += 1) {
         const currentLines = pages[currentPageIndex]?.lines ?? [];
@@ -255,7 +377,15 @@ export function buildAtomicRecommendationSegments(
   return segments;
 }
 
-function recommendationSubjectCompatible(questionNorm, segmentNorm) {
+/**
+ * Проверяет структурную совместимость рекомендации субъекта.
+ *
+ * @param questionNorm Значение `questionNorm`, необходимое этому этапу scorer-а.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function recommendationSubjectCompatible(questionNorm: string, segmentNorm: string): boolean {
   const questionBiological = containsNormalizedPhrase(questionNorm, "\u0431\u0438\u043e\u043b\u043e\u0433");
   const questionMechanical = containsNormalizedPhrase(questionNorm, "\u043c\u0435\u0445\u0430\u043d");
   const segmentBiological = containsNormalizedPhrase(segmentNorm, "\u0431\u0438\u043e\u043b\u043e\u0433");
@@ -270,7 +400,16 @@ function recommendationSubjectCompatible(questionNorm, segmentNorm) {
   return true;
 }
 
-function recommendationQuestionCoverage(questionNorm, questionTokens, segmentNorm) {
+/**
+ * Выполняет внутренний этап `recommendationQuestionCoverage`, подготавливающий рекомендации вопроса `coverage` для основного scorer-а.
+ *
+ * @param questionNorm Значение `questionNorm`, необходимое этому этапу scorer-а.
+ * @param questionTokens Нормализованные токены вопроса.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function recommendationQuestionCoverage(questionNorm: string, questionTokens: string[], segmentNorm: string): number {
   const segmentTokens = tokenizeNormalized(segmentNorm);
   let coverageScore = strictSoftCoverage(questionTokens, segmentTokens);
   const valveProsthesisQuestion =
@@ -281,7 +420,15 @@ function recommendationQuestionCoverage(questionNorm, questionTokens, segmentNor
   return coverageScore;
 }
 
-function recommendationAnswerWindow(questionNorm, segmentNorm) {
+/**
+ * Строит ограниченное локальное окно для рекомендации варианта ответа.
+ *
+ * @param questionNorm Значение `questionNorm`, необходимое этому этапу scorer-а.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationAnswerWindow(questionNorm: string, segmentNorm: string): string {
   if (containsNormalizedPhrase(questionNorm, "\u0434\u0438\u043b\u0430\u0442\u0430\u0446")) {
     const withoutDilation = segmentNorm.indexOf(normalizeForSearch("\u0431\u0435\u0437 \u0434\u0438\u043b\u0430\u0442\u0430\u0446"));
     if (withoutDilation > 80) return segmentNorm.slice(0, withoutDilation);
@@ -289,7 +436,15 @@ function recommendationAnswerWindow(questionNorm, segmentNorm) {
   return segmentNorm;
 }
 
-function recommendationAliasSupport(answerText, segmentNorm) {
+/**
+ * Выполняет внутренний этап `recommendationAliasSupport`, подготавливающий рекомендации алиаса поддержки ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationAliasSupport(answerText: string, segmentNorm: string): number {
   const answerNorm = normalizeForSearch(answerText);
   let support = 0;
   if (
@@ -310,7 +465,14 @@ function recommendationAliasSupport(answerText, segmentNorm) {
   return support;
 }
 
-function anticoagulationContraPolarity(normalized) {
+/**
+ * Выполняет внутренний этап `anticoagulationContraPolarity`, подготавливающий `anticoagulation` `contra` полярности для основного scorer-а.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function anticoagulationContraPolarity(normalized: string): AnticoagulationContraPolarity | null {
   if (!containsNormalizedPhrase(normalized, "\u0430\u043d\u0442\u0438\u043a\u043e\u0430\u0433")) return null;
   const contra = normalizeForSearch("\u043f\u0440\u043e\u0442\u0438\u0432\u043e\u043f\u043e\u043a\u0430\u0437");
   let start = 0;
@@ -325,7 +487,15 @@ function anticoagulationContraPolarity(normalized) {
   return null;
 }
 
-function recommendationPresenceMismatch(answerText, segmentNorm) {
+/**
+ * Определяет явное несовпадение рекомендации `presence`.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function recommendationPresenceMismatch(answerText: string, segmentNorm: string): boolean {
   const answerNorm = normalizeForSearch(answerText);
   const answerContraPolarity = anticoagulationContraPolarity(answerNorm);
   const segmentContraPolarity = anticoagulationContraPolarity(segmentNorm);
@@ -348,7 +518,14 @@ function recommendationPresenceMismatch(answerText, segmentNorm) {
   return false;
 }
 
-function appointmentTargetTokens(question) {
+/**
+ * Выделяет специфичные токены для назначения целевого объекта.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function appointmentTargetTokens(question: string): string[] {
   const normalized = normalizeText(question);
   const cues = [
     "\u043d\u0430\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435",
@@ -384,24 +561,63 @@ function appointmentTargetTokens(question) {
     .slice(0, 7);
 }
 
-function targetCoverage(targetTokens, segmentTokens) {
+/**
+ * Выполняет внутренний этап `targetCoverage`, подготавливающий целевого объекта `coverage` для основного scorer-а.
+ *
+ * @param targetTokens Нормализованные токены соответствующего текста.
+ * @param segmentTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function targetCoverage(targetTokens: string[], segmentTokens: string[]): number {
   if (!targetTokens.length) return 0;
   return strictSoftCoverage(targetTokens, segmentTokens);
 }
 
-function appointmentContextTokens(question, targetTokens) {
+/**
+ * Выделяет специфичные токены для назначения `context`.
+ *
+ * @param question Исходный текст вопроса.
+ * @param targetTokens Нормализованные токены соответствующего текста.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function appointmentContextTokens(question: string, targetTokens: string[]): string[] {
   const targetSet = new Set(targetTokens);
   return uniqueTokens(question)
     .filter((token) => token.length >= 4 && !targetSet.has(token) && !FOCUS_STOPWORDS.has(token) && !RECOMMENDATION_TARGET_GENERIC.has(token))
     .slice(0, 8);
 }
 
-function contextCoverage(contextTokens, segmentTokens) {
+/**
+ * Выполняет внутренний этап `contextCoverage`, подготавливающий `context` `coverage` для основного scorer-а.
+ *
+ * @param contextTokens Нормализованные токены соответствующего текста.
+ * @param segmentTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function contextCoverage(contextTokens: string[], segmentTokens: string[]): number {
   if (contextTokens.length < 2) return 1;
   return strictSoftCoverage(contextTokens, segmentTokens);
 }
 
-function recommendationSegmentAnswerHit(answer, answerTokens, segmentNorm, segmentTokens) {
+/**
+ * Определяет локальные совпадения для рекомендации сегмента варианта ответа.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @param segmentTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationSegmentAnswerHit(
+  answer: AnswerOption,
+  answerTokens: string[],
+  segmentNorm: string,
+  segmentTokens: string[],
+): RecommendationSegmentAnswerHit {
   const answerNorm = normalizeForSearch(answer.text);
   const strongPhrases = new Set([answerNorm]);
   const withoutParentheses = answerNorm.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
@@ -423,7 +639,14 @@ function recommendationSegmentAnswerHit(answer, answerTokens, segmentNorm, segme
   return { phraseHit, strongPhraseHit, answerCoverage, numericCoverage, supportHit, mismatchHit };
 }
 
-function genericPopulationAnswerText(answerText) {
+/**
+ * Выполняет внутренний этап `genericPopulationAnswerText`, подготавливающий общих токенов популяции варианта ответа текста для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function genericPopulationAnswerText(answerText: string): boolean {
   const normalized = normalizeForSearch(answerText);
   return (
     normalized.startsWith(normalizeForSearch("\u0432\u0441\u0435\u043c \u043f\u0430\u0446\u0438\u0435\u043d\u0442")) ||
@@ -435,12 +658,27 @@ function genericPopulationAnswerText(answerText) {
   );
 }
 
-function populationStem(answerText) {
+/**
+ * Выполняет внутренний этап `populationStem`, подготавливающий популяции основы слова для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function populationStem(answerText: string): string | null {
   const stems = ["\u043f\u0430\u0446\u0438\u0435\u043d\u0442", "\u043f\u043e\u0441\u0442\u0440\u0430\u0434", "\u0431\u043e\u043b\u044c\u043d"].map((item) => normalizeForSearch(item));
   return uniqueTokens(answerText).find((token) => stems.some((stem) => token.startsWith(stem.slice(0, Math.min(8, stem.length))))) ?? null;
 }
 
-function hasSpecificPopulationAlternative(answers, genericAnswer) {
+/**
+ * Проверяет наличие или совместимость специфичных популяции альтернативы.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param genericAnswer Значение `genericAnswer`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasSpecificPopulationAlternative(answers: AnswerOption[], genericAnswer: AnswerOption): boolean {
   const stem = populationStem(genericAnswer.text);
   if (!stem) return false;
   return (answers ?? []).some((candidate) => {
@@ -458,7 +696,14 @@ function hasSpecificPopulationAlternative(answers, genericAnswer) {
   });
 }
 
-function followUpFrequencyAnswer(answerText) {
+/**
+ * Выполняет внутренний этап `followUpFrequencyAnswer`, подготавливающий `follow` `up` частоты варианта ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function followUpFrequencyAnswer(answerText: string): boolean {
   const normalized = normalizeForSearch(answerText);
   return (
     extractNumbers(answerText).length > 0 &&
@@ -474,8 +719,19 @@ function followUpFrequencyAnswer(answerText) {
  * Ищет поддержку варианта внутри того рекомендательного блока, который относится к препарату/вмешательству
  * из вопроса вида "рекомендовано назначение X". Если вариант уверенно найден только в соседней рекомендации
  * про другой X, возвращается мягкий штраф вместо поддержки.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
  */
-export function explicitRecommendationTargetAdjustment({ mode, pages, question, answer, answers, answerTokens }) {
+export function explicitRecommendationTargetAdjustment(
+  {mode, pages, question, answer, answers, answerTokens}: AnswerScoringContext,
+): SupportAdjustment {
   if (mode !== "multi") return { support: null, adjustment: 0, evidence: null };
   const targetTokens = appointmentTargetTokens(question);
   if (!targetTokens.length) return { support: null, adjustment: 0, evidence: null };
@@ -529,7 +785,19 @@ export function explicitRecommendationTargetAdjustment({ mode, pages, question, 
   return { support: null, adjustment: 0, evidence: null };
 }
 
-export function bestRecommendationItemSupport({ pages, question, answer, answerTokens }) {
+/**
+ * Ищет вариант ответа внутри одного атомарного пункта рекомендации.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestRecommendationItemSupport(
+  {pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!recommendationItemQuestion(question)) return null;
   const questionNorm = normalizeForSearch(question);
   const qTokens = recommendationQuestionTokens(question);
@@ -562,7 +830,14 @@ export function bestRecommendationItemSupport({ pages, question, answer, answerT
   return best;
 }
 
-function broadRecommendationQuestion(question) {
+/**
+ * Выполняет внутренний этап `broadRecommendationQuestion`, подготавливающий `broad` рекомендации вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function broadRecommendationQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   return (
     containsNormalizedPhrase(normalized, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") ||
@@ -574,7 +849,14 @@ function broadRecommendationQuestion(question) {
   );
 }
 
-function recommendationCueSegment(segmentNorm) {
+/**
+ * Выполняет внутренний этап `recommendationCueSegment`, подготавливающий рекомендации маркера сегмента для основного scorer-а.
+ *
+ * @param segmentNorm Значение `segmentNorm`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationCueSegment(segmentNorm: string): boolean {
   return (
     containsNormalizedPhrase(segmentNorm, "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") ||
     containsNormalizedPhrase(segmentNorm, "\u043d\u0430\u0437\u043d\u0430\u0447") ||
@@ -586,8 +868,19 @@ function recommendationCueSegment(segmentNorm) {
 /**
  * Ищет вариант внутри одного рекомендательного пункта, не склеивая соседние рекомендации.
  * Срабатывает только при высокой доле вопросных токенов в том же пункте, где найден вариант.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestRecommendationBlockSupport({ mode, pages, topQuestionPages, question, answer, answerTokens }) {
+export function bestRecommendationBlockSupport(
+  {mode, pages, topQuestionPages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "multi") return null;
   if (!broadRecommendationQuestion(question)) return null;
   const questionNorm = normalizeForSearch(question);

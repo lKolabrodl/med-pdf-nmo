@@ -7,6 +7,16 @@ import type { AnswerScore } from "../../types.js";
 type AnswerOption = { id: string; text: string };
 type RelationFragment = { page: number; text: string };
 type RelationScope = { valueText: string; contextText: string; conditionText: string };
+type NumericTuple = {number: string; unit: string};
+type ComparatorDirection = "less" | "greater";
+type ConditionSpec = {number: string; unit: string; direction: ComparatorDirection | null};
+type RelationTupleProof = {
+  answerId: string;
+  page: number;
+  text: string;
+  role: RelationRole;
+  interval: boolean;
+};
 
 type RelationRole =
   | "maximum_dose"
@@ -80,7 +90,14 @@ type CanonicalInterval = {
 
 const NUMBER_ATOM_SOURCE = String.raw`\d+(?:\.\d+)?`;
 
-function canonicalNumber(value: string) {
+/**
+ * Возвращает каноническое представление числа.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalNumber(value: string): string {
   const normalized = value.replace(/^0+(?=\d)/u, "").replace(/\.0+$/u, "").replace(/(\.\d*?)0+$/u, "$1");
   return normalized || "0";
 }
@@ -88,6 +105,9 @@ function canonicalNumber(value: string) {
 /**
  * Canonicalizes an interval as one value. In particular, endpoint numbers that
  * merely coexist in a clause do not satisfy an interval option.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function canonicalIntervalTuples(text: string): CanonicalInterval[] {
   const clean = normalizeText(text);
@@ -125,11 +145,27 @@ export function canonicalIntervalTuples(text: string): CanonicalInterval[] {
     );
 }
 
-function strictNumbers(text: string) {
+/**
+ * Выполняет внутренний этап `strictNumbers`, подготавливающий `strict` чисел для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function strictNumbers(text: string): string[] {
   return (normalizeText(text).match(/\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?%?/gu) ?? []).map((value) => value.replace(/^0+(?=\d)/u, ""));
 }
 
-function canonicalUnitAfter(clean: string, end: number, number: string) {
+/**
+ * Возвращает каноническое представление единицы измерения `after`.
+ *
+ * @param clean Значение `clean`, необходимое этому этапу scorer-а.
+ * @param end Конечная позиция рассматриваемого диапазона.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalUnitAfter(clean: string, end: number, number: string): string {
   const after = clean.slice(end, Math.min(clean.length, end + 28));
   if (number.endsWith("%") || /^\s*%/u.test(after)) return "percent";
   const probes: Array<[string, RegExp]> = [
@@ -150,7 +186,14 @@ function canonicalUnitAfter(clean: string, end: number, number: string) {
   return probes.find(([, pattern]) => pattern.test(after))?.[0] ?? "scalar";
 }
 
-function numericTuples(text: string) {
+/**
+ * Выполняет внутренний этап `numericTuples`, подготавливающий числового значения кортежей отношений для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function numericTuples(text: string): NumericTuple[] {
   const clean = normalizeText(text);
   const tuples: Array<{ number: string; unit: string }> = [];
   for (const match of clean.matchAll(/\d+(?:\.\d+)?(?:-\d+(?:\.\d+)?)?%?/gu)) {
@@ -161,18 +204,39 @@ function numericTuples(text: string) {
   return tuples;
 }
 
-function familySkeleton(text: string) {
+/**
+ * Выполняет внутренний этап `familySkeleton`, подготавливающий семейства вариантов лексического каркаса для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function familySkeleton(text: string): string {
   return uniqueTokens(text)
     .filter((token) => !/^\d/u.test(token) && !SKELETON_IGNORES.has(token))
     .sort()
     .join("|");
 }
 
-function unitClass(text: string) {
+/**
+ * Выполняет внутренний этап `unitClass`, подготавливающий единицы измерения класса для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function unitClass(text: string): string {
   const clean = normalizeText(text);
   return UNIT_PATTERNS.find(([, pattern]) => pattern.test(clean))?.[0] ?? "scalar";
 }
 
+/**
+ * Строит структуру интервала семейства вариантов из переданного локального контекста.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function buildIntervalFamily(answers: AnswerOption[]): NumericFamily | null {
   if (answers.length < 3) return null;
   const parsed = answers.map((answer) => canonicalIntervalTuples(answer.text));
@@ -199,7 +263,15 @@ function buildIntervalFamily(answers: AnswerOption[]): NumericFamily | null {
   return { members, allFamilyNumbers: new Set(members.flatMap((member) => member.allNumbers)) };
 }
 
-function buildNumericFamily(answers: AnswerOption[], enableIntervalFamilies = false): NumericFamily | null {
+/**
+ * Строит структуру числового значения семейства вариантов из переданного локального контекста.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param enableIntervalFamilies Значение `enableIntervalFamilies`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function buildNumericFamily(answers: AnswerOption[], enableIntervalFamilies: boolean = false): NumericFamily | null {
   if (enableIntervalFamilies) {
     const intervalFamily = buildIntervalFamily(answers);
     if (intervalFamily) return intervalFamily;
@@ -244,11 +316,25 @@ function buildNumericFamily(answers: AnswerOption[], enableIntervalFamilies = fa
   };
 }
 
-function negativeOrAmbiguousQuestion(question: string) {
+/**
+ * Выполняет внутренний этап `negativeOrAmbiguousQuestion`, подготавливающий отрицания `or` `ambiguous` вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function negativeOrAmbiguousQuestion(question: string): boolean {
   const clean = normalizeText(question);
   return /(?:^|\s)(?:кроме|исключая)(?:\s|$)/u.test(clean) || /(?:^|\s)не\s+(?:явля|относ|характер|рекоменд|включ)/u.test(clean);
 }
 
+/**
+ * Определяет связанного отношения роли отношения по общим текстовым маркерам.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function detectRelationRole(question: string): RelationRole | null {
   const clean = normalizeText(question);
   if (/максимальн/u.test(clean) && /доз/u.test(clean)) return "maximum_dose";
@@ -266,7 +352,14 @@ function detectRelationRole(question: string): RelationRole | null {
   return null;
 }
 
-function questionComparator(question: string) {
+/**
+ * Извлекает из вопроса нормализованный оператор числового сравнения.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionComparator(question: string): ComparatorDirection | null {
   const clean = normalizeText(question);
   if (/(?:^|\s)(?:не\s+менее|не\s+ниже)(?:\s|$)/u.test(clean)) return "greater";
   if (/(?:^|\s)(?:не\s+более|не\s+выше)(?:\s|$)/u.test(clean)) return "less";
@@ -275,15 +368,30 @@ function questionComparator(question: string) {
   return null;
 }
 
-function focusTokens(question: string) {
+/**
+ * Выделяет специфичные токены для фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function focusTokens(question: string): string[] {
   return uniqueTokens(question).filter(
     (token) => token.length >= 4 && !/^\d/u.test(token) && !FOCUS_STOPWORDS.has(token) && !RELATION_GENERIC_TOKENS.has(token),
   );
 }
 
-function conditionSpecs(question: string, _family: NumericFamily) {
+/**
+ * Выполняет внутренний этап `conditionSpecs`, подготавливающий условия `specs` для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @param _family Значение `_family`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function conditionSpecs(question: string, _family: NumericFamily): ConditionSpec[] {
   const clean = normalizeText(question);
-  const values: Array<{ number: string; unit: string; direction: string | null }> = [];
+  const values: ConditionSpec[] = [];
   for (const tuple of numericTuples(question)) {
     if (!["kg", "years", "months"].includes(tuple.unit) || Number(tuple.number) >= 1000) continue;
     const index = clean.indexOf(tuple.number);
@@ -301,12 +409,26 @@ function conditionSpecs(question: string, _family: NumericFamily) {
   );
 }
 
-function isBoundaryLine(line: string) {
+/**
+ * Проверяет наличие или совместимость границы строки.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function isBoundaryLine(line: string): boolean {
   const clean = normalizeText(line);
   return /^\s*[•*]/u.test(line) || /^\d+(?:\.\d+)+\.?\s/u.test(clean) || /^(?:уровень убедительности|ууд|уур|комментари)/u.test(clean);
 }
 
-function splitBoundedText(text: string) {
+/**
+ * Выполняет внутренний этап `splitBoundedText`, подготавливающий `split` ограниченного текста для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function splitBoundedText(text: string): string[] {
   const protectedText = String(text ?? "").replace(/(мм\s*рт)\.\s*(ст)\./giu, "$1§ $2§");
   const pieces = protectedText
     .split(/(?<=[.!?])\s+|\s*;\s*/u)
@@ -315,11 +437,17 @@ function splitBoundedText(text: string) {
   return pieces.length ? pieces : [String(text ?? "").replace(/\s+/gu, " ").trim()].filter(Boolean);
 }
 
-/** Builds fresh sentence/clause and at-most-two-line proof fragments. */
+/**
+ * Builds fresh sentence/clause and at-most-two-line proof fragments.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function buildRelationTupleFragments(
   pages: PdfLinePage[],
   topQuestionPages?: Set<number>,
-) {
+): RelationFragment[] {
   const fragments: RelationFragment[] = [];
   const seen = new Set<string>();
   for (const page of pages ?? []) {
@@ -349,7 +477,16 @@ export function buildRelationTupleFragments(
   return fragments;
 }
 
-function sliceTargetScope(text: string, target: RegExp, siblings: RegExp[]) {
+/**
+ * Выполняет внутренний этап `sliceTargetScope`, подготавливающий `slice` целевого объекта `scope` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param target Значение `target`, необходимое этому этапу scorer-а.
+ * @param siblings Значение `siblings`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sliceTargetScope(text: string, target: RegExp, siblings: RegExp[]): string | null {
   const clean = normalizeText(text);
   const targetMatch = target.exec(clean);
   target.lastIndex = 0;
@@ -366,7 +503,15 @@ function sliceTargetScope(text: string, target: RegExp, siblings: RegExp[]) {
   return clean.slice(targetIndex, end).trim();
 }
 
-function roleCueMatches(text: string, role: RelationRole) {
+/**
+ * Проверяет совпадение роли отношения маркера.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param role Значение `role`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function roleCueMatches(text: string, role: RelationRole): boolean {
   if (role === "rank") return /мест/u.test(text);
   if (role === "interval") return /интервал/u.test(text);
   if (role === "percent_cases") return /(?:%|процент)/u.test(text) && /случа/u.test(text);
@@ -376,6 +521,14 @@ function roleCueMatches(text: string, role: RelationRole) {
   return true;
 }
 
+/**
+ * Выполняет внутренний этап `scopesForRole`, подготавливающий `scopes` `for` роли отношения для основного scorer-а.
+ *
+ * @param fragment Значение `fragment`, необходимое этому этапу scorer-а.
+ * @param role Значение `role`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function scopesForRole(fragment: RelationFragment, role: RelationRole): RelationScope[] {
   const clauses = splitBoundedText(fragment.text).map((text) => normalizeText(text));
   const scopes: RelationScope[] = [];
@@ -400,11 +553,27 @@ function scopesForRole(fragment: RelationFragment, role: RelationRole): Relation
   return scopes;
 }
 
-function numberPresent(scope: string, number: string) {
+/**
+ * Выполняет внутренний этап `numberPresent`, подготавливающий числа `present` для основного scorer-а.
+ *
+ * @param scope Значение `scope`, необходимое этому этапу scorer-а.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function numberPresent(scope: string, number: string): boolean {
   return strictNumbers(scope).includes(number);
 }
 
-function comparatorNearValue(scope: string, value: string) {
+/**
+ * Выполняет внутренний этап `comparatorNearValue`, подготавливающий компаратора `near` значения для основного scorer-а.
+ *
+ * @param scope Значение `scope`, необходимое этому этапу scorer-а.
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function comparatorNearValue(scope: string, value: string): ComparatorDirection | null {
   const clean = normalizeText(scope);
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const match = new RegExp(`(?:^|\\s)${escaped.replace(/-/gu, "\\s*-\\s*")}(?:%|\\s|$)`, "u").exec(clean);
@@ -418,24 +587,51 @@ function comparatorNearValue(scope: string, value: string) {
   return null;
 }
 
-function requiredUnitClass(question: string, family: NumericFamily) {
+/**
+ * Выполняет внутренний этап `requiredUnitClass`, подготавливающий `required` единицы измерения класса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @param family Значение `family`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function requiredUnitClass(question: string, family: NumericFamily): string {
   const answerClass = family.members[0]?.unitClass ?? "scalar";
   return answerClass === "scalar" ? unitClass(question) : answerClass;
 }
 
-function focusCompatible(scope: string, questionTokens: string[]) {
+/**
+ * Проверяет структурную совместимость фокуса вопроса.
+ *
+ * @param scope Значение `scope`, необходимое этому этапу scorer-а.
+ * @param questionTokens Нормализованные токены вопроса.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function focusCompatible(scope: string, questionTokens: string[]): boolean {
   if (!questionTokens.length) return false;
   const coverage = strictSoftCoverage(questionTokens, tokenizeNormalized(normalizeForSearch(scope)));
   return coverage >= (questionTokens.length <= 2 ? 0.75 : 0.45);
 }
 
+/**
+ * Выполняет внутренний этап `memberMatchesScope`, подготавливающий элемента `scope` для основного scorer-а.
+ *
+ * @param member Значение `member`, необходимое этому этапу scorer-а.
+ * @param scope Значение `scope`, необходимое этому этапу scorer-а.
+ * @param role Значение `role`, необходимое этому этапу scorer-а.
+ * @param comparator Значение `comparator`, необходимое этому этапу scorer-а.
+ * @param requiredUnit Значение `requiredUnit`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function memberMatchesScope(
   member: NumericFamilyMember,
   scope: string,
   role: RelationRole,
-  comparator: string | null,
+  comparator: ComparatorDirection | null,
   requiredUnit: string,
-) {
+): boolean {
   if (member.intervalKey) {
     const unit = member.intervalUnit === "scalar" ? requiredUnit : member.intervalUnit;
     return canonicalIntervalTuples(scope).some(
@@ -458,7 +654,15 @@ function memberMatchesScope(
   return true;
 }
 
-function localConditionDirection(text: string, number: string) {
+/**
+ * Выполняет внутренний этап `localConditionDirection`, подготавливающий локального контекста условия направления для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function localConditionDirection(text: string, number: string): ComparatorDirection | null {
   const clean = normalizeText(text);
   const index = clean.indexOf(number);
   if (index < 0) return null;
@@ -468,7 +672,15 @@ function localConditionDirection(text: string, number: string) {
   return null;
 }
 
-function conditionsCompatible(text: string, conditions: Array<{ number: string; unit: string; direction: string | null }>) {
+/**
+ * Проверяет структурную совместимость условий.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param conditions Значение `conditions`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function conditionsCompatible(text: string, conditions: ConditionSpec[]): boolean {
   const tuples = numericTuples(text);
   return conditions.every((condition) => {
     if (!tuples.some((tuple) => tuple.number === condition.number && tuple.unit === condition.unit)) return false;
@@ -479,6 +691,14 @@ function conditionsCompatible(text: string, conditions: Array<{ number: string; 
 /**
  * Resolves one dense numeric family only when a bounded source scope proves a
  * unique subject + relation-role + conditions + value tuple.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.fragments Значение `fragments`, необходимое этому этапу scorer-а.
+ * @param context.enableIntervalFamilies Значение `enableIntervalFamilies`, необходимое этому этапу scorer-а.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
  */
 export function resolveRelationTuple({
   mode,
@@ -492,7 +712,7 @@ export function resolveRelationTuple({
   answers: AnswerOption[];
   fragments: RelationFragment[];
   enableIntervalFamilies?: boolean;
-}) {
+}): RelationTupleProof | null {
   if (mode !== "single" || negativeOrAmbiguousQuestion(question)) return null;
   const family = buildNumericFamily(answers, enableIntervalFamilies);
   if (!family) return null;
@@ -505,7 +725,7 @@ export function resolveRelationTuple({
   const requiredConditions = conditionSpecs(question, family);
   const comparator = questionComparator(question);
   const requiredUnit = requiredUnitClass(question, family);
-  const proofs = [];
+  const proofs: RelationTupleProof[] = [];
 
   for (const fragment of fragments) {
     for (const scope of scopesForRole(fragment, role)) {
@@ -528,6 +748,13 @@ export function resolveRelationTuple({
   return proofs.find((proof) => proof.answerId === [...resolvedIds][0]) ?? null;
 }
 
+/**
+ * Применяет уникальное relation-tuple разрешение, не перебивая более надёжную структуру.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param context Полный контекст скоринга текущего варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function applySingleRelationTupleResolver(
   answerScores: AnswerScore[],
   context: {
@@ -538,7 +765,7 @@ export function applySingleRelationTupleResolver(
     answers: AnswerOption[];
     enableIntervalFamilies?: boolean;
   },
-) {
+): AnswerScore[] {
   if (context.mode !== "single") return answerScores;
   const fragments = buildRelationTupleFragments(context.pages, context.topQuestionPages);
   const resolved = resolveRelationTuple({ ...context, fragments });

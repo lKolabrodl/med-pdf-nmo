@@ -16,7 +16,7 @@ function collectRuntimeSources(relativeDir: string) {
     const entryPath = path.join(relativeDir, entry.name);
     if (entry.isDirectory()) {
       out.push(...collectRuntimeSources(entryPath));
-    } else if (entry.name.endsWith(".ts")) {
+    } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
       out.push(readSource(entryPath));
     }
   }
@@ -30,7 +30,11 @@ function collectBrowserRuntimeSources(relativeDir: string) {
     const entryPath = path.join(relativeDir, entry.name);
     if (entry.isDirectory()) {
       out.push(...collectBrowserRuntimeSources(entryPath));
-    } else if (entry.name.endsWith(".ts") && entryPath !== path.join("src", "cli.ts")) {
+    } else if (
+      entry.name.endsWith(".ts") &&
+      !entry.name.endsWith(".test.ts") &&
+      entryPath !== path.join("src", "cli.ts")
+    ) {
       out.push(readSource(entryPath));
     }
   }

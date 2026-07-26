@@ -65,6 +65,15 @@ export const COORDINATE_RELATIONAL_GENERIC_TOKENS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
+/**
+ * Находит структурную границу для числового значения поиска.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param index Позиция текущего элемента или совпадения.
+ * @param length Длина проверяемого диапазона или токена.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericSearchBoundary(
   normalizedText: string,
   index: number,
@@ -78,6 +87,10 @@ function numericSearchBoundary(
 /**
  * Быстрый gate для coordinate-table scorer'ов: включает их только когда вопрос
  * похож на таблицу, шкалу, классификацию, степень, стадию или числовой критерий.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function hasCoordinateTableCue(
   question: string,
@@ -108,6 +121,11 @@ export function hasCoordinateTableCue(
  * Более широкий gate для multi-групп: кроме явных таблиц допускает list-like
  * вопросы и формулировки про группы/состав/комбинации, где ответы часто живут
  * в одной табличной строке.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function hasCoordinateTableGroupCue(
   question: string,
@@ -133,6 +151,9 @@ export function hasCoordinateTableGroupCue(
 /**
  * Узкий gate для реляционных таблиц: вопрос должен запрашивать тип, механизм,
  * показатель, симптом или другую явно сформулированную связь между колонками.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function hasCoordinateRelationalRowCue(question: string): boolean {
   const raw = String(question ?? "").toLowerCase();
@@ -156,7 +177,12 @@ export function hasCoordinateRelationalRowCue(question: string): boolean {
   return symptomRelation || cueGroups.some((group) => group.every((cue) => raw.includes(cue)));
 }
 
-/** Вопросы сравнения могут ссылаться на таблицу далеко от BM25 top-pages. */
+/**
+ * Вопросы сравнения могут ссылаться на таблицу далеко от BM25 top-pages.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function hasCoordinateComparisonTableCue(question: string): boolean {
   const raw = String(question ?? "").toLowerCase();
   return (
@@ -165,12 +191,24 @@ export function hasCoordinateComparisonTableCue(question: string): boolean {
   );
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCellText`, подготавливающий координатной таблицы ячейки текста для основного scorer-а.
+ *
+ * @param cell Значение `cell`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateCellText(
   cell: Pick<CoordinateCell, "text"> | null | undefined,
 ): string {
   return String(cell?.text ?? "").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Выполняет внутренний этап `coordinateLineCells`, подготавливающий координатной таблицы строки ячеек для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateLineCells(
   line: CoordinateTextLine | null | undefined,
 ): CoordinateCell[] {
@@ -204,6 +242,12 @@ export function coordinateLineCells(
   return cells.filter((cell) => coordinateCellText(cell));
 }
 
+/**
+ * Выполняет внутренний этап `coordinateGroupLineCells`, подготавливающий координатной таблицы группы строки ячеек для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateGroupLineCells(
   line: CoordinateTextLine | null | undefined,
 ): CoordinateCell[] {
@@ -237,6 +281,12 @@ export function coordinateGroupLineCells(
   return cells.filter((cell) => coordinateCellText(cell));
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCellsSpread`, подготавливающий координатной таблицы ячеек разброса координат для основного scorer-а.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateCellsSpread(cells: CoordinateCell[]): number {
   if (cells.length < 2) return 0;
   return (
@@ -245,12 +295,25 @@ export function coordinateCellsSpread(cells: CoordinateCell[]): number {
   );
 }
 
+/**
+ * Проверяет, содержит ли набор координатных ячеек хотя бы одно числовое значение.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateCellsHaveNumericValue(
   cells: CoordinateCell[],
 ): boolean {
   return cells.some((cell) => extractNumbers(cell.text).length > 0 || /[<>≤≥=]/u.test(String(cell.text ?? "")));
 }
 
+/**
+ * Проверяет, похож ли набор координатных ячеек на строку таблицы.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function isCoordinateTableLine(
   line: CoordinateTextLine | null | undefined,
   cells: CoordinateCell[] = coordinateLineCells(line),
@@ -264,6 +327,12 @@ export function isCoordinateTableLine(
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateLineHasHeaderCue`, подготавливающий координатной таблицы строки заголовка маркера для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateLineHasHeaderCue(
   line: CoordinateTextLine | null | undefined,
 ): boolean {
@@ -271,6 +340,12 @@ export function coordinateLineHasHeaderCue(
   return tokenHitCount([...COORDINATE_TABLE_CUE_TOKENS], tokens) > 0;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateTextHasTableCaption`, подготавливающий координатной таблицы текста таблицы заголовка таблицы для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateTextHasTableCaption(text: string): boolean {
   const normalized = normalizeForSearch(text);
   if (containsNormalizedPhrase(normalized, "\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e \u0442\u0430\u0431\u043b\u0438\u0446")) return false;
@@ -282,12 +357,24 @@ export function coordinateTextHasTableCaption(text: string): boolean {
   );
 }
 
+/**
+ * Выполняет внутренний этап `coordinateTextHasExplicitTableCaption`, подготавливающий координатной таблицы текста явного таблицы заголовка таблицы для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateTextHasExplicitTableCaption(text: string): boolean {
   const normalized = normalizeForSearch(text);
   if (containsNormalizedPhrase(normalized, "\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e \u0442\u0430\u0431\u043b\u0438\u0446")) return false;
   return containsNormalizedPhrase(normalized, "\u0442\u0430\u0431\u043b\u0438\u0446");
 }
 
+/**
+ * Выполняет внутренний этап `coordinateTextIsRecommendationMeta`, подготавливающий координатной таблицы текста рекомендации `meta` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateTextIsRecommendationMeta(text: string): boolean {
   const raw = String(text ?? "").toLowerCase();
   if (
@@ -307,6 +394,13 @@ export function coordinateTextIsRecommendationMeta(text: string): boolean {
   );
 }
 
+/**
+ * Выполняет внутренний этап `coordinateLineLooksLikeDataRow`, подготавливающий координатной таблицы строки `looks` `like` `data` строки для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateLineLooksLikeDataRow(
   line: CoordinateTextLine | null | undefined,
   cells: CoordinateCell[] = coordinateLineCells(line),
@@ -324,6 +418,12 @@ export function coordinateLineLooksLikeDataRow(
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateSeverityCueCount`, подготавливающий координатной таблицы `severity` маркера количества для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ */
 export function coordinateSeverityCueCount(text: string): number {
   const normalized = normalizeForSearch(text);
   const cues = [
@@ -341,6 +441,12 @@ export function coordinateSeverityCueCount(text: string): number {
   return count;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRowHasTableContext`, подготавливающий координатной таблицы строки таблицы `context` для основного scorer-а.
+ *
+ * @param row Значение `row`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateRowHasTableContext(
   row: CoordinateTableRow,
 ): boolean {
@@ -358,11 +464,25 @@ export function coordinateRowHasTableContext(
   return false;
 }
 
+/**
+ * Блокирует координатный scorer для вопросов, не описывающих табличное сопоставление.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ */
 export function coordinateTableQuestionBlocked(question: string): boolean {
   const normalized = normalizeForSearch(question);
   return containsNormalizedPhrase(normalized, "\u0444\u0438\u0431\u0440\u043e\u0437") || containsNormalizedPhrase(normalized, "metavir");
 }
 
+/**
+ * Находит ближайшее значение для ближайшего координатной таблицы ячейки.
+ *
+ * @param cells Значение `cells`, необходимое этому этапу scorer-а.
+ * @param x Значение `x`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function nearestCoordinateCell(
   cells: CoordinateCell[],
   x: number,
@@ -381,6 +501,14 @@ function nearestCoordinateCell(
   return bestDistance <= 54 ? best : null;
 }
 
+/**
+ * Выполняет внутренний этап `appendCoordinateContinuation`, подготавливающий `append` координатной таблицы продолжения для основного scorer-а.
+ *
+ * @param baseCells Коллекция значений, используемая текущим этапом сопоставления.
+ * @param continuationCells Коллекция значений, используемая текущим этапом сопоставления.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function appendCoordinateContinuation(
   baseCells: CoordinateCell[],
   continuationCells: CoordinateCell[],
@@ -397,6 +525,13 @@ function appendCoordinateContinuation(
   return appended;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateHeaderText`, подготавливающий координатной таблицы заголовка текста для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateHeaderText(
   lines: CoordinateTextLine[],
   index: number,
@@ -420,6 +555,13 @@ export function coordinateHeaderText(
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Выполняет внутренний этап `coordinateNearbyTableContext`, подготавливающий координатной таблицы соседнего контекста таблицы `context` для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateNearbyTableContext(
   lines: CoordinateTextLine[],
   index: number,
@@ -439,6 +581,13 @@ export function coordinateNearbyTableContext(
   return [...parts, localHeader].join(" ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Восстанавливает строки таблицы из координат текстовых элементов PDF.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function coordinateTableRows(page: CoordinatePdfPage): CoordinateTableRow[] {
   if (page.__coordinateTableRows) return page.__coordinateTableRows;
   const lines = page.lineItems ?? [];
@@ -496,6 +645,10 @@ function coordinateTableRows(page: CoordinatePdfPage): CoordinateTableRow[] {
 /**
  * Строит по страницам обычные coordinate rows: строка PDF разбивается на
  * x-ячейки, рядом лежащие continuation-строки приклеиваются к базовой строке.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildCoordinateTableRowsByPage(
   pages: CoordinatePdfPage[],
@@ -513,6 +666,14 @@ export function buildCoordinateTableRowsByPage(
 }
 
 
+/**
+ * Выделяет специфичные токены вопроса для сопоставления с координатной таблицей.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
 export function coordinateTableFocusTokens(
   question: string,
   focusTokens: string[],
@@ -529,6 +690,13 @@ export function coordinateTableFocusTokens(
   return out.slice(0, 12);
 }
 
+/**
+ * Проверяет совпадение составных токенов фокуса вопроса с подписью таблицы.
+ *
+ * @param tableFocus Значение `tableFocus`, необходимое этому этапу scorer-а.
+ * @param labelTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateCompoundFocusMatches(
   tableFocus: string[],
   labelTokens: string[],
@@ -547,6 +715,13 @@ export function coordinateCompoundFocusMatches(
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRouteSynonymSupport`, подготавливающий координатной таблицы способа введения синонимичной формы поддержки ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param cellText Исходный текст соответствующего объекта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateRouteSynonymSupport(
   answerText: string,
   cellText: string,
@@ -568,6 +743,12 @@ export function coordinateRouteSynonymSupport(
   return 0;
 }
 
+/**
+ * Выполняет внутренний этап `severityCue`, подготавливающий `severity` маркера для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function severityCue(
   text: string,
 ): "very_severe" | "moderate" | "severe" | "mild" | null {
@@ -585,6 +766,14 @@ export function severityCue(
   return null;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateDirectionCuesAroundNumber`, подготавливающий координатной таблицы направления маркеров `around` числа для основного scorer-а.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @param number Каноническое числовое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function coordinateDirectionCuesAroundNumber(
   normalizedText: string,
   number: string,
@@ -638,6 +827,14 @@ function coordinateDirectionCuesAroundNumber(
   return directions;
 }
 
+/**
+ * Проверяет структурную совместимость координатной таблицы числового значения направления.
+ *
+ * @param cellText Исходный текст соответствующего объекта.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param answerNumbers Значение `answerNumbers`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ */
 export function coordinateNumericDirectionCompatible(
   cellText: string,
   answerText: string,
@@ -657,6 +854,16 @@ export function coordinateNumericDirectionCompatible(
   return true;
 }
 
+/**
+ * Выполняет внутренний этап `coordinateCellAnswerSupport`, подготавливающий координатной таблицы ячейки варианта ответа поддержки ответа для основного scorer-а.
+ *
+ * @param cell Значение `cell`, необходимое этому этапу scorer-а.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @param answerPhrases Коллекция значений, используемая текущим этапом сопоставления.
+ * @param answerNumbers Значение `answerNumbers`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function coordinateCellAnswerSupport(
   cell: CoordinateCell,
   answer: AnswerOption,
@@ -679,6 +886,17 @@ export function coordinateCellAnswerSupport(
   return { support, numericCoverage, phraseHit, tokens, normalized };
 }
 
+/**
+ * Выполняет внутренний этап `coordinateRowContrastBonus`, подготавливающий координатной таблицы строки контраста `bonus` для основного scorer-а.
+ *
+ * @param row Значение `row`, необходимое этому этапу scorer-а.
+ * @param bestCell Значение `bestCell`, необходимое этому этапу scorer-а.
+ * @param tableFocus Значение `tableFocus`, необходимое этому этапу scorer-а.
+ * @param bestCellSupport Значение `bestCellSupport`, необходимое этому этапу scorer-а.
+ * @param wholeRowAnswerMatch Значение `wholeRowAnswerMatch`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function coordinateRowContrastBonus(
   row: CoordinateTableRow,
   bestCell: CoordinateCell,
@@ -708,6 +926,15 @@ function coordinateRowContrastBonus(
 /**
  * Оценивает single-answer поддержку из coordinate row: вариант должен совпасть
  * с конкретной ячейкой, а соседние ячейки/заголовок должны объяснять фокус вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.coordinateTableRowsByPage Координатные строки таблиц по страницам.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestCoordinateTableRowSupport({
   mode,

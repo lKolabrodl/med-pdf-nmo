@@ -1,6 +1,18 @@
-import { extractNumbers, normalizeForSearch, uniqueTokens } from "../../../normalize.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
-import { betterEvidence, containsNormalizedPhrase, expandNumberToken, rawTokens, softCoverage, tokenizeNormalized } from "../../text-utils.js";
+import {extractNumbers, normalizeForSearch, uniqueTokens} from "../../../normalize.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import {betterEvidence, containsNormalizedPhrase, expandNumberToken, rawTokens, softCoverage, tokenizeNormalized} from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
+
+type DoseFact = {
+  dose: string | null;
+  doseRange: [string, string] | null;
+  frequency: string | null;
+};
+
+type SourceDoseFact = Omit<DoseFact, "dose"> & {
+  dose: string;
+};
 
 const DOSE_DRUG_GENERIC = new Set(
   [
@@ -46,16 +58,38 @@ const DOSE_ASSIGNMENT_CUES = [
   "\u0441\u043e\u0441\u0442\u0430\u0432\u043b",
 ].map((item) => normalizeForSearch(item));
 
-function doseTokenStartsWithAny(token, cues) {
+/**
+ * Выполняет внутренний этап `doseTokenStartsWithAny`, подготавливающий дозы токена `with` `any` для основного scorer-а.
+ *
+ * @param token Отдельный нормализуемый или сравниваемый токен.
+ * @param cues Значение `cues`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function doseTokenStartsWithAny(token: string, cues: string[]): boolean {
   const normalized = normalizeForSearch(token);
   return cues.some((cue) => normalized.startsWith(cue));
 }
 
-function doseContentTokens(text) {
+/**
+ * Выделяет специфичные токены для дозы `content`.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function doseContentTokens(text: string): string[] {
   return uniqueTokens(text).filter((token) => token.length >= 5 && !DOSE_DRUG_GENERIC.has(token) && !FOCUS_STOPWORDS.has(token) && !/^\d/u.test(token));
 }
 
-function questionDoseDrugTokens(question) {
+/**
+ * Выделяет специфичные токены для вопроса дозы препарата.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function questionDoseDrugTokens(question: string): string[] {
   const normalized = normalizeForSearch(question);
   if (!containsNormalizedPhrase(normalized, "\u0434\u043e\u0437")) return [];
   const raw = rawTokens(question);
@@ -70,7 +104,15 @@ function questionDoseDrugTokens(question) {
   return tokens.slice(0, 3);
 }
 
-function drugTokenIndex(normalized, drugTokens) {
+/**
+ * Находит позицию препарата токена в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param drugTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function drugTokenIndex(normalized: string, drugTokens: string[]): number {
   let best = -1;
   for (const token of drugTokens) {
     const prefix = token.slice(0, Math.min(token.length, 9));
@@ -80,8 +122,16 @@ function drugTokenIndex(normalized, drugTokens) {
   return best;
 }
 
-function doseSlashNumbers(sourceText, drugTokens) {
-  const out = [];
+/**
+ * Выполняет внутренний этап `doseSlashNumbers`, подготавливающий дозы `slash` чисел для основного scorer-а.
+ *
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @param drugTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function doseSlashNumbers(sourceText: string, drugTokens: string[]): string[] {
+  const out: string[] = [];
   const slashPattern = /(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/giu;
   for (const match of sourceText.matchAll(slashPattern)) {
     const rawIndex = match.index ?? 0;
@@ -106,7 +156,15 @@ function doseSlashNumbers(sourceText, drugTokens) {
   return out;
 }
 
-function doseNearDrugNumbers(sourceText, drugTokens) {
+/**
+ * Выполняет внутренний этап `doseNearDrugNumbers`, подготавливающий дозы `near` препарата чисел для основного scorer-а.
+ *
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @param drugTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function doseNearDrugNumbers(sourceText: string, drugTokens: string[]): string[] {
   const normalized = normalizeForSearch(sourceText);
   const drugIndex = drugTokenIndex(normalized, drugTokens);
   if (drugIndex < 0) return [];
@@ -127,9 +185,17 @@ function doseNearDrugNumbers(sourceText, drugTokens) {
   return extractNumbers(local).slice(0, 2).map((number) => String(number).replace(",", "."));
 }
 
-function doseAssignedToDrugNumbers(sourceText, drugTokens) {
+/**
+ * Выполняет внутренний этап `doseAssignedToDrugNumbers`, подготавливающий дозы `assigned` `to` препарата чисел для основного scorer-а.
+ *
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @param drugTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function doseAssignedToDrugNumbers(sourceText: string, drugTokens: string[]): string[] {
   const normalized = normalizeForSearch(sourceText);
-  const out = [];
+  const out: string[] = [];
   const dosePattern = /(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/giu;
   for (const match of normalized.matchAll(dosePattern)) {
     const index = match.index ?? 0;
@@ -143,11 +209,25 @@ function doseAssignedToDrugNumbers(sourceText, drugTokens) {
   return out;
 }
 
-function normalizeDoseNumber(value) {
+/**
+ * Приводит дозы числа к канонической форме для последующего сравнения.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function normalizeDoseNumber(value: string | number | null | undefined): string {
   return String(value ?? "").replace(",", ".").replace(/\.0$/u, "");
 }
 
-function answerDoseFact(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа дозы `fact` в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerDoseFact(answerText: string): DoseFact {
   const normalized = normalizeForSearch(answerText);
   const doseRangeMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*-\s*(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/iu);
   const doseMatch = normalized.match(/(\d+(?:[.,]\d+)?)\s*[\u006d\u043c]\u0433/iu);
@@ -159,7 +239,15 @@ function answerDoseFact(answerText) {
   };
 }
 
-function sourceDoseFacts(sourceText, drugTokens) {
+/**
+ * Извлекает из исходного PDF-фрагмента исходного фрагмента дозы `facts`.
+ *
+ * @param sourceText Исходный текст PDF или ограниченного сегмента.
+ * @param drugTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sourceDoseFacts(sourceText: string, drugTokens: string[]): SourceDoseFact[] {
   const normalized = normalizeForSearch(sourceText);
   const drugIndex = drugTokenIndex(normalized, drugTokens);
   if (drugIndex < 0) return [];
@@ -168,7 +256,7 @@ function sourceDoseFacts(sourceText, drugTokens) {
     return assignedNumbers.map((number) => ({ dose: number, doseRange: null, frequency: null }));
   }
   const local = normalized.slice(drugIndex, Math.min(normalized.length, drugIndex + 125));
-  const facts = [];
+  const facts: SourceDoseFact[] = [];
   const slashNumbers = doseSlashNumbers(sourceText, drugTokens);
   if (slashNumbers.length) {
     return slashNumbers.map((number) => ({ dose: normalizeDoseNumber(number), doseRange: null, frequency: null }));
@@ -192,7 +280,22 @@ function sourceDoseFacts(sourceText, drugTokens) {
   return facts;
 }
 
-function doseFactMatchesAnswer(fact, answerFact, answerNumbers, hasFrequencyFacts = false) {
+/**
+ * Выполняет внутренний этап `doseFactMatchesAnswer`, подготавливающий дозы `fact` варианта ответа для основного scorer-а.
+ *
+ * @param fact Значение `fact`, необходимое этому этапу scorer-а.
+ * @param answerFact Значение `answerFact`, необходимое этому этапу scorer-а.
+ * @param answerNumbers Значение `answerNumbers`, необходимое этому этапу scorer-а.
+ * @param hasFrequencyFacts Значение `hasFrequencyFacts`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function doseFactMatchesAnswer(
+  fact: SourceDoseFact,
+  answerFact: DoseFact,
+  answerNumbers: Set<string>,
+  hasFrequencyFacts: boolean = false,
+): boolean {
   if (answerFact.doseRange) {
     if (!fact.doseRange) return false;
     if (fact.doseRange[0] !== answerFact.doseRange[0] || fact.doseRange[1] !== answerFact.doseRange[1]) return false;
@@ -204,14 +307,26 @@ function doseFactMatchesAnswer(fact, answerFact, answerNumbers, hasFrequencyFact
   return true;
 }
 
-export function bestDrugDoseSupport({ mode, pages, question, answer }) {
+/**
+ * Ищет совместное упоминание препарата, дозы, единицы и кратности назначения.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestDrugDoseSupport(
+  {mode, pages, question, answer}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const drugTokens = questionDoseDrugTokens(question);
   if (!drugTokens.length) return null;
   const answerNumbers = new Set(extractNumbers(answer.text).flatMap(expandNumberToken).map((number) => String(number).replace(",", ".")));
   if (!answerNumbers.size || !containsNormalizedPhrase(normalizeForSearch(answer.text), "\u043c\u0433")) return null;
   const answerFact = answerDoseFact(answer.text);
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const lines = page.lines ?? [];

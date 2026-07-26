@@ -34,6 +34,13 @@ const SUBJECT_NUMERIC_GENERIC_FOCUS = new Set(
   ),
 );
 
+/**
+ * Выполняет внутренний этап `subjectBoundNumericClauses`, подготавливающий субъекта привязки числового значения клауз для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function subjectBoundNumericClauses(text: unknown): string[] {
   return String(text ?? "")
     .split(/\s*;\s*|(?<=[.!?])\s+/u)
@@ -41,6 +48,13 @@ function subjectBoundNumericClauses(text: unknown): string[] {
     .filter((clause) => clause.length >= 18 && clause.length <= 520);
 }
 
+/**
+ * Выполняет внутренний этап `numericOptionValues`, подготавливающий числового значения варианта ответа значений для основного scorer-а.
+ *
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericOptionValues(answers: AnswerOption[]): NumericOptionValue[] {
   return answers.map((candidate) => ({
     id: candidate.id,
@@ -48,6 +62,14 @@ function numericOptionValues(answers: AnswerOption[]): NumericOptionValue[] {
   }));
 }
 
+/**
+ * Выполняет внутренний этап `numericComparatorNearValue`, подготавливающий числового значения компаратора `near` значения для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function numericComparatorNearValue(text: string, value: string): NumericComparator | null {
   const normalized = normalizeForSearch(text).replace(/[≤]/gu, "<").replace(/[≥]/gu, ">");
   const escaped = value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -63,6 +85,15 @@ function numericComparatorNearValue(text: string, value: string): NumericCompara
  * Связывает числовой вариант с субъектом внутри одного предложения или
  * части предложения. Это не дает проценту соседнего заболевания получить
  * поддержку только потому, что PDF склеил обе фразы в один line-window.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
 export function bestSubjectBoundNumericClauseSupport({mode,pages,topQuestionPages,question,answer,answers}: SubjectBoundNumericClauseInput): NumericEvidence {
   if (mode !== "single") return null;

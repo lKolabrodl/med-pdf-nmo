@@ -9,6 +9,7 @@ import { strictSoftCoverage, tokenHitCount } from "../../text-utils.js";
 
 type AnswerOption = { id: string; text: string };
 
+/** Структурные поправки, полученные из одной атомарной recommendation-пропозиции. */
 export type RecommendationPropositionResolution = Map<
   string,
   {
@@ -31,18 +32,39 @@ const QUESTION_GENERIC = new Set(
   ),
 );
 
-function propositionQuestion(question: string) {
+/**
+ * Выполняет внутренний этап `propositionQuestion`, подготавливающий recommendation-пропозиции вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function propositionQuestion(question: string): boolean {
   const clean = normalizeText(question);
   return /рекоменд|следует|является\s+ли|противопоказ/u.test(clean);
 }
 
-export function recommendationTargetTokens(question: string) {
+/**
+ * Извлекает специфичные токены действия или объекта рекомендации из вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ */
+export function recommendationTargetTokens(question: string): string[] {
   return uniqueTokens(question).filter(
     (token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !QUESTION_GENERIC.has(token) && !/^\d+$/u.test(token),
   );
 }
 
-function hasAny(text: string, patterns: RegExp[]) {
+/**
+ * Проверяет наличие или совместимость `any`.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param patterns Значение `patterns`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasAny(text: string, patterns: RegExp[]): boolean {
   return patterns.some((pattern) => pattern.test(text));
 }
 
@@ -53,7 +75,19 @@ type Proposition = {
   irrelevant: boolean;
 };
 
-export function recommendationPropositionFeatures(text: string, contraindicationQuestion: boolean, isAnswer = false): Proposition {
+/**
+ * Разбирает текст на цель, полярность, ограничение и универсальный квантор.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param contraindicationQuestion Значение `contraindicationQuestion`, необходимое этому этапу scorer-а.
+ * @param isAnswer Значение `isAnswer`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function recommendationPropositionFeatures(
+  text: string,
+  contraindicationQuestion: boolean,
+  isAnswer: boolean = false,
+): Proposition {
   const clean = normalizeText(text);
   const irrelevant = /не\s+имеет\s+значения|по\s+усмотрению|на\s+выбор/u.test(clean);
   let polarity: Proposition["polarity"] = null;
@@ -82,11 +116,26 @@ export function recommendationPropositionFeatures(text: string, contraindication
   return { polarity, universal, restricted, irrelevant };
 }
 
-function featureKey(feature: Proposition) {
+/**
+ * Выполняет внутренний этап `featureKey`, подготавливающий признака `key` для основного scorer-а.
+ *
+ * @param feature Значение `feature`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function featureKey(feature: Proposition): string {
   return `${feature.polarity ?? "unknown"}:${feature.universal ? "all" : feature.restricted ? "restricted" : feature.irrelevant ? "irrelevant" : "plain"}`;
 }
 
-function optionCompatibility(source: Proposition, answer: Proposition) {
+/**
+ * Выполняет внутренний этап `optionCompatibility`, подготавливающий варианта ответа `compatibility` для основного scorer-а.
+ *
+ * @param source Ограниченный исходный фрагмент PDF.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function optionCompatibility(source: Proposition, answer: Proposition): number {
   let score = 0;
   if (source.polarity && answer.polarity) score += source.polarity === answer.polarity ? 2.4 : -3.4;
   else if (source.polarity && !answer.polarity) score -= 0.8;
@@ -107,6 +156,13 @@ function optionCompatibility(source: Proposition, answer: Proposition) {
   return score;
 }
 
+/**
+ * Строит ограниченные текстовые сегменты для физических строк PDF рекомендации блока.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function physicalRecommendationBlockSegments(
   pages: PdfLinePage[],
 ): RecommendationSegment[] {
@@ -126,6 +182,13 @@ function physicalRecommendationBlockSegments(
  * Resolves a single yes/no/quantifier option family from one atomic source
  * recommendation. Target lookup and proposition comparison are separate so
  * a condition from a neighboring recommendation cannot become the answer.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
  */
 export function resolveRecommendationProposition({
   mode,

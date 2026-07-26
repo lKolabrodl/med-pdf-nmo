@@ -1,4 +1,5 @@
-import { coverage, extractNumbers, normalizeForSearch, tokenize } from "../../../normalize.js";
+import {coverage, extractNumbers, normalizeForSearch, tokenize} from "../../../normalize.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   answerSearchPhrases,
   betterEvidence,
@@ -9,8 +10,23 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
+import type {AnswerOption, EvidenceItem} from "../../types.js";
 
-function exactAnswerPhrases(answerText, answerTokens) {
+type ExactAnswerPhrase = {
+  raw: string;
+  normalized: string;
+  tokens: string[];
+};
+
+/**
+ * Строит набор поисковых фраз для точного совпадения варианта ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function exactAnswerPhrases(answerText: string, answerTokens: string[]): ExactAnswerPhrase[] {
   const answerNumbers = extractNumbers(answerText);
   const minTokenCount = Math.max(3, Math.ceil(Math.max(1, answerTokens.length) * 0.72));
   const phrases = [];
@@ -29,7 +45,15 @@ function exactAnswerPhrases(answerText, answerTokens) {
   return phrases;
 }
 
-function exactAnswerApplicable(question, answer) {
+/**
+ * Проверяет, применим ли scorer для точного совпадения варианта ответа.
+ *
+ * @param question Исходный текст вопроса.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function exactAnswerApplicable(question: string, answer: AnswerOption): boolean {
   const normalizedQuestion = normalizeForSearch(question);
   const answerNumbers = extractNumbers(answer.text);
   if (answerNumbers.length < 3) return false;
@@ -41,7 +65,23 @@ function exactAnswerApplicable(question, answer) {
   return routeDoseQuestion;
 }
 
-export function bestExactAnswerSupport({ mode, pages, topQuestionPages, question, answer, questionTokens, answerTokens, focusTokens }) {
+/**
+ * Ищет полный длинный ответ с сохранением всех числовых значений назначения.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestExactAnswerSupport(
+  {mode, pages, topQuestionPages, question, answer, questionTokens, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   if (!exactAnswerApplicable(question, answer)) return null;
   const phrases = exactAnswerPhrases(answer.text, answerTokens);

@@ -8,6 +8,7 @@ import { answerSearchPhrases, containsNormalizedPhrase, strictSoftCoverage, toke
 
 type AnswerOption = { id: string; text: string };
 
+/** Структурная поддержка вариантов, найденных в направленном списке факторов риска. */
 export type RiskFactorListResolution = Map<
   string,
   {
@@ -18,7 +19,14 @@ export type RiskFactorListResolution = Map<
 
 type RiskListItem = { text: string; page: number };
 
-function rawRussianText(text: string) {
+/**
+ * Восстанавливает читаемый кириллический текст из исходного PDF-фрагмента.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function rawRussianText(text: string): string {
   return String(text ?? "")
     .toLowerCase()
     .replace(/ё/gu, "е")
@@ -26,7 +34,14 @@ function rawRussianText(text: string) {
     .trim();
 }
 
-function riskQuestionTarget(question: string) {
+/**
+ * Выполняет внутренний этап `riskQuestionTarget`, подготавливающий фактора риска вопроса целевого объекта для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function riskQuestionTarget(question: string): string | null {
   const clean = rawRussianText(question);
   const match = clean.match(/фактор(?:ами|ов|ы)?\s+риска\s+развития\s+(.+)/u);
   if (!match) return null;
@@ -37,10 +52,18 @@ function riskQuestionTarget(question: string) {
   return target.length >= 4 ? target : null;
 }
 
+/**
+ * Выделяет специфичные токены для вопроса целевого объекта.
+ *
+ * @param question Исходный текст вопроса.
+ * @param abbreviations Значение `abbreviations`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function questionTargetTokens(
   question: string,
   abbreviations: PdfAbbreviation[],
-) {
+): string[] {
   const target = riskQuestionTarget(question);
   if (!target) return [];
   const targetTokens = uniqueTokens(target).filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token));
@@ -55,7 +78,14 @@ function questionTargetTokens(
   return [...expanded];
 }
 
-function riskHeaderTarget(line: string) {
+/**
+ * Выполняет внутренний этап `riskHeaderTarget`, подготавливающий фактора риска заголовка целевого объекта для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function riskHeaderTarget(line: string): string | null {
   const clean = rawRussianText(line).replace(/^[•*\-–—]\s*/u, "");
   const patterns = [
     /^факторами\s+риска\s+развития\s+(.+?)\s+(?:являются|считаются|служат)\s*:?\s*$/u,
@@ -69,17 +99,41 @@ function riskHeaderTarget(line: string) {
   return null;
 }
 
-function startsListItem(line: string) {
+/**
+ * Проверяет наличие или совместимость списка пункта рекомендации.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function startsListItem(line: string): boolean {
   return /^\s*[•*\-–—]\s+/u.test(String(line ?? ""));
 }
 
-function likelyNewParagraph(line: string, previous: string) {
+/**
+ * Проверяет наличие или совместимость `new` `paragraph`.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param previous Значение `previous`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function likelyNewParagraph(line: string, previous: string): boolean {
   const raw = String(line ?? "").trim();
   const previousRaw = String(previous ?? "").trim();
   return /[.;]\s*$/u.test(previousRaw) && /^[А-ЯЁA-Z][а-яёa-z]/u.test(raw);
 }
 
-function collectRiskItems(lines: string[], headerIndex: number, page: number) {
+/**
+ * Собирает фактора риска элементов, не выходя за структурные границы текущего блока.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param headerIndex Позиция соответствующего элемента в локальной структуре.
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function collectRiskItems(lines: string[], headerIndex: number, page: number): RiskListItem[] {
   const items: RiskListItem[] = [];
   let current: string[] = [];
   for (let index = headerIndex + 1; index < Math.min(lines.length, headerIndex + 36); index += 1) {
@@ -99,7 +153,15 @@ function collectRiskItems(lines: string[], headerIndex: number, page: number) {
   return items;
 }
 
-function answerMatchesItem(answer: AnswerOption, itemText: string) {
+/**
+ * Извлекает или проверяет варианта ответа пункта рекомендации в варианте ответа.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param itemText Исходный текст соответствующего объекта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerMatchesItem(answer: AnswerOption, itemText: string): {matched: boolean; tokenCoverage: number} {
   const normalized = normalizeForSearch(itemText);
   const answerTokens = uniqueTokens(answer.text).filter((token) => token.length >= 3);
   const phraseHit = answerSearchPhrases(answer.text)
@@ -114,6 +176,15 @@ function answerMatchesItem(answer: AnswerOption, itemText: string) {
  * Восстанавливает ориентированное отношение "факторы риска -> заболевание"
  * из явного заголовка и его маркированных дочерних пунктов. Обратные фразы
  * вида "заболевание является фактором риска ..." в этот блок не попадают.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pdfText Извлечённый текст PDF и связанные метаданные.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
  */
 export function resolveRiskFactorList({
   mode,

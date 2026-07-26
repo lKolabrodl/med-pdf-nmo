@@ -23,13 +23,47 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
+import type {PdfPage, PdfTextLine} from "../../../pdf.js";
+import type {AnswerScoringContext} from "../../contracts.js";
+import type {AnswerMode, EvidenceItem} from "../../types.js";
 
-function questionLabelCues(question) {
+type MkbClassExclusionSupport = {
+  support: EvidenceItem | null;
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
+
+type VisualTableColumnTarget = {
+  x: number;
+  text: string;
+  page: number;
+};
+
+type VisualTableColumnTargetsByPage = Map<number, VisualTableColumnTarget[]>;
+
+/**
+ * Выделяет текстовые маркеры для вопроса метки.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionLabelCues(question: string): string[] {
   const normalized = normalizeForSearch(question);
   return LABEL_CUES.filter((cue) => normalized.includes(cue));
 }
 
-export function bestLabelNumberSupport({ pages, topQuestionPages, question, answer }) {
+/**
+ * Ищет числовой вариант рядом с текстовой меткой, извлечённой из вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestLabelNumberSupport({pages, topQuestionPages, question, answer}: AnswerScoringContext): EvidenceItem | null {
   const labels = questionLabelCues(question);
   if (/мкб/u.test(normalizeText(question))) return null;
   if (!labels.length || !extractNumbers(answer.text).length) return null;
@@ -38,7 +72,7 @@ export function bestLabelNumberSupport({ pages, topQuestionPages, question, answ
   for (const page of pages) {
     if (topQuestionPages?.size && !topQuestionPages.has(page.page)) continue;
     const pageNorm = page.normalized;
-    const labelHits = [];
+    const labelHits: number[] = [];
     for (const label of labels) {
       let start = 0;
       while (start < pageNorm.length) {
@@ -126,7 +160,14 @@ const CYRILLIC_CODE_LETTERS = new Map([
   ["\u0445", "x"],
 ]);
 
-function canonicalClassificationCode(text) {
+/**
+ * Возвращает каноническое представление классификации кода.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalClassificationCode(text: string): string | null {
   const normalized = String(text ?? "").normalize("NFKC");
   const match = normalized.match(/(?:^|[^\p{L}\p{N}])([A-Za-z\u0410-\u042f\u0430-\u044f])\s*\.?\s*(\d{1,3})(?:\s*[.]\s*(\d{1,2}))?(?![\p{L}\p{N}])/u);
   if (!match) return null;
@@ -137,11 +178,18 @@ function canonicalClassificationCode(text) {
   return sub ? `${letter}${main}.${sub}` : `${letter}${main}`;
 }
 
-function canonicalClassificationCodes(text) {
+/**
+ * Возвращает каноническое представление классификации кодов.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalClassificationCodes(text: string): string[] {
   const normalized = String(text ?? "").normalize("NFKC");
-  const codes = [];
+  const codes: string[] = [];
   const pattern = /(?:^|[^\p{L}\p{N}])([A-Za-z\u0410-\u042f\u0430-\u044f])\s*\.?\s*(\d{1,3})(?:\s*[.]\s*(\d{1,2}))?(?![\p{L}\p{N}])/gu;
-  let match;
+  let match: RegExpExecArray | null;
   while ((match = pattern.exec(normalized))) {
     const code = canonicalClassificationCode(match[0]);
     if (code) codes.push(code);
@@ -157,9 +205,16 @@ function canonicalClassificationCodes(text) {
   return codes;
 }
 
-function classificationCodeWindows(page) {
+/**
+ * Строит ограниченные локальные окна для классификации кода.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function classificationCodeWindows(page: PdfPage): string[] {
   const lines = page.lines ?? [];
-  const windows = [];
+  const windows: string[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const parts = [lines[index], lines[index + 1], lines[index + 2]].filter(Boolean);
     const one = parts[0]?.trim();
@@ -172,7 +227,21 @@ function classificationCodeWindows(page) {
   return [...new Set(windows)];
 }
 
-export function bestClassificationCodeSupport({ pages, topQuestionPages, question, answer, questionTokens, focusTokens }) {
+/**
+ * Ищет точный код классификации в релевантном строковом контексте.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestClassificationCodeSupport(
+  {pages, topQuestionPages, question, answer, questionTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const code = canonicalClassificationCode(answer.text);
   if (!code) return null;
   const normalizedQuestion = normalizeForSearch(question);
@@ -225,7 +294,15 @@ const MKB_CLASS_EXCLUSION_GENERIC_TOKENS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function mkbClassExclusionQuestion(mode, question) {
+/**
+ * Выполняет внутренний этап `mkbClassExclusionQuestion`, подготавливающий `mkb` класса `exclusion` вопроса для основного scorer-а.
+ *
+ * @param mode Режим выбора ответа: `single` или `multi`.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function mkbClassExclusionQuestion(mode: AnswerMode, question: string): boolean {
   if (mode !== "multi") return false;
   const normalized = normalizeForSearch(question);
   const hasMkb = containsNormalizedPhrase(normalized, "\u043c\u043a\u0431");
@@ -237,19 +314,51 @@ function mkbClassExclusionQuestion(mode, question) {
   return hasMkb && hasClass && asksExcluded && Boolean(questionMkbClassCode(question));
 }
 
-function questionMkbClassCode(question) {
+/**
+ * Извлекает из вопроса код класса МКБ без уточняющей подклассовой части.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionMkbClassCode(question: string): string | null {
   return canonicalClassificationCodes(question).find((code) => !code.includes(".")) ?? null;
 }
 
-function sameMkbClass(code, classCode) {
+/**
+ * Выполняет внутренний этап `sameMkbClass`, подготавливающий `same` `mkb` класса для основного scorer-а.
+ *
+ * @param code Значение `code`, необходимое этому этапу scorer-а.
+ * @param classCode Значение `classCode`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sameMkbClass(code: string, classCode: string): boolean {
   return code === classCode || code.startsWith(`${classCode}.`);
 }
 
-function lineHasMkbClass(line, classCode) {
+/**
+ * Выполняет внутренний этап `lineHasMkbClass`, подготавливающий строки `mkb` класса для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param classCode Значение `classCode`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineHasMkbClass(line: string, classCode: string): boolean {
   return canonicalClassificationCodes(line).some((code) => sameMkbClass(code, classCode));
 }
 
-function mkbClassSectionLines(pages, topQuestionPages, classCode) {
+/**
+ * Выполняет внутренний этап `mkbClassSectionLines`, подготавливающий `mkb` класса секции строк для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param classCode Значение `classCode`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function mkbClassSectionLines(pages: PdfPage[], topQuestionPages: Set<number>, classCode: string): string[] {
   let startPageIndex = -1;
   let startLineIndex = -1;
   const candidates = topQuestionPages?.size ? pages.filter((page) => topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1)) : pages;
@@ -266,7 +375,7 @@ function mkbClassSectionLines(pages, topQuestionPages, classCode) {
   }
   if (startPageIndex < 0) return [];
 
-  const out = [];
+  const out: string[] = [];
   for (let pageIndex = startPageIndex; pageIndex < Math.min(pages.length, startPageIndex + 3); pageIndex += 1) {
     const lines = pages[pageIndex].lines ?? [];
     const from = pageIndex === startPageIndex ? startLineIndex : 0;
@@ -280,8 +389,16 @@ function mkbClassSectionLines(pages, topQuestionPages, classCode) {
   return out;
 }
 
-function mkbClassIncludedRows(sectionLines, classCode) {
-  const rows = [];
+/**
+ * Восстанавливает строки для `mkb` класса включённых строк.
+ *
+ * @param sectionLines Физические или логические строки PDF.
+ * @param classCode Значение `classCode`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function mkbClassIncludedRows(sectionLines: string[], classCode: string): string[] {
+  const rows: string[] = [];
   for (let index = 0; index < sectionLines.length; index += 1) {
     const line = sectionLines[index];
     const codes = canonicalClassificationCodes(line);
@@ -300,11 +417,26 @@ function mkbClassIncludedRows(sectionLines, classCode) {
   return rows;
 }
 
-function mkbClassAnswerTokens(answerText) {
+/**
+ * Выделяет специфичные токены для `mkb` класса варианта ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function mkbClassAnswerTokens(answerText: string): string[] {
   return uniqueTokens(answerText).filter((token) => token.length >= 4 && !MKB_CLASS_EXCLUSION_GENERIC_TOKENS.has(token) && !FOCUS_STOPWORDS.has(token));
 }
 
-function mkbClassIncludedRowHit(row, answerText) {
+/**
+ * Определяет локальные совпадения для `mkb` класса включённых строк строки.
+ *
+ * @param row Значение `row`, необходимое этому этапу scorer-а.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function mkbClassIncludedRowHit(row: string, answerText: string): boolean {
   const tokens = mkbClassAnswerTokens(answerText);
   if (!tokens.length) return false;
   const rowTokens = tokenize(row);
@@ -315,7 +447,20 @@ function mkbClassIncludedRowHit(row, answerText) {
   return Math.max(strict, soft, raw) >= threshold;
 }
 
-export function bestMkbClassExclusionSupport({ pages, topQuestionPages, mode, question, answer }) {
+/**
+ * Проверяет включение или исключение варианта из названного класса МКБ.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestMkbClassExclusionSupport(
+  {pages, topQuestionPages, mode, question, answer}: AnswerScoringContext,
+): MkbClassExclusionSupport {
   if (!mkbClassExclusionQuestion(mode, question)) return { support: null, adjustment: 0, evidence: null };
   const classCode = questionMkbClassCode(question);
   if (!classCode) return { support: null, adjustment: 0, evidence: null };
@@ -351,7 +496,14 @@ export function bestMkbClassExclusionSupport({ pages, topQuestionPages, mode, qu
   };
 }
 
-function canonicalShortLabel(value) {
+/**
+ * Возвращает каноническое представление короткой формы метки.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function canonicalShortLabel(value: string): string {
   const compact = String(value ?? "")
     .normalize("NFKC")
     .toLowerCase()
@@ -365,7 +517,14 @@ function canonicalShortLabel(value) {
   return compact.replace(/[^a-z0-9]/g, "");
 }
 
-function questionShortLabels(question) {
+/**
+ * Извлекает из вопроса короткие формы меток классификационной строки.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionShortLabels(question: string): string[] {
   const text = String(question ?? "").normalize("NFKC");
   const labels = new Set<string>();
   const patterns = [
@@ -383,7 +542,14 @@ function questionShortLabels(question) {
   return [...labels];
 }
 
-function lineShortLabels(text) {
+/**
+ * Выполняет внутренний этап `lineShortLabels`, подготавливающий строки короткой формы меток для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineShortLabels(text: string): string[] {
   const raw = String(text ?? "").normalize("NFKC");
   const labels = new Set<string>(questionShortLabels(raw));
   const compact = canonicalShortLabel(raw);
@@ -392,7 +558,15 @@ function lineShortLabels(text) {
   return [...labels];
 }
 
-function visualRowText(lines, index) {
+/**
+ * Выполняет внутренний этап `visualRowText`, подготавливающий визуальной таблицы строки текста для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function visualRowText(lines: PdfTextLine[], index: number): string {
   const start = Math.max(0, index - 2);
   const end = Math.min(lines.length, index + 4);
   return lines
@@ -417,13 +591,28 @@ const VISUAL_TABLE_COLUMN_CUE_TOKENS = new Set(
   uniqueTokens("легкая легкой средняя средней среднетяжелая среднетяжелой тяжелая тяжелой степень степени стадия стадии класс класса категория категории группа тип форма"),
 );
 
-export function hasVisualTableColumnCue(question, focusTokens) {
+/**
+ * Проверяет, требует ли вопрос чтения именованной колонки визуальной таблицы.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function hasVisualTableColumnCue(question: string, focusTokens: string[]): boolean {
   const tokens = [...new Set([...(focusTokens ?? []), ...uniqueTokens(question)])];
   return tokens.some((token) => VISUAL_TABLE_COLUMN_CUE_TOKENS.has(token));
 }
 
-function visualTableColumnFocusTokens(focusTokens, question) {
-  const out = [];
+/**
+ * Выделяет специфичные токены вопроса для выбора колонки визуальной таблицы.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function visualTableColumnFocusTokens(focusTokens: string[], question: string): string[] {
+  const out: string[] = [];
   for (const token of [...(focusTokens ?? []), ...uniqueTokens(question)]) {
     if (!token || token.length < 4) continue;
     if (FOCUS_STOPWORDS.has(token) || VISUAL_TABLE_COLUMN_GENERIC_FOCUS.has(token)) continue;
@@ -432,16 +621,32 @@ function visualTableColumnFocusTokens(focusTokens, question) {
   return out.slice(0, 10);
 }
 
-function lineXSpread(line) {
+/**
+ * Выполняет внутренний этап `lineXSpread`, подготавливающий строки `xspread` для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineXSpread(line: PdfTextLine): number {
   const xs = (line?.items ?? []).map((item) => item.x ?? 0);
   if (xs.length < 2) return 0;
   return Math.max(...xs) - Math.min(...xs);
 }
 
-function visualTableColumnTargets(page, question, focusTokens) {
+/**
+ * Находит целевые колонки визуальной таблицы по заголовкам и фокусу вопроса.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function visualTableColumnTargets(page: PdfPage, question: string, focusTokens: string[]): VisualTableColumnTarget[] {
   const focus = visualTableColumnFocusTokens(focusTokens, question);
   if (!focus.length) return [];
-  const targets = [];
+  const targets: VisualTableColumnTarget[] = [];
   const lines = page?.lineItems ?? [];
   for (const line of lines) {
     if ((line.items?.length ?? 0) < 3 || lineXSpread(line) < 140) continue;
@@ -464,8 +669,23 @@ function visualTableColumnTargets(page, question, focusTokens) {
   return targets;
 }
 
-function visualTableTargetsNearPage(pages, page, question, focusTokens) {
-  const out = [];
+/**
+ * Возвращает целевые колонки визуальной таблицы на указанной или соседней странице.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param page Текущая страница PDF или её номер.
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function visualTableTargetsNearPage(
+  pages: PdfPage[],
+  page: PdfPage,
+  question: string,
+  focusTokens: string[],
+): VisualTableColumnTarget[] {
+  const out: VisualTableColumnTarget[] = [];
   for (const candidate of pages) {
     if (candidate.page !== page.page && candidate.page !== page.page - 1) continue;
     out.push(...visualTableColumnTargets(candidate, question, focusTokens));
@@ -473,8 +693,22 @@ function visualTableTargetsNearPage(pages, page, question, focusTokens) {
   return out;
 }
 
-export function buildVisualTableColumnTargetsByPage(pages, question, focusTokens, topQuestionPages) {
-  const byPage = new Map();
+/**
+ * Строит по координатам PDF целевые ячейки колонки для каждой страницы.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function buildVisualTableColumnTargetsByPage(
+  pages: PdfPage[],
+  question: string,
+  focusTokens: string[],
+  topQuestionPages: Set<number>,
+): VisualTableColumnTargetsByPage {
+  const byPage: VisualTableColumnTargetsByPage = new Map();
   for (const page of pages) {
     const nearTopPage =
       !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
@@ -485,7 +719,14 @@ export function buildVisualTableColumnTargetsByPage(pages, question, focusTokens
   return byPage;
 }
 
-function answerMetricTokens(answerText) {
+/**
+ * Выделяет специфичные токены для варианта ответа метрики.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function answerMetricTokens(answerText: string): string[] {
   return uniqueTokens(answerText).filter((token) => {
     if (!token || token.length < 3) return false;
     if (/^\d/u.test(token)) return false;
@@ -494,7 +735,14 @@ function answerMetricTokens(answerText) {
   });
 }
 
-function comparatorSigns(text) {
+/**
+ * Выполняет внутренний этап `comparatorSigns`, подготавливающий компаратора `signs` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function comparatorSigns(text: string): Set<string> {
   const signs = new Set<string>();
   const raw = String(text ?? "");
   if (/[<≤]/u.test(raw)) signs.add("<");
@@ -502,7 +750,15 @@ function comparatorSigns(text) {
   return signs;
 }
 
-function visualValueMatchesAnswer(itemText, answerText) {
+/**
+ * Выполняет внутренний этап `visualValueMatchesAnswer`, подготавливающий визуальной таблицы значения варианта ответа для основного scorer-а.
+ *
+ * @param itemText Исходный текст соответствующего объекта.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function visualValueMatchesAnswer(itemText: string, answerText: string): boolean {
   const numericCoverage = numberCoverage(answerText, normalizeForSearch(itemText));
   if (numericCoverage <= 0) return false;
   const expandedAnswerNumbers = [...new Set(extractNumbers(answerText).flatMap(expandNumberToken))];
@@ -513,7 +769,15 @@ function visualValueMatchesAnswer(itemText, answerText) {
   return [...answerSigns].some((sign) => itemSigns.has(sign));
 }
 
-function targetCellText(line, targetX) {
+/**
+ * Выполняет внутренний этап `targetCellText`, подготавливающий целевого объекта ячейки текста для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @param targetX Значение `targetX`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function targetCellText(line: PdfTextLine, targetX: number): string {
   return (line.items ?? [])
     .filter((item) => Math.abs((item.x ?? 0) - targetX) <= 52)
     .map((item) => item.text)
@@ -522,9 +786,18 @@ function targetCellText(line, targetX) {
     .trim();
 }
 
-function nearbyMetricText(lines, index, targetX) {
+/**
+ * Выполняет внутренний этап `nearbyMetricText`, подготавливающий соседнего контекста метрики текста для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @param targetX Значение `targetX`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function nearbyMetricText(lines: PdfTextLine[], index: number, targetX: number): string {
   const baseY = lines[index]?.y ?? 0;
-  const parts = [];
+  const parts: string[] = [];
   for (let offset = -2; offset <= 2; offset += 1) {
     const line = lines[index + offset];
     if (!line) continue;
@@ -536,7 +809,22 @@ function nearbyMetricText(lines, index, targetX) {
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
-export function bestVisualTableColumnSupport({ mode, pages, topQuestionPages, question, answer, focusTokens, visualTableColumnTargetsByPage }) {
+/**
+ * Сопоставляет ответ с ячейкой заранее выбранной визуальной колонки.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.visualTableColumnTargetsByPage Подготовленные структуры, сгруппированные по номеру страницы.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestVisualTableColumnSupport(
+  {mode, pages, topQuestionPages, question, answer, visualTableColumnTargetsByPage}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "multi" || !extractNumbers(answer.text).length) return null;
   if (!visualTableColumnTargetsByPage) return null;
   const metricTokens = answerMetricTokens(answer.text);
@@ -547,7 +835,7 @@ export function bestVisualTableColumnSupport({ mode, pages, topQuestionPages, qu
     const nearTopPage =
       !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
     if (!nearTopPage) continue;
-    const targets = visualTableColumnTargetsByPage.get(page.page) ?? [];
+    const targets = (visualTableColumnTargetsByPage as VisualTableColumnTargetsByPage).get(page.page) ?? [];
     if (!targets.length) continue;
     const lines = page.lineItems ?? [];
     for (let index = 0; index < lines.length; index += 1) {
@@ -584,11 +872,25 @@ export function bestVisualTableColumnSupport({ mode, pages, topQuestionPages, qu
   return best;
 }
 
-function lineStartX(line) {
+/**
+ * Выполняет внутренний этап `lineStartX`, подготавливающий строки `start` `x` для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineStartX(line: PdfTextLine): number {
   return line?.items?.[0]?.x ?? 0;
 }
 
-function linePrefixShortLabels(line) {
+/**
+ * Выполняет внутренний этап `linePrefixShortLabels`, подготавливающий строки префикса короткой формы меток для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function linePrefixShortLabels(line: PdfTextLine): string[] {
   const prefix = (line?.items ?? [])
     .slice(0, 3)
     .map((item) => item.text)
@@ -596,19 +898,41 @@ function linePrefixShortLabels(line) {
   return lineShortLabels(prefix || String(line?.text ?? "").slice(0, 24));
 }
 
-function lineStartsWithShortLabelStem(line) {
+/**
+ * Выполняет внутренний этап `lineStartsWithShortLabelStem`, подготавливающий строки `with` короткой формы метки основы слова для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineStartsWithShortLabelStem(line: PdfTextLine): boolean {
   const first = canonicalShortLabel(line?.items?.[0]?.text ?? "");
   return /^[tnm]$/.test(first) || /^(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)$/.test(first);
 }
 
-function splitShortLabelSuffix(line) {
+/**
+ * Выполняет внутренний этап `splitShortLabelSuffix`, подготавливающий `split` короткой формы метки суффикса для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function splitShortLabelSuffix(line: PdfTextLine): string | null {
   const compact = canonicalShortLabel(line?.items?.[0]?.text ?? line?.text ?? "");
   if (/^(?:is|[0-4x]|[0-4][ab]?)$/.test(compact)) return compact;
   if (/^(?:i|ii|iii|iv|v|vi|vii|viii|ix|x)[ab]?$/.test(compact)) return compact;
   return null;
 }
 
-function lineExactShortLabels(lines, index) {
+/**
+ * Выполняет внутренний этап `lineExactShortLabels`, подготавливающий строки точного совпадения короткой формы меток для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function lineExactShortLabels(lines: PdfTextLine[], index: number): string[] {
   const labels = new Set(linePrefixShortLabels(lines[index]));
   if (lineStartsWithShortLabelStem(lines[index]) && index + 1 < lines.length) {
     const suffix = splitShortLabelSuffix(lines[index + 1]);
@@ -620,8 +944,16 @@ function lineExactShortLabels(lines, index) {
   return [...labels];
 }
 
-function visualExactLabelRowText(lines, index) {
-  const row = [];
+/**
+ * Выполняет внутренний этап `visualExactLabelRowText`, подготавливающий визуальной таблицы точного совпадения метки строки текста для основного scorer-а.
+ *
+ * @param lines Физические строки извлечённой страницы PDF.
+ * @param index Позиция текущего элемента или совпадения.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function visualExactLabelRowText(lines: PdfTextLine[], index: number): string {
+  const row: string[] = [];
   const first = lines[index];
   if (!first?.text) return "";
   const startX = lineStartX(first);
@@ -649,7 +981,21 @@ function visualExactLabelRowText(lines, index) {
   return row.join(" ").replace(/\s+/g, " ").trim();
 }
 
-export function bestExactShortLabelRowSupport({ pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
+/**
+ * Ищет точное совпадение короткой метки в ограниченной визуальной строке.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestExactShortLabelRowSupport(
+  {pages, topQuestionPages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const labels = questionShortLabels(question);
   if (!labels.length || !answerTokens.length) return null;
   const answerPhrases = answerSearchPhrases(answer.text);
@@ -696,7 +1042,21 @@ export function bestExactShortLabelRowSupport({ pages, topQuestionPages, questio
   return best;
 }
 
-export function bestShortLabelRowSupport({ pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
+/**
+ * Ищет мягкое совпадение короткой метки в строке с табличным контекстом.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestShortLabelRowSupport(
+  {pages, topQuestionPages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const labels = questionShortLabels(question);
   if (!labels.length || !answerTokens.length) return null;
   const answerPhrases = answerSearchPhrases(answer.text);

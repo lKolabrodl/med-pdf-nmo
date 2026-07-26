@@ -6,7 +6,9 @@ import {
   tokenize,
   uniqueTokens,
 } from "../../../normalize.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
+import type {PdfPage} from "../../../pdf.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext, QuestionIntent} from "../../contracts.js";
 import {
   answerSearchPhrases,
   betterEvidence,
@@ -19,7 +21,33 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
-import { geneMutationQuestion, latinAnswerTokens } from "../biomedical-symbols/index.js";
+import type {AnswerMode, AnswerOption, AnswerScore, EvidenceItem} from "../../types.js";
+import {geneMutationQuestion, latinAnswerTokens} from "../biomedical-symbols/index.js";
+
+type NormalizedTokenSegment = {
+  text: string;
+  normalized: string;
+  tokens: string[];
+};
+
+type ParentheticalGroupContext = {
+  beforeText: string;
+  afterText: string;
+  specificFocus: string[];
+};
+
+type ContinuationListHit = {
+  phraseHit: boolean;
+  answerCoverage: number;
+  hit: boolean;
+};
+
+type SharedMultiSegmentHit = {
+  phraseHit: boolean;
+  tokenCoverage: number;
+  tokens: string[];
+  compactSpan: number;
+};
 
 const SHARED_MULTI_SOURCE_KINDS = new Set([
   "question_anchor_segment",
@@ -75,17 +103,37 @@ const SHARED_MULTI_REQUIRED_CUE_GROUPS = [
 
 const SHARED_MULTI_SHORT_ALIAS_PHRASES = new Set(["\u0441\u043f\u044f", "\u0440\u044d"].map((item) => normalizeForSearch(item)));
 
-function answerShortMedicalAliases(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа короткой формы медицинского алиаса алиасов в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerShortMedicalAliases(answerText: string): string[] {
   const own = new Set(focusedAnswerSearchPhrases(answerText).map((phrase) => normalizeForSearch(phrase)));
   const answerNorm = normalizeForSearch(answerText);
   return [...SHARED_MULTI_SHORT_ALIAS_PHRASES].filter((alias) => own.has(alias) && !answerNorm.includes(alias));
 }
 
-export function bestShortMedicalAliasSupport({ mode, pages, topQuestionPages, questionTokens, answer }) {
+/**
+ * Ищет короткий медицинский алиас ответа в релевантном multi-сегменте.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestShortMedicalAliasSupport(
+  {mode, pages, topQuestionPages, questionTokens, answer}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "multi") return null;
   const aliases = answerShortMedicalAliases(answer.text);
   if (!aliases.length) return null;
-  let best = null;
+  let best: EvidenceItem | null = null;
   for (const page of pages) {
     const nearTopPage =
       !topQuestionPages?.size || topQuestionPages.has(page.page) || topQuestionPages.has(page.page - 1) || topQuestionPages.has(page.page + 1);
@@ -107,7 +155,14 @@ export function bestShortMedicalAliasSupport({ mode, pages, topQuestionPages, qu
   return best;
 }
 
-function sharedMultiTokens(answerText) {
+/**
+ * Выделяет специфичные токены для общего multi-сегмента multi-answer набора.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function sharedMultiTokens(answerText: string): string[] {
   return uniqueTokens(answerText).filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token) && !SHARED_MULTI_GENERIC_TOKENS.has(token));
 }
 
@@ -125,23 +180,63 @@ const PARENTHETICAL_GROUP_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function parentheticalGroupFocusTokens(question) {
+/**
+ * Выделяет специфичные токены для группы в скобках группы фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function parentheticalGroupFocusTokens(question: string): string[] {
   return uniqueTokens(question).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token) && !PARENTHETICAL_GROUP_GENERIC_FOCUS.has(token));
 }
 
-function answerInParentheticalGroup(groupNormalized, answer) {
+/**
+ * Извлекает или проверяет варианта ответа `in` группы в скобках группы в варианте ответа.
+ *
+ * @param groupNormalized Значение `groupNormalized`, необходимое этому этапу scorer-а.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerInParentheticalGroup(groupNormalized: string, answer: AnswerOption): boolean {
   return answerSearchPhrases(answer.text)
     .map((phrase) => normalizeForSearch(phrase))
     .filter((phrase) => phrase.length >= 3)
     .some((phrase) => containsNormalizedPhrase(groupNormalized, phrase));
 }
 
-function parentheticalGroupAnswerHit(groupNormalized, groupTokens, answer) {
+/**
+ * Определяет локальные совпадения для группы в скобках группы варианта ответа.
+ *
+ * @param groupNormalized Значение `groupNormalized`, необходимое этому этапу scorer-а.
+ * @param groupTokens Нормализованные токены соответствующего текста.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function parentheticalGroupAnswerHit(
+  groupNormalized: string,
+  groupTokens: string[],
+  answer: AnswerOption,
+): boolean {
   const answerTokens = uniqueTokens(answer.text);
   return answerInParentheticalGroup(groupNormalized, answer) || strictSoftCoverage(answerTokens, groupTokens) >= (answerTokens.length <= 1 ? 0.95 : 0.68);
 }
 
-function inlineParentheticalGroupContext({ beforeText, afterText, specificFocus }) {
+/**
+ * Проверяет, связана ли скобочная группа с одинаковым фокусом до и после неё.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.beforeText Исходный текст соответствующего объекта.
+ * @param context.afterText Исходный текст соответствующего объекта.
+ * @param context.specificFocus Значение `specificFocus`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function inlineParentheticalGroupContext(
+  {beforeText, afterText, specificFocus}: ParentheticalGroupContext,
+): boolean {
   const beforeTokens = tokenize(beforeText);
   const afterTokens = tokenize(afterText);
   const headHits = tokenHitCount(specificFocus, beforeTokens);
@@ -154,8 +249,19 @@ function inlineParentheticalGroupContext({ beforeText, afterText, specificFocus 
  * Связывает варианты ответа с ближайшей скобочной группой после релевантного
  * заголовка: `органические причины (...)`, `факторы риска (...)` и похожие
  * конструкции. Это помогает не смешивать соседние группы в одной строке.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestParentheticalGroupSupport({ mode, pages, question, answer, answers, answerTokens }) {
+export function bestParentheticalGroupSupport(
+  {mode, pages, question, answer, answers, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "multi") return null;
   const normalizedQuestion = normalizeForSearch(question);
   const questionTokenSet = new Set(tokenize(question));
@@ -164,7 +270,7 @@ export function bestParentheticalGroupSupport({ mode, pages, question, answer, a
   }
   const specificFocus = parentheticalGroupFocusTokens(question);
   if (specificFocus.length < 2) return null;
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const text = String(page.text ?? "");
@@ -218,14 +324,35 @@ const CONTINUATION_LIST_SEGMENT_CUES = [
   "\u0434\u0430\u043d\u043d",
 ].map((item) => normalizeForSearch(item));
 
-function continuationListQuestion(question, intent) {
+/**
+ * Выполняет внутренний этап `continuationListQuestion`, подготавливающий продолжения списка вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @param intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function continuationListQuestion(question: string, intent: QuestionIntent): boolean {
   if (intent?.exception) return false;
   const normalized = normalizeForSearch(question);
   if (containsNormalizedPhrase(normalized, "\u043d\u0435 \u0432\u043a\u043b\u044e\u0447")) return false;
   return CONTINUATION_LIST_QUESTION_CUES.some((cue) => normalized.includes(cue)) && containsNormalizedPhrase(normalized, "\u043d\u0430");
 }
 
-function answerContinuationListHit(segment, answer, answerTokens) {
+/**
+ * Определяет локальные совпадения для варианта ответа продолжения списка.
+ *
+ * @param segment Значение `segment`, необходимое этому этапу scorer-а.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerContinuationListHit(
+  segment: NormalizedTokenSegment,
+  answer: AnswerOption,
+  answerTokens: string[],
+): ContinuationListHit {
   const normalized = segment.normalized;
   const phraseHit = answerSearchPhrases(answer.text)
     .map((phrase) => normalizeForSearch(phrase))
@@ -238,9 +365,16 @@ function answerContinuationListHit(segment, answer, answerTokens) {
   return { phraseHit, answerCoverage, hit };
 }
 
-function continuationLineSegments(page) {
+/**
+ * Строит ограниченные текстовые сегменты для продолжения строки.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function continuationLineSegments(page: PdfPage): NormalizedTokenSegment[] {
   const lines = page.lines ?? [];
-  const segments = [];
+  const segments: NormalizedTokenSegment[] = [];
   for (let index = 0; index < lines.length; index += 1) {
     const text = lines.slice(index, Math.min(lines.length, index + 7)).join(" ").replace(/\s+/g, " ").trim();
     if (text.length >= 40 && text.length <= 1500) {
@@ -260,11 +394,25 @@ function continuationLineSegments(page) {
  * В отличие от общего BM25 этот scorer требует, чтобы сама строка содержала
  * формулировку вопроса и структурный list-cue, поэтому соседние обсуждения
  * вариантов не получают такой же вес.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestQuestionContinuationListSupport({ mode, pages, topQuestionPages, question, answer, answerTokens, questionTokens, focusTokens, intent }) {
+export function bestQuestionContinuationListSupport(
+  {mode, pages, topQuestionPages, question, answer, answerTokens, questionTokens, focusTokens, intent}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "multi" || !continuationListQuestion(question, intent)) return null;
   const usefulFocus = (focusTokens?.length ? focusTokens : questionTokens).filter((token) => token.length >= 4 && !FOCUS_STOPWORDS.has(token));
-  let best = null;
+  let best: EvidenceItem | null = null;
 
   for (const page of pages) {
     const nearTopPage =
@@ -297,12 +445,27 @@ export function bestQuestionContinuationListSupport({ mode, pages, topQuestionPa
   return best;
 }
 
-function sharedMultiSectionCue(question) {
+/**
+ * Выполняет внутренний этап `sharedMultiSectionCue`, подготавливающий общего multi-сегмента multi-answer набора секции маркера для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sharedMultiSectionCue(question: string): string | null {
   const normalizedQuestion = normalizeForSearch(question);
   return SHARED_MULTI_SECTION_CUES.find((cue) => normalizedQuestion.includes(cue)) ?? null;
 }
 
-function sharedMultiFocusedNormalized(segmentText, question) {
+/**
+ * Выполняет внутренний этап `sharedMultiFocusedNormalized`, подготавливающий общего multi-сегмента multi-answer набора сфокусированного `normalized` для основного scorer-а.
+ *
+ * @param segmentText Исходный текст соответствующего объекта.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sharedMultiFocusedNormalized(segmentText: string, question: string): string {
   const normalized = normalizeForSearch(segmentText);
   const cue = sharedMultiSectionCue(question);
   if (!cue) return normalized;
@@ -317,7 +480,15 @@ function sharedMultiFocusedNormalized(segmentText, question) {
   return normalized.slice(start, end);
 }
 
-function sharedMultiRequiredCueMismatch(answerText, normalizedSegment) {
+/**
+ * Определяет явное несовпадение общего multi-сегмента multi-answer набора `required` маркера.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param normalizedSegment Значение `normalizedSegment`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function sharedMultiRequiredCueMismatch(answerText: string, normalizedSegment: string): boolean {
   const normalizedAnswer = normalizeForSearch(answerText);
   for (const group of SHARED_MULTI_REQUIRED_CUE_GROUPS) {
     if (group.answer.some((cue) => normalizedAnswer.includes(cue)) && !group.source.some((cue) => normalizedSegment.includes(cue))) {
@@ -327,7 +498,15 @@ function sharedMultiRequiredCueMismatch(answerText, normalizedSegment) {
   return false;
 }
 
-function sharedMultiTokenPosition(normalizedSegment, token) {
+/**
+ * Выполняет внутренний этап `sharedMultiTokenPosition`, подготавливающий общего multi-сегмента multi-answer набора токена `position` для основного scorer-а.
+ *
+ * @param normalizedSegment Значение `normalizedSegment`, необходимое этому этапу scorer-а.
+ * @param token Отдельный нормализуемый или сравниваемый токен.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sharedMultiTokenPosition(normalizedSegment: string, token: string): number {
   const probes = [token, token.slice(0, 10), token.slice(0, 8), token.slice(0, 6)].filter((item) => item.length >= 4);
   for (const probe of probes) {
     const index = normalizedSegment.indexOf(probe);
@@ -336,7 +515,15 @@ function sharedMultiTokenPosition(normalizedSegment, token) {
   return -1;
 }
 
-function sharedMultiCompactSpan(normalizedSegment, tokens) {
+/**
+ * Выполняет внутренний этап `sharedMultiCompactSpan`, подготавливающий общего multi-сегмента multi-answer набора компактной записи `span` для основного scorer-а.
+ *
+ * @param normalizedSegment Значение `normalizedSegment`, необходимое этому этапу scorer-а.
+ * @param tokens Набор токенов для локального сопоставления.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sharedMultiCompactSpan(normalizedSegment: string, tokens: string[]): number {
   const positions = tokens
     .map((token) => sharedMultiTokenPosition(normalizedSegment, token))
     .filter((position) => position >= 0)
@@ -345,7 +532,15 @@ function sharedMultiCompactSpan(normalizedSegment, tokens) {
   return positions[positions.length - 1] - positions[0];
 }
 
-function sharedMultiNumericComparatorMismatch(answerText, normalizedSegment) {
+/**
+ * Определяет явное несовпадение общего multi-сегмента multi-answer набора числового значения компаратора.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @param normalizedSegment Значение `normalizedSegment`, необходимое этому этапу scorer-а.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
+function sharedMultiNumericComparatorMismatch(answerText: string, normalizedSegment: string): boolean {
   const answerNumbers = extractNumbers(answerText).filter((number) => /^\d+(?:[.,]\d+)?$/u.test(number));
   if (answerNumbers.length !== 1) return false;
   const answerNumber = String(Number(answerNumbers[0].replace(",", ".")));
@@ -354,7 +549,20 @@ function sharedMultiNumericComparatorMismatch(answerText, normalizedSegment) {
   return !comparatorHits.includes(answerNumber);
 }
 
-function sharedMultiSegmentHit(segmentText, answer, question) {
+/**
+ * Определяет локальные совпадения для общего multi-сегмента multi-answer набора сегмента.
+ *
+ * @param segmentText Исходный текст соответствующего объекта.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function sharedMultiSegmentHit(
+  segmentText: string,
+  answer: AnswerOption,
+  question: string,
+): SharedMultiSegmentHit | null {
   const normalized = sharedMultiFocusedNormalized(segmentText, question);
   if (!normalized || normalized.length < 30) return null;
   if (sharedMultiRequiredCueMismatch(answer.text, normalized)) return null;
@@ -374,20 +582,33 @@ function sharedMultiSegmentHit(segmentText, answer, question) {
   return { phraseHit, tokenCoverage, tokens, compactSpan };
 }
 
-export function addSharedMultiSegmentSupport(answerScores, intent, question) {
+/**
+ * Добавляет ограниченную общую поддержку ответам из одного multi-сегмента.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param intent Определённый predictor-ом тип и полярность вопроса.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function addSharedMultiSegmentSupport(
+  answerScores: AnswerScore[],
+  intent: QuestionIntent,
+  question: string,
+): AnswerScore[] {
   if (intent.negative || intent.exception || answerScores.length < 3) return answerScores;
   const sorted = [...answerScores].sort((a, b) => b.raw - a.raw);
   const topRaw = sorted[0]?.raw ?? 0;
   if (topRaw < 5) return answerScores;
 
-  const sourceMap = new Map();
+  const sourceMap = new Map<string, EvidenceItem>();
   for (const item of sorted.slice(0, Math.min(3, sorted.length))) {
     for (const evidenceItem of item.evidence.slice(0, 4)) {
       if (!SHARED_MULTI_SOURCE_KINDS.has(evidenceItem.kind)) continue;
       if (!evidenceItem.text || evidenceItem.text.length < 50) continue;
       if ((evidenceItem.score ?? 0) < 4.8) continue;
       const key = `${evidenceItem.page}:${evidenceItem.kind}:${evidenceItem.text.slice(0, 220)}`;
-      if (!sourceMap.has(key) || sourceMap.get(key).score < evidenceItem.score) {
+      const current = sourceMap.get(key);
+      if (!current || current.score < evidenceItem.score) {
         sourceMap.set(key, evidenceItem);
       }
     }
@@ -396,7 +617,7 @@ export function addSharedMultiSegmentSupport(answerScores, intent, question) {
   if (!sources.length) return answerScores;
 
   return answerScores.map((item) => {
-    let best = null;
+    let best: EvidenceItem | null = null;
     for (const source of sources) {
       const hit = sharedMultiSegmentHit(source.text, item.answer, question);
       if (!hit) continue;
@@ -424,7 +645,19 @@ export function addSharedMultiSegmentSupport(answerScores, intent, question) {
   });
 }
 
-export function applyGeneSentenceSetSupport(answerScores, mode, question) {
+/**
+ * Усиливает согласованный набор gene-ответов, найденных в одном предложении.
+ *
+ * @param answerScores Текущие score и evidence всех вариантов ответа.
+ * @param mode Режим выбора ответа: `single` или `multi`.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function applyGeneSentenceSetSupport(
+  answerScores: AnswerScore[],
+  mode: AnswerMode,
+  question: string,
+): AnswerScore[] {
   if (mode !== "multi" || !geneMutationQuestion(question)) return answerScores;
   const supported = answerScores.filter((item) => item.evidence.some((evidenceItem) => evidenceItem.kind === "gene_sentence_segment"));
   if (supported.length < 2) return answerScores;

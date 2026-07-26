@@ -14,8 +14,63 @@ import {
   tokenHitCount,
   tokenizeNormalized,
 } from "../../text-utils.js";
+import type {PdfPage} from "../../../pdf.js";
+import type {AnswerScoringContext, QuestionIntent} from "../../contracts.js";
+import type {AnswerOption, EvidenceItem} from "../../types.js";
 
-function questionDefinitionTerm(question) {
+type EvidenceAdjustment = {
+  adjustment: number;
+  evidence: EvidenceItem | null;
+};
+
+type SupportAdjustment = EvidenceAdjustment & {
+  support: EvidenceItem | null;
+};
+
+type LineWindowSegment = {
+  text: string;
+  normalized: string;
+  tokens: string[];
+};
+
+type FrequencyPolarity = "low" | "high";
+type RecommendationPolarity = "positive" | "negative";
+
+type FrequencyListItem = {
+  text: string;
+  page: number;
+};
+
+type FrequencyListSupportContext = {
+  pages: PdfPage[];
+  pageIndex: number;
+  lineIndex: number;
+  answer: AnswerOption;
+  answerPhrases: string[];
+  answerTokens: string[];
+  specificTokens: string[];
+  target: FrequencyPolarity;
+};
+
+type LabelDefinitionWindow = {
+  answerWindow: string;
+  contextWindow: string;
+};
+
+type RecommendationAnswerHit = {
+  phraseHit: boolean;
+  answerCoverage: number;
+  hit: boolean;
+};
+
+/**
+ * Извлекает из вопроса термин, для которого требуется определение.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionDefinitionTerm(question: string): string | null {
   const tokens = rawTokens(question);
   const podIndex = tokens.findIndex((token) => token === "\u043f\u043e\u0434");
   const ponimIndex = tokens.findIndex((token) => token.startsWith("\u043f\u043e\u043d\u0438\u043c"));
@@ -27,7 +82,15 @@ function questionDefinitionTerm(question) {
   return null;
 }
 
-function definitionTermIndex(normalized, term) {
+/**
+ * Находит позицию определения термина в локальном тексте или структуре.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param term Значение `term`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
+function definitionTermIndex(normalized: string, term: string): number {
   const labelNorm = normalizeForSearch(term);
   const exact = normalized.indexOf(labelNorm);
   if (exact >= 0) return exact;
@@ -37,7 +100,15 @@ function definitionTermIndex(normalized, term) {
   return prefixes.length ? normalized.indexOf(prefixes[0]) : -1;
 }
 
-function definitionTermWindow(normalized, term) {
+/**
+ * Строит ограниченное локальное окно для определения термина.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param term Значение `term`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function definitionTermWindow(normalized: string, term: string): string | null {
   const exact = normalizeForSearch(term);
   const prefixes = [
     exact,
@@ -68,13 +139,32 @@ function definitionTermWindow(normalized, term) {
   return fallback >= 0 ? normalized.slice(fallback, Math.min(normalized.length, fallback + 260)) : null;
 }
 
-function answerAbbreviations(answerText) {
+/**
+ * Извлекает или проверяет варианта ответа сокращений в варианте ответа.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerAbbreviations(answerText: string): string[] {
   return (String(answerText ?? "").match(/[A-ZА-ЯЁ]{2,}(?:-[A-ZА-ЯЁ]{2,})?/gu) ?? [])
     .map((item) => normalizeForSearch(item))
     .filter((item) => item.length >= 2);
 }
 
-export function bestTermDefinitionSupport({ pages, question, answer, answerTokens }) {
+/**
+ * Ищет ответ в локальной связке между термином вопроса и его определением.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestTermDefinitionSupport(
+  {pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   const term = questionDefinitionTerm(question);
   if (!term) return null;
   if (normalizeForSearch(term).length < 4) return null;
@@ -104,17 +194,31 @@ export function bestTermDefinitionSupport({ pages, question, answer, answerToken
   return best;
 }
 
-function definitionQuestionLike(question: string) {
+/**
+ * Выполняет внутренний этап `definitionQuestionLike`, подготавливающий определения вопроса `like` для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function definitionQuestionLike(question: string): boolean {
   const normalized = normalizeForSearch(question);
   return (
-    questionDefinitionTerm(question) ||
+    Boolean(questionDefinitionTerm(question)) ||
     containsNormalizedPhrase(normalized, "\u044d\u0442\u043e") ||
     containsNormalizedPhrase(normalized, "\u043f\u043e\u043d\u0438\u043c\u0430") ||
     containsNormalizedPhrase(normalized, "\u043d\u0430\u0437\u044b\u0432\u0430")
   );
 }
 
-function definitionCueWindow(normalized: string) {
+/**
+ * Строит ограниченное локальное окно для определения маркера.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function definitionCueWindow(normalized: string): boolean {
   return (
     containsNormalizedPhrase(normalized, "\u044d\u0442\u043e") ||
     containsNormalizedPhrase(normalized, "\u043f\u043e\u043d\u0438\u043c\u0430") ||
@@ -123,7 +227,14 @@ function definitionCueWindow(normalized: string) {
   );
 }
 
-function definitionExactFragments(text: string) {
+/**
+ * Выполняет внутренний этап `definitionExactFragments`, подготавливающий определения точного совпадения фрагментов для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function definitionExactFragments(text: string): string[] {
   const fragments = String(text ?? "")
     .split(/(?<=[.!?;])\s+/u)
     .map((item) => item.trim())
@@ -142,13 +253,28 @@ const DEFINITION_TERM_GENERIC_TOKENS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function primaryDefinitionTermToken(question: string) {
+/**
+ * Выполняет внутренний этап `primaryDefinitionTermToken`, подготавливающий основного определения термина токена для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function primaryDefinitionTermToken(question: string): string {
   const term = questionDefinitionTerm(question);
   const tokens = uniqueTokens(term ?? question).filter((token) => token.length >= 4 && !DEFINITION_TERM_GENERIC_TOKENS.has(token));
   return tokens[0] ?? "";
 }
 
-function editDistanceAtMostOne(left: string, right: string) {
+/**
+ * Выполняет внутренний этап `editDistanceAtMostOne`, подготавливающий `edit` `distance` `at` `most` `one` для основного scorer-а.
+ *
+ * @param left Левое сравниваемое значение.
+ * @param right Правое сравниваемое значение.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function editDistanceAtMostOne(left: string, right: string): boolean {
   if (left === right) return true;
   if (Math.abs(left.length - right.length) > 1) return false;
   let edits = 0;
@@ -172,7 +298,15 @@ function editDistanceAtMostOne(left: string, right: string) {
   return edits + (left.length - i) + (right.length - j) <= 1;
 }
 
-function definitionFragmentMatchesQuestionTerm(fragmentTokens: string[], primaryTerm: string) {
+/**
+ * Выполняет внутренний этап `definitionFragmentMatchesQuestionTerm`, подготавливающий определения `fragment` вопроса термина для основного scorer-а.
+ *
+ * @param fragmentTokens Нормализованные токены соответствующего текста.
+ * @param primaryTerm Значение `primaryTerm`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function definitionFragmentMatchesQuestionTerm(fragmentTokens: string[], primaryTerm: string): boolean {
   if (!primaryTerm) return true;
   const cueIndex = fragmentTokens.findIndex((token) => token === normalizeForSearch("\u044d\u0442\u043e"));
   const labelTokens = fragmentTokens.slice(0, cueIndex >= 0 ? cueIndex : Math.min(3, fragmentTokens.length));
@@ -183,8 +317,19 @@ function definitionFragmentMatchesQuestionTerm(fragmentTokens: string[], primary
  * Поддерживает definition-вопросы, когда полный вариант ответа найден рядом с
  * `это`/`понимают`/тире-определением. Это помогает пережить OCR-ошибку в самом
  * термине, но не читает медицинский факт из датасета.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestDefinitionExactAnswerSupport({ mode, pages, topQuestionPages, question, answer, answerTokens }) {
+export function bestDefinitionExactAnswerSupport(
+  {mode, pages, topQuestionPages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single" || !definitionQuestionLike(question)) return null;
   const answerPhrases = answerSearchPhrases(answer.text).slice(0, 12);
   const primaryTerm = primaryDefinitionTermToken(question);
@@ -225,7 +370,22 @@ export function bestDefinitionExactAnswerSupport({ mode, pages, topQuestionPages
 
 const DEFINITION_COMPLETION_EVIDENCE = new Set(["definition_exact_answer_segment", "term_definition_segment", "label_definition_segment"]);
 
-export function definitionCompletionAdjustment({ mode, question, answer, answers, answerTokens }, evidence) {
+/**
+ * Уточняет score варианта, завершающего определение с нужной специфичностью.
+ *
+ * @param params1 Контекстные параметры текущего scorer-этапа.
+ * @param params1.mode Режим выбора ответа: `single` или `multi`.
+ * @param params1.question Исходный текст вопроса.
+ * @param params1.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param params1.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param params1.answerTokens Нормализованные токены проверяемого варианта.
+ * @param evidence Evidence, уже найденные для варианта ответа.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function definitionCompletionAdjustment(
+  {mode, question, answer, answers, answerTokens}: AnswerScoringContext,
+  evidence: EvidenceItem[],
+): EvidenceAdjustment {
   if (mode !== "single" || !definitionQuestionLike(question)) return { adjustment: 0, evidence: null };
   const definitionEvidence = evidence.find((item) => DEFINITION_COMPLETION_EVIDENCE.has(item.kind) && (item.score ?? 0) >= 18);
   if (!definitionEvidence) return { adjustment: 0, evidence: null };
@@ -290,14 +450,27 @@ const FREQUENCY_POLARITY_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-/** Определяет, спрашивает ли фрагмент о частом/редком/ведущем варианте. */
-export function frequencyPolarity(normalized: string) {
+/**
+ * Определяет, спрашивает ли фрагмент о частом/редком/ведущем варианте.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
+export function frequencyPolarity(normalized: string): FrequencyPolarity | null {
   if (FREQUENCY_POLARITY_LOW_CUES.some((cue) => containsNormalizedPhrase(normalized, cue))) return "low";
   if (FREQUENCY_POLARITY_HIGH_CUES.some((cue) => containsNormalizedPhrase(normalized, cue))) return "high";
   return null;
 }
 
-function frequencyPolarityFocusTokens(focusTokens, answerTokens) {
+/**
+ * Выделяет специфичные токены для частоты полярности фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function frequencyPolarityFocusTokens(focusTokens: string[], answerTokens: string[]): string[] {
   const answerSet = new Set(answerTokens ?? []);
   return (focusTokens ?? []).filter((token) => token.length >= 4 && !answerSet.has(token) && !FREQUENCY_POLARITY_GENERIC_FOCUS.has(token));
 }
@@ -307,8 +480,13 @@ function frequencyPolarityFocusTokens(focusTokens, answerTokens) {
  *
  * Для частотных вопросов это важно: `(менингит + менингококкемия)` рядом с
  * "наиболее часто" обычно поясняет форму, но не обязательно является ответом.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param phrases Значение `phrases`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
  */
-function containsPhraseOutsideParentheses(text: string, phrases: string[]) {
+function containsPhraseOutsideParentheses(text: string, phrases: string[]): boolean {
   const normalized = normalizeForSearch(String(text ?? "").replace(/\([^)]*\)/gu, " "));
   for (const phrase of phrases) {
     const normalizedPhrase = normalizeForSearch(phrase);
@@ -318,8 +496,14 @@ function containsPhraseOutsideParentheses(text: string, phrases: string[]) {
   return false;
 }
 
-/** Делит line-window на небольшие предложение-подобные фрагменты для локального связывания cue и ответа. */
-function frequencyPolarityFragments(text: string) {
+/**
+ * Делит line-window на небольшие предложение-подобные фрагменты для локального связывания cue и ответа.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function frequencyPolarityFragments(text: string): string[] {
   const fragments = String(text ?? "")
     .split(/(?<=[.!?;])\s+/u)
     .map((item) => item.trim())
@@ -327,12 +511,28 @@ function frequencyPolarityFragments(text: string) {
   return fragments.length ? fragments : [String(text ?? "")];
 }
 
-function frequencyListItemLine(line: string) {
+/**
+ * Выполняет внутренний этап `frequencyListItemLine`, подготавливающий частоты списка пункта рекомендации строки для основного scorer-а.
+ *
+ * @param line Значение `line`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function frequencyListItemLine(line: string): boolean {
   return /^\s*(?:[•*\-]|\d+[.)]|[IVX]+[.)])\s+/iu.test(String(line ?? ""));
 }
 
-function frequencyPolarityListItems(pages, pageIndex: number, lineIndex: number) {
-  const items: Array<{ text: string; page: number }> = [];
+/**
+ * Выполняет внутренний этап `frequencyPolarityListItems`, подготавливающий частоты полярности списка элементов для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param pageIndex Позиция соответствующего элемента в локальной структуре.
+ * @param lineIndex Позиция соответствующего элемента в локальной структуре.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function frequencyPolarityListItems(pages: PdfPage[], pageIndex: number, lineIndex: number): FrequencyListItem[] {
+  const items: FrequencyListItem[] = [];
   for (let offset = 0; offset <= 1; offset += 1) {
     const page = pages[pageIndex + offset];
     if (!page) continue;
@@ -350,7 +550,26 @@ function frequencyPolarityListItems(pages, pageIndex: number, lineIndex: number)
   return items;
 }
 
-function betterFrequencyListSupport(best, { pages, pageIndex, lineIndex, answer, answerPhrases, answerTokens, specificTokens, target }) {
+/**
+ * Выполняет внутренний этап `betterFrequencyListSupport`, подготавливающий `better` частоты списка поддержки ответа для основного scorer-а.
+ *
+ * @param best Значение `best`, необходимое этому этапу scorer-а.
+ * @param params2 Контекстные параметры текущего scorer-этапа.
+ * @param params2.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param params2.pageIndex Позиция соответствующего элемента в локальной структуре.
+ * @param params2.lineIndex Позиция соответствующего элемента в локальной структуре.
+ * @param params2.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param params2.answerPhrases Коллекция значений, используемая текущим этапом сопоставления.
+ * @param params2.answerTokens Нормализованные токены проверяемого варианта.
+ * @param params2.specificTokens Нормализованные токены соответствующего текста.
+ * @param params2.target Значение `target`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function betterFrequencyListSupport(
+  best: EvidenceItem | null,
+  {pages, pageIndex, lineIndex, answer, answerPhrases, answerTokens, specificTokens, target}: FrequencyListSupportContext,
+): EvidenceItem | null {
   const page = pages[pageIndex];
   const heading = page.lines?.[lineIndex] ?? "";
   const headingNorm = normalizeForSearch(heading);
@@ -381,8 +600,20 @@ function betterFrequencyListSupport(best, { pages, pageIndex, lineIndex, answer,
  *
  * Слой не знает медицинских фактов: он связывает вариант ответа с тем же
  * предложением, где находится частотный маркер, и отбрасывает скобочные примеры.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestFrequencyPolaritySupport({ mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens }) {
+export function bestFrequencyPolaritySupport(
+  {mode, pages, topQuestionPages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const target = frequencyPolarity(normalizeForSearch(question));
   if (!target) return null;
@@ -428,7 +659,20 @@ export function bestFrequencyPolaritySupport({ mode, pages, topQuestionPages, qu
   return best;
 }
 
-export function negatedAnswerPrefixAdjustment({ mode, pages, question, answer, answerTokens }) {
+/**
+ * Штрафует отрицательный префикс ответа, не подтверждённый локальным источником.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function negatedAnswerPrefixAdjustment(
+  {mode, pages, question, answer, answerTokens}: AnswerScoringContext,
+): EvidenceAdjustment {
   if (mode !== "single" || answerTokens.length < 2) return { adjustment: 0, evidence: null };
   const questionNorm = normalizeForSearch(question);
   if (!containsNormalizedPhrase(questionNorm, "\u043e\u0431\u0440\u0430\u0437\u043e\u0432") && !containsNormalizedPhrase(questionNorm, "\u0445\u0430\u0440\u0430\u043a\u0442\u0435\u0440")) {
@@ -454,7 +698,19 @@ export function negatedAnswerPrefixAdjustment({ mode, pages, question, answer, a
   return { adjustment: 0, evidence: null };
 }
 
-export function impossibilityOnlyAdjustment({ mode, pages, question, answer }) {
+/**
+ * Ограничивает абсолютную формулировку невозможности без явной поддержки PDF.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function impossibilityOnlyAdjustment(
+  {mode, pages, question, answer}: AnswerScoringContext,
+): EvidenceAdjustment {
   if (mode !== "single") return { adjustment: 0, evidence: null };
   const questionNorm = normalizeForSearch(question);
   if (
@@ -514,7 +770,15 @@ export function impossibilityOnlyAdjustment({ mode, pages, question, answer }) {
   return { adjustment: 0, evidence: null };
 }
 
-export function activeTherapyIndicationAdjustment({ question, answer }) {
+/**
+ * Штрафует подмену активного лечения формулировкой об отсутствии терапии.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function activeTherapyIndicationAdjustment({question, answer}: AnswerScoringContext): EvidenceAdjustment {
   const questionNorm = normalizeForSearch(question);
   if (
     !containsNormalizedPhrase(questionNorm, "\u043d\u0430\u0447\u0430\u043b") ||
@@ -543,6 +807,12 @@ export function activeTherapyIndicationAdjustment({ question, answer }) {
   };
 }
 
+/**
+ * Извлекает короткую метку, определение которой запрашивается в вопросе.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ */
 export function questionDefinitionLabel(question: string): string | null {
   const tokens = rawTokens(question);
   const index = tokens.findIndex((token) => token.startsWith("\u0441\u0447\u0438\u0442\u0430"));
@@ -555,13 +825,21 @@ export function questionDefinitionLabel(question: string): string | null {
   return label.length ? label.join(" ") : null;
 }
 
-function labelDefinitionWindows(normalized, labelNorm) {
+/**
+ * Строит ограниченные локальные окна для метки определения.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @param labelNorm Значение `labelNorm`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function labelDefinitionWindows(normalized: string, labelNorm: string): LabelDefinitionWindow[] {
   const labelBoundaries = [
     "\u043e\u0442\u0440\u0438\u0446\u0430\u0442\u0435\u043b",
     "\u0441\u043e\u043c\u043d\u0438\u0442\u0435\u043b",
     "\u043f\u043e\u043b\u043e\u0436\u0438\u0442\u0435\u043b",
   ].map((item) => normalizeForSearch(item));
-  const windows = [];
+  const windows: LabelDefinitionWindow[] = [];
   let start = 0;
   while (start < normalized.length) {
     const labelIndex = normalized.indexOf(labelNorm, start);
@@ -593,11 +871,32 @@ const LABEL_DEFINITION_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function labelDefinitionFocusTokens(focusTokens) {
+/**
+ * Выделяет специфичные токены для метки определения фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function labelDefinitionFocusTokens(focusTokens: string[]): string[] {
   return (focusTokens ?? []).filter((token) => token.length >= 3 && !LABEL_DEFINITION_GENERIC_FOCUS.has(token));
 }
 
-export function bestLabelDefinitionSupport({ mode, pages, question, answer, answerTokens, focusTokens }) {
+/**
+ * Сопоставляет ответ с определением короткой метки вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
+export function bestLabelDefinitionSupport(
+  {mode, pages, question, answer, answerTokens, focusTokens}: AnswerScoringContext,
+): EvidenceItem | null {
   if (mode !== "single") return null;
   const label = questionDefinitionLabel(question);
   if (!label) return null;
@@ -645,15 +944,36 @@ const RECOMMENDATION_GENERIC_FOCUS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
-function specificRecommendationFocusTokens(focusTokens) {
+/**
+ * Выделяет специфичные токены для специфичных рекомендации фокуса вопроса.
+ *
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function specificRecommendationFocusTokens(focusTokens: string[]): string[] {
   return (focusTokens ?? []).filter((token) => token.length >= 4 && !RECOMMENDATION_GENERIC_FOCUS.has(token));
 }
 
-function recommendationQuestion(question) {
+/**
+ * Выполняет внутренний этап `recommendationQuestion`, подготавливающий рекомендации вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationQuestion(question: string): boolean {
   return containsNormalizedPhrase(normalizeForSearch(question), "\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434");
 }
 
-function segmentRecommendationPolarity(normalized) {
+/**
+ * Выполняет внутренний этап `segmentRecommendationPolarity`, подготавливающий сегмента рекомендации полярности для основного scorer-а.
+ *
+ * @param normalized Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function segmentRecommendationPolarity(normalized: string): RecommendationPolarity | null {
   if (
     containsNormalizedPhrase(normalized, "\u043d\u0435 \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") ||
     containsNormalizedPhrase(normalized, "\u043d\u0435\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434")
@@ -664,7 +984,15 @@ function segmentRecommendationPolarity(normalized) {
   return null;
 }
 
-function recommendationQuestionPolarity(question, intent) {
+/**
+ * Выполняет внутренний этап `recommendationQuestionPolarity`, подготавливающий рекомендации вопроса полярности для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @param intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationQuestionPolarity(question: string, intent: QuestionIntent): RecommendationPolarity {
   const normalized = normalizeForSearch(question);
   if (intent.negative || containsNormalizedPhrase(normalized, "\u043d\u0435 \u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434") || containsNormalizedPhrase(normalized, "\u043d\u0435\u0440\u0435\u043a\u043e\u043c\u0435\u043d\u0434")) {
     return "negative";
@@ -672,14 +1000,42 @@ function recommendationQuestionPolarity(question, intent) {
   return "positive";
 }
 
-function recommendationAnswerHit(segment, answer, answerTokens) {
+/**
+ * Определяет локальные совпадения для рекомендации варианта ответа.
+ *
+ * @param segment Значение `segment`, необходимое этому этапу scorer-а.
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationAnswerHit(
+  segment: LineWindowSegment,
+  answer: AnswerOption,
+  answerTokens: string[],
+): RecommendationAnswerHit {
   const answerPhrases = answerSearchPhrases(answer.text).slice(0, 16);
   const phraseHit = answerPhrases.some((phrase) => containsNormalizedPhrase(segment.normalized, phrase));
   const answerCoverage = strictSoftCoverage(answerTokens, segment.tokens);
   return { phraseHit, answerCoverage, hit: phraseHit || answerCoverage >= 0.6 };
 }
 
-export function recommendationPolarityAdjustment({ mode, pages, question, answer, answerTokens, focusTokens, intent }) {
+/**
+ * Проверяет совпадение положительной или отрицательной полярности рекомендации.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Поправка score и, при наличии, объясняющее evidence.
+ */
+export function recommendationPolarityAdjustment(
+  {mode, pages, question, answer, answerTokens, focusTokens, intent}: AnswerScoringContext,
+): SupportAdjustment {
   if (mode !== "single" || !recommendationQuestion(question)) return { support: null, adjustment: 0, evidence: null };
   const target = recommendationQuestionPolarity(question, intent);
   if (target !== "negative") return { support: null, adjustment: 0, evidence: null };

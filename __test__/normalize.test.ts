@@ -55,6 +55,11 @@ describe("normalize", () => {
       pages: [
         {
           page: 1,
+          text: "",
+          blocks: [],
+          lineItems: [],
+          normalized: "",
+          charLength: 0,
           lines: [
             "Болезнь Альфа подробно описана в этом разделе. Антитела к раствори мому печеночному аитигену встречаются отдельно.",
           ],

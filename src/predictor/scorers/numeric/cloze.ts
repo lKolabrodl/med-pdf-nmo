@@ -68,6 +68,13 @@ const SMALL_NUMBER_ALIASES = new Map(
   }),
 );
 
+/**
+ * Выполняет внутренний этап `clozeQuestionParts`, подготавливающий числового пропуска вопроса `parts` для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeQuestionParts(question: string): ClozeQuestionParts {
   const raw = String(question ?? "");
   const blank = raw.match(/_{2,}|…+/u);
@@ -78,6 +85,15 @@ function clozeQuestionParts(question: string): ClozeQuestionParts {
   };
 }
 
+/**
+ * Проверяет, применим ли scorer для числового пропуска.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.question Исходный текст вопроса.
+ * @returns `true`, если проверяемое условие выполнено; иначе `false`.
+ * @internal
+ */
 function clozeApplicable({mode,question}: Pick<ClozeGapInput, "mode" | "question" | "answer">): boolean {
   if (mode !== "single") return false;
   const hasBlank = /_{2,}|…+/u.test(String(question ?? ""));
@@ -85,6 +101,15 @@ function clozeApplicable({mode,question}: Pick<ClozeGapInput, "mode" | "question
   return false;
 }
 
+/**
+ * Выделяет специфичные токены для числового пропуска фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function clozeFocusTokens(question: string, focusTokens: string[], answerTokens: string[]): string[] {
   const answerSet = new Set(answerTokens ?? []);
   const out: string[] = [];
@@ -97,6 +122,14 @@ function clozeFocusTokens(question: string, focusTokens: string[], answerTokens:
   return out.slice(0, 18);
 }
 
+/**
+ * Выделяет специфичные токены для числового пропуска ядра.
+ *
+ * @param question Исходный текст вопроса.
+ * @param answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function clozeCoreTokens(question: string, answerTokens: string[]): string[] {
   const parts = clozeQuestionParts(question);
   const left = parts.left
@@ -108,6 +141,13 @@ function clozeCoreTokens(question: string, answerTokens: string[]): string[] {
   return tokens.filter((token) => !answerSet.has(token)).slice(0, 6);
 }
 
+/**
+ * Выполняет внутренний этап `clozeAnswerPhraseEntries`, подготавливающий числового пропуска варианта ответа фразы `entries` для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeAnswerPhraseEntries(answerText: string): ClozePhraseEntry[] {
   const entries: ClozePhraseEntry[] = [];
   const seen = new Set<string>();
@@ -140,11 +180,27 @@ function clozeAnswerPhraseEntries(answerText: string): ClozePhraseEntry[] {
   return entries;
 }
 
+/**
+ * Выполняет внутренний этап `clozeHasUnitCue`, подготавливающий числового пропуска единицы измерения маркера для основного scorer-а.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeHasUnitCue(local: string, question: string): boolean {
   const text = normalizeForSearch(`${local} ${question}`);
   return /(?:мг|мес|месяц|сут|дн|раз|р |%|°|мм|г\/л|лет|год)/u.test(text);
 }
 
+/**
+ * Выполняет внутренний этап `lastTokenDistance`, подготавливающий `last` токена `distance` для основного scorer-а.
+ *
+ * @param before Значение `before`, необходимое этому этапу scorer-а.
+ * @param focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function lastTokenDistance(before: string, focusTokens: string[]): number {
   let best = -1;
   for (const token of focusTokens) {
@@ -156,6 +212,14 @@ function lastTokenDistance(before: string, focusTokens: string[]): number {
   return before.length - best;
 }
 
+/**
+ * Выполняет внутренний этап `clozeContrastPenalty`, подготавливающий числового пропуска контраста `penalty` для основного scorer-а.
+ *
+ * @param tail Значение `tail`, необходимое этому этапу scorer-а.
+ * @param questionNumbers Значение `questionNumbers`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
+ */
 function clozeContrastPenalty(tail: string, questionNumbers: string[]): number {
   let penalty = 0;
   for (const phrase of CLOZE_CONTRAST_PHRASES) {
@@ -168,6 +232,13 @@ function clozeContrastPenalty(tail: string, questionNumbers: string[]): number {
   return Math.min(3, penalty);
 }
 
+/**
+ * Выполняет внутренний этап `relevantClozeQuestionNumbers`, подготавливающий `relevant` числового пропуска вопроса чисел для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function relevantClozeQuestionNumbers(question: string): string[] {
   const raw = String(question ?? "");
   const out: string[] = [];
@@ -184,12 +255,28 @@ function relevantClozeQuestionNumbers(question: string): string[] {
   return out;
 }
 
+/**
+ * Выполняет внутренний этап `clozeLocalHasRelevantQuestionNumber`, подготавливающий числового пропуска локального контекста `relevant` вопроса числа для основного scorer-а.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @param relevantNumbers Значение `relevantNumbers`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeLocalHasRelevantQuestionNumber(local: string, relevantNumbers: string[]): boolean {
   if (!relevantNumbers.length) return true;
   const localNumbers = new Set(extractNumbers(local).flatMap(expandNumberToken));
   return relevantNumbers.some((number) => localNumbers.has(number));
 }
 
+/**
+ * Выполняет внутренний этап `clozeTailHasConflictingNumber`, подготавливающий числового пропуска хвоста фразы `conflicting` числа для основного scorer-а.
+ *
+ * @param tail Значение `tail`, необходимое этому этапу scorer-а.
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeTailHasConflictingNumber(tail: string, answerText: string): boolean {
   const answerNumbers = new Set(extractNumbers(answerText).flatMap(expandNumberToken));
   if (!answerNumbers.size) return false;
@@ -198,10 +285,30 @@ function clozeTailHasConflictingNumber(tail: string, answerText: string): boolea
     .some((number) => !answerNumbers.has(number));
 }
 
+/**
+ * Выполняет внутренний этап `clozeTailHasTimingCue`, подготавливающий числового пропуска хвоста фразы временного условия маркера для основного scorer-а.
+ *
+ * @param tail Значение `tail`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function clozeTailHasTimingCue(tail: string): boolean {
   return containsNormalizedPhrase(tail, "через") || containsNormalizedPhrase(tail, "после");
 }
 
+/**
+ * Ищет числовой вариант в локальном месте пропуска или незавершённой фразы.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
 export function bestClozeGapSupport({mode,pages,topQuestionPages,question,answer,answerTokens,focusTokens}: ClozeGapInput): NumericEvidence {
   if (!clozeApplicable({mode,question,answer})) return null;
   const specificFocus = clozeFocusTokens(question, focusTokens, answerTokens);

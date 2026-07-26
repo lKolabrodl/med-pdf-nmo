@@ -57,15 +57,36 @@ const COUNT_GENERIC_TOKENS = new Set(
   ].flatMap((item) => uniqueTokens(item)),
 );
 
+/**
+ * Выполняет внутренний этап `countQuestion`, подготавливающий количества вопроса для основного scorer-а.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function countQuestion(question: string): boolean {
   const normalized = normalizeForSearch(question);
   return COUNT_QUESTION_CUES.some((cue) => normalized.includes(cue));
 }
 
+/**
+ * Выделяет специфичные токены для количества фокуса вопроса.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function countFocusTokens(question: string): string[] {
   return uniqueTokens(question).filter((token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token) && !COUNT_GENERIC_TOKENS.has(token) && !/^\d/.test(token));
 }
 
+/**
+ * Строит набор поисковых фраз для количества числа поиска.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
 function countNumberSearchPhrases(answerText: string): string[] {
   const phrases = new Set<string>();
   for (const number of extractNumbers(answerText)) {
@@ -79,6 +100,13 @@ function countNumberSearchPhrases(answerText: string): string[] {
   return [...phrases].filter(Boolean);
 }
 
+/**
+ * Выполняет внутренний этап `countRelationAnswerOption`, подготавливающий количества связанного отношения варианта ответа варианта ответа для основного scorer-а.
+ *
+ * @param answerText Исходный текст проверяемого варианта ответа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function countRelationAnswerOption(answerText: string): boolean {
   const normalized = normalizeForSearch(answerText);
   const tokens = phraseTokens(answerText).filter((token) => token.length > 0);
@@ -99,10 +127,24 @@ function countRelationAnswerOption(answerText: string): boolean {
   return nonNumericTokens.length <= 1;
 }
 
+/**
+ * Определяет локальные совпадения для количества маркера.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function countCueHit(local: string): boolean {
   return COUNT_LOCAL_CUES.some((cue) => local.includes(cue));
 }
 
+/**
+ * Определяет локальные совпадения для `positive` структурного совпадения.
+ *
+ * @param local Значение `local`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function positiveStructuralHit(local: string): boolean {
   const cue = normalizeForSearch("\u0441\u0442\u0440\u0443\u043a\u0442\u0443\u0440");
   for (let index = local.indexOf(cue); index >= 0; index = local.indexOf(cue, index + cue.length)) {
@@ -112,6 +154,16 @@ function positiveStructuralHit(local: string): boolean {
   return false;
 }
 
+/**
+ * Выполняет внутренний этап `countTargetNear`, подготавливающий количества целевого объекта `near` для основного scorer-а.
+ *
+ * @param normalizedPage Значение `normalizedPage`, необходимое этому этапу scorer-а.
+ * @param hit Значение `hit`, необходимое этому этапу scorer-а.
+ * @param phraseLength Значение `phraseLength`, необходимое этому этапу scorer-а.
+ * @param question Исходный текст вопроса.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function countTargetNear(normalizedPage: string, hit: number, phraseLength: number, question: string): boolean {
   const questionNorm = normalizeForSearch(question);
   const local = normalizedPage.slice(Math.max(0, hit - 25), Math.min(normalizedPage.length, hit + phraseLength + 55));
@@ -134,6 +186,18 @@ function countTargetNear(normalizedPage: string, hit: number, phraseLength: numb
   return true;
 }
 
+/**
+ * Ищет количество, связанное с тем же объектом или отношением, что и вопрос.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
+ */
 export function bestCountRelationSupport({mode,pages,topQuestionPages,question,answer,answerTokens}: CountRelationInput): NumericEvidence {
   if (mode !== "single" || !countQuestion(question)) return null;
   if (!extractNumbers(answer.text).length) return null;

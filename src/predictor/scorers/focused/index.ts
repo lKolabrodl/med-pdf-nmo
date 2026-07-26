@@ -1,5 +1,7 @@
-import { coverage, extractNumbers, normalizeForSearch, normalizeText, tokenize, uniqueTokens } from "../../../normalize.js";
-import { FOCUS_STOPWORDS } from "../../constants.js";
+import type {PdfPage} from "../../../pdf.js";
+import {coverage, extractNumbers, normalizeForSearch, normalizeText, tokenize, uniqueTokens} from "../../../normalize.js";
+import {FOCUS_STOPWORDS} from "../../constants.js";
+import type {AnswerScoringContext} from "../../contracts.js";
 import {
   answerSearchPhrases,
   betterEvidence,
@@ -15,6 +17,20 @@ import {
   tokenizeNormalized,
   tokenHitCount,
 } from "../../text-utils.js";
+import type {EvidenceItem} from "../../types.js";
+
+type LineTokenSegmentKind = "line" | "line_pair";
+
+type LineTokenSegment = {
+  text: string;
+  kind: LineTokenSegmentKind;
+  normalized: string;
+  tokens: string[];
+};
+
+type CachedLineTokenPage = PdfPage & {
+  __lineTokenSegments?: LineTokenSegment[];
+};
 
 /**
  * Собирает компактный набор токенов вопроса, по которым остальные scorer'ы ищут
@@ -22,8 +38,11 @@ import {
  *
  * В набор попадают явные cue-фразы, числа из вопроса и негeneric-токены; это
  * снижает шанс, что вариант ответа будет поддержан похожим, но чужим фрагментом.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
  */
-export function questionFocusTokens(question) {
+export function questionFocusTokens(question: string): string[] {
   const allTokens = uniqueTokens(question);
   const cueTokens = cueFocusTokens(question);
   const numbers = new Set(extractNumbers(question).flatMap(expandNumberToken));
@@ -33,7 +52,7 @@ export function questionFocusTokens(question) {
     if (FOCUS_STOPWORDS.has(token)) return false;
     return token.length > 2;
   });
-  const merged = [];
+  const merged: string[] = [];
   for (const token of [...cueTokens, ...filtered]) {
     if (!merged.includes(token)) merged.push(token);
   }
@@ -43,8 +62,12 @@ export function questionFocusTokens(question) {
 /**
  * Достает из вопроса короткие смысловые хвосты после устойчивых формулировок
  * вроде "с целью", "для" и возрастных ограничений.
+ *
+ * @param question Исходный текст вопроса.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function cueFocusTokens(question) {
+function cueFocusTokens(question: string): string[] {
   const raw = normalizeText(question);
   const parts = [];
   const patterns = [
@@ -63,8 +86,20 @@ function cueFocusTokens(question) {
 /**
  * Ищет вариант ответа в небольшом окне вокруг точного/нормализованного вхождения
  * и требует рядом фокус вопроса или совпадающие числа из вопроса.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestFocusedSupport({ pages, topQuestionPages, question, answer, answerTokens, focusTokens, intent }) {
+export function bestFocusedSupport(
+  {pages, topQuestionPages, question, answer, answerTokens, focusTokens, intent}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!focusTokens?.length) return null;
   const answerPhrases = focusedAnswerSearchPhrases(answer.text).slice(0, 24);
   let best = null;
@@ -106,10 +141,14 @@ export function bestFocusedSupport({ pages, topQuestionPages, question, answer, 
 /**
  * Строит короткие строковые сегменты страницы: одну строку и пару соседних строк.
  * Эти сегменты дают дешевый локальный evidence без широкого поиска по странице.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
  */
-function lineTokenSegments(page) {
+function lineTokenSegments(page: PdfPage): Array<Omit<LineTokenSegment, "normalized" | "tokens">> {
   const lines = page.lines ?? [];
-  const segments = [];
+  const segments: Array<Omit<LineTokenSegment, "normalized" | "tokens">> = [];
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (line?.length >= 8) segments.push({ text: line, kind: "line" });
@@ -124,8 +163,11 @@ function lineTokenSegments(page) {
 /**
  * Возвращает кешированные line/pair-сегменты с уже посчитанной нормализацией и
  * токенами; кеш живет на объекте страницы и не попадает в публичный результат.
+ *
+ * @param page Текущая страница PDF или её номер.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
  */
-export function cachedLineTokenSegments(page) {
+export function cachedLineTokenSegments(page: CachedLineTokenPage): LineTokenSegment[] {
   if (!page.__lineTokenSegments) {
     Object.defineProperty(page, "__lineTokenSegments", {
       value: lineTokenSegments(page).map((segment) => ({
@@ -136,14 +178,27 @@ export function cachedLineTokenSegments(page) {
       enumerable: false,
     });
   }
-  return page.__lineTokenSegments;
+  return page.__lineTokenSegments!;
 }
 
 /**
  * Сравнивает вариант ответа с локальными line/pair-сегментами и отдает поддержку
  * только когда рядом есть фокус вопроса, числа или достаточно сильное совпадение.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.topQuestionPages Страницы, наиболее релевантные вопросу по поисковому индексу.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param context.questionTokens Нормализованные токены вопроса.
+ * @param context.answerTokens Нормализованные токены проверяемого варианта.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.intent Определённый predictor-ом тип и полярность вопроса.
+ * @returns Лучшее evidence или `null`, если применимый локальный сигнал не найден.
  */
-export function bestLineTokenSupport({ pages, topQuestionPages, question, answer, questionTokens, answerTokens, focusTokens, intent }) {
+export function bestLineTokenSupport(
+  {pages, topQuestionPages, question, answer, questionTokens, answerTokens, focusTokens, intent}: AnswerScoringContext,
+): EvidenceItem | null {
   if (!answerTokens.length) return null;
   const numericAnswer = extractNumbers(answer.text).length > 0;
   const minAnswerSupport = numericAnswer ? 0.65 : answerTokens.length <= 2 ? 0.95 : 0.62;
@@ -199,8 +254,12 @@ export function bestLineTokenSupport({ pages, topQuestionPages, question, answer
 /**
  * Штрафует локальные окна с ограничивающими формулировками, чтобы "не
  * рекомендуется" и "только при невозможности" не выглядели как обычная поддержка.
+ *
+ * @param normalizedText Текст, заранее приведённый к поисковой нормальной форме.
+ * @returns Вычисленное числовое значение или специальное граничное значение при отсутствии совпадения.
+ * @internal
  */
-function limitedCuePenalty(normalizedText) {
+function limitedCuePenalty(normalizedText: string): number {
   const limitedCues = ["не рекомендуется", "не рекомендовано", "только в случаях", "при невозможности", "невозможности", "за исключением"];
   let penalty = 0;
   for (const cue of limitedCues) {

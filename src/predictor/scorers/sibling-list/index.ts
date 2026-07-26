@@ -22,7 +22,12 @@ type SiblingBlock = {
   labelTokens: string[];
   bodyTokens: string[];
 };
+type LabelBody = {label: string; body: string};
+type BodyMatch = {matched: boolean; quality: number; phraseHit: boolean; coverage: number};
+type LabelMatch = {matched: boolean; quality: number};
+type BodyQuestionMatch = {quality: number; hits: number};
 
+/** Поправка и evidence для ответов, разрешённых внутри sibling-блока. */
 export type SiblingListResolution = Map<
   string,
   {
@@ -55,7 +60,14 @@ const QUESTION_RELATION_TOKENS = new Set(
   ),
 );
 
-function isRunningHeader(text: string) {
+/**
+ * Проверяет наличие или совместимость `running` заголовка.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function isRunningHeader(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return (
     normalized.length < 180 &&
@@ -64,7 +76,14 @@ function isRunningHeader(text: string) {
   );
 }
 
-function isStrongBoundary(text: string) {
+/**
+ * Находит структурную границу для `strong`.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function isStrongBoundary(text: string): boolean {
   const normalized = normalizeForSearch(text);
   return (
     /^\s*\d+(?:\.\d+)+\.?\s+/u.test(String(text ?? "")) ||
@@ -74,7 +93,14 @@ function isStrongBoundary(text: string) {
   );
 }
 
-function recommendationLikeLabel(label: string) {
+/**
+ * Выполняет внутренний этап `recommendationLikeLabel`, подготавливающий рекомендации `like` метки для основного scorer-а.
+ *
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function recommendationLikeLabel(label: string): boolean {
   const normalizedLabel = normalizeForSearch(label);
   return (
     containsNormalizedPhrase(normalizedLabel, "рекоменд") ||
@@ -84,14 +110,29 @@ function recommendationLikeLabel(label: string) {
   );
 }
 
-function validLabelBody(label: string, body: string) {
+/**
+ * Проверяет наличие или совместимость метки тела пункта.
+ *
+ * @param label Разобранная метка строки, стадии или типа.
+ * @param body Значение `body`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function validLabelBody(label: string, body: string): LabelBody | null {
   const labelTokens = uniqueTokens(label);
   if (!body || label.length > 100 || labelTokens.length < 1 || labelTokens.length > 9) return null;
   if (recommendationLikeLabel(label)) return null;
   return { label, body };
 }
 
-function hasOrdinalSignature(label: string) {
+/**
+ * Проверяет наличие или совместимость порядкового значения `signature`.
+ *
+ * @param label Разобранная метка строки, стадии или типа.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function hasOrdinalSignature(label: string): boolean {
   const clean = normalizeText(label);
   return (
     new RegExp(`(?:^|\\s)${ORDINAL_VALUE}(?:\\s+\\S{1,3})?\\s+${ORDINAL_KIND}(?:\\s|$)`, "iu").test(clean) ||
@@ -99,7 +140,14 @@ function hasOrdinalSignature(label: string) {
   );
 }
 
-function parseStructuredLabel(text: string) {
+/**
+ * Разбирает входной текст и выделяет `structured` метки.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function parseStructuredLabel(text: string): LabelBody | null {
   const raw = String(text ?? "");
   const bullet = BULLET_START.test(raw);
   const stripped = raw.replace(BULLET_START, "").replace(/\s+/gu, " ").trim();
@@ -127,6 +175,13 @@ function parseStructuredLabel(text: string) {
   return null;
 }
 
+/**
+ * Выполняет внутренний этап `flattenLines`, подготавливающий `flatten` строк для основного scorer-а.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
 function flattenLines(pages: PdfLinePage[]): FlatLine[] {
   const lines: FlatLine[] = [];
   let flatIndex = 0;
@@ -143,6 +198,9 @@ function flattenLines(pages: PdfLinePage[]): FlatLine[] {
  * Reconstructs category-style bullet items such as `- Label. Description`.
  * A block ends at the next physical bullet, preserving sibling boundaries even
  * across a page break. Recommendation bullets are deliberately excluded.
+ *
+ * @param pages Извлечённые страницы PDF, доступные scorer-у.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
  */
 export function buildSiblingListBlocks(
   pages: PdfLinePage[],
@@ -205,13 +263,29 @@ export function buildSiblingListBlocks(
   return clusters.filter((cluster) => cluster.length >= 2);
 }
 
-function informativeTokens(text: string, generic = CATEGORY_GENERIC_TOKENS) {
+/**
+ * Выделяет специфичные токены для информативных токенов.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @param generic Значение `generic`, необходимое этому этапу scorer-а.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function informativeTokens(text: string, generic: Set<string> = CATEGORY_GENERIC_TOKENS): string[] {
   return uniqueTokens(text).filter(
     (token) => token.length >= 3 && !FOCUS_STOPWORDS.has(token) && !generic.has(token) && !/^\d+$/u.test(token),
   );
 }
 
-function answerBodyMatch(answer: AnswerOption, block: SiblingBlock) {
+/**
+ * Проверяет совпадение варианта ответа тела пункта.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerBodyMatch(answer: AnswerOption, block: SiblingBlock): BodyMatch {
   const normalized = normalizeForSearch(block.body);
   const answerTokens = informativeTokens(answer.text, new Set());
   const phraseHit = answerSearchPhrases(answer.text)
@@ -226,12 +300,26 @@ function answerBodyMatch(answer: AnswerOption, block: SiblingBlock) {
   return { matched, quality: Math.max(phraseHit ? 1 : 0, coverage) * Math.min(1, numeric), phraseHit, coverage };
 }
 
-function labelSpecificTokens(text: string) {
+/**
+ * Выделяет специфичные токены для метки специфичных.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Подготовленная коллекция; пустая коллекция означает отсутствие подходящих элементов.
+ * @internal
+ */
+function labelSpecificTokens(text: string): string[] {
   const tokens = informativeTokens(text);
   return tokens.length ? tokens : uniqueTokens(text).filter((token) => !FOCUS_STOPWORDS.has(token));
 }
 
-function ordinalNumber(value: string) {
+/**
+ * Выполняет внутренний этап `ordinalNumber`, подготавливающий порядкового значения числа для основного scorer-а.
+ *
+ * @param value Входное значение, которое требуется нормализовать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalNumber(value: string): number | null {
   if (/^\d{1,2}$/u.test(value)) return Number(value);
   const roman = new Map([
     ["i", 1],
@@ -248,7 +336,14 @@ function ordinalNumber(value: string) {
   return roman.get(value.toLowerCase()) ?? null;
 }
 
-function ordinalLabelKey(text: string) {
+/**
+ * Выполняет внутренний этап `ordinalLabelKey`, подготавливающий порядкового значения метки `key` для основного scorer-а.
+ *
+ * @param text Текст, который требуется разобрать или проверить.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function ordinalLabelKey(text: string): string | null {
   const clean = normalizeText(text);
   const kinds: Array<[string, RegExp]> = [
     ["type", /тип\S*/iu],
@@ -274,7 +369,15 @@ function ordinalLabelKey(text: string) {
   return null;
 }
 
-function blockWithPlusInheritance(block: SiblingBlock, cluster: SiblingBlock[]) {
+/**
+ * Выполняет внутренний этап `blockWithPlusInheritance`, подготавливающий блока `with` `plus` `inheritance` для основного scorer-а.
+ *
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @param cluster Значение `cluster`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function blockWithPlusInheritance(block: SiblingBlock, cluster: SiblingBlock[]): SiblingBlock {
   if (!/\+/u.test(block.body.slice(0, 100))) return block;
   const referencedKey = ordinalLabelKey(block.body.slice(0, 100));
   if (!referencedKey || referencedKey === ordinalLabelKey(block.label)) return block;
@@ -289,7 +392,15 @@ function blockWithPlusInheritance(block: SiblingBlock, cluster: SiblingBlock[]) 
   };
 }
 
-function questionLabelMatch(question: string, block: SiblingBlock) {
+/**
+ * Проверяет совпадение вопроса метки.
+ *
+ * @param question Исходный текст вопроса.
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function questionLabelMatch(question: string, block: SiblingBlock): number {
   const questionOrdinal = ordinalLabelKey(question);
   const blockOrdinal = ordinalLabelKey(block.label);
   if (questionOrdinal && blockOrdinal) return questionOrdinal === blockOrdinal ? 1 : 0;
@@ -302,7 +413,15 @@ function questionLabelMatch(question: string, block: SiblingBlock) {
   return labelInQuestion;
 }
 
-function answerLabelMatch(answer: AnswerOption, block: SiblingBlock) {
+/**
+ * Проверяет совпадение варианта ответа метки.
+ *
+ * @param answer Проверяемый вариант ответа с идентификатором и текстом.
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function answerLabelMatch(answer: AnswerOption, block: SiblingBlock): LabelMatch {
   const answerOrdinal = ordinalLabelKey(answer.text);
   const blockOrdinal = ordinalLabelKey(block.label);
   if (answerOrdinal && blockOrdinal) {
@@ -322,13 +441,30 @@ function answerLabelMatch(answer: AnswerOption, block: SiblingBlock) {
   return { matched: score >= 0.72, quality: score };
 }
 
-function chooseUnique<T extends { strength: number }>(candidates: T[], margin: number) {
+/**
+ * Выбирает уникальный результат для `unique` или воздерживается при неоднозначности.
+ *
+ * @param candidates Значение `candidates`, необходимое этому этапу scorer-а.
+ * @param margin Значение `margin`, необходимое этому этапу scorer-а.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function chooseUnique<T extends {strength: number}>(candidates: T[], margin: number): T | null {
   const sorted = [...candidates].sort((left, right) => right.strength - left.strength);
   if (!sorted.length) return null;
   if (sorted[1] && sorted[0].strength - sorted[1].strength < margin) return null;
   return sorted[0];
 }
 
+/**
+ * Разрешает multi-answer набора принадлежности и возвращает однозначный результат при достаточном evidence.
+ *
+ * @param clusters Значение `clusters`, необходимое этому этапу scorer-а.
+ * @param question Исходный текст вопроса.
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ * @internal
+ */
 function resolveMultiMembership(
   clusters: SiblingBlock[][],
   question: string,
@@ -379,7 +515,20 @@ function resolveMultiMembership(
   return resolution;
 }
 
-function bodyQuestionMatch(questionTokens: string[], block: SiblingBlock, commonTokens: Set<string>) {
+/**
+ * Проверяет совпадение тела пункта вопроса.
+ *
+ * @param questionTokens Нормализованные токены вопроса.
+ * @param block Значение `block`, необходимое этому этапу scorer-а.
+ * @param commonTokens Нормализованные токены соответствующего текста.
+ * @returns Вычисленное значение; `null` или пустая структура означают отсутствие применимого сигнала, если это предусмотрено функцией.
+ * @internal
+ */
+function bodyQuestionMatch(
+  questionTokens: string[],
+  block: SiblingBlock,
+  commonTokens: Set<string>,
+): BodyQuestionMatch {
   const distinctive = questionTokens.filter((token) => !commonTokens.has(token));
   if (!distinctive.length) return { quality: 0, hits: 0 };
   const quality = strictSoftCoverage(distinctive, block.bodyTokens);
@@ -387,6 +536,16 @@ function bodyQuestionMatch(questionTokens: string[], block: SiblingBlock, common
   return { quality, hits };
 }
 
+/**
+ * Разрешает single-answer разрешения `inverse` и возвращает однозначный результат при достаточном evidence.
+ *
+ * @param clusters Значение `clusters`, необходимое этому этапу scorer-а.
+ * @param question Исходный текст вопроса.
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param suppliedFocusTokens Нормализованные токены соответствующего текста.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ * @internal
+ */
 function resolveSingleInverse(
   clusters: SiblingBlock[][],
   question: string,
@@ -465,6 +624,15 @@ function resolveSingleInverse(
   ]);
 }
 
+/**
+ * Разрешает single-answer разрешения `forward` и возвращает однозначный результат при достаточном evidence.
+ *
+ * @param clusters Значение `clusters`, необходимое этому этапу scorer-а.
+ * @param question Исходный текст вопроса.
+ * @param answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
+ * @internal
+ */
 function resolveSingleForward(
   clusters: SiblingBlock[][],
   question: string,
@@ -531,6 +699,16 @@ function resolveSingleForward(
  * Resolves only contrastive sibling lists. The function abstains unless a
  * target block and at least one competing sibling are both proven by the
  * current answer family; ordinary isolated bullets receive no score.
+ *
+ * @param context Контекстные параметры текущего scorer-этапа.
+ * @param context.mode Режим выбора ответа: `single` или `multi`.
+ * @param context.pages Извлечённые страницы PDF, доступные scorer-у.
+ * @param context.question Исходный текст вопроса.
+ * @param context.answers Полный набор вариантов, необходимый для контрастного сравнения.
+ * @param context.focusTokens Специфичные токены вопроса без общих служебных слов.
+ * @param context.enableMultiMembership Значение `enableMultiMembership`, необходимое этому этапу scorer-а.
+ * @param context.enableSingleInverse Значение `enableSingleInverse`, необходимое этому этапу scorer-а.
+ * @returns Структурное разрешение; пустое значение означает, что scorer воздержался.
  */
 export function resolveSiblingList({
   mode,
