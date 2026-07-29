@@ -313,3 +313,43 @@ exclusive rows and answer values can become one flat paragraph. The predictor
 now uses coordinates, continued headers, list hierarchy, atomic recommendations,
 and bounded OCR repair, but it still cannot always reconstruct which value
 belongs to which row, condition, heading, or list item.
+
+## Accepted extraction change after iteration 161
+
+Before chunking and indexing, the extractor can repair a Cyrillic token split by
+an internal space. The default repair is deliberately document-local and
+structural:
+
+1. The joined token must already occur intact at least twice in the same PDF.
+2. Neither fragment may be a stop-word, number, or independently occurring word
+   elsewhere in that PDF.
+3. Overlapping or ambiguous joins abstain.
+4. The split occurrence must be on a numbered/Roman row, bullet, heading, or
+   short label line ending in a colon.
+
+The default values are:
+
+```text
+documentTokenRepair=true
+documentTokenRepairMinFrequency=2
+documentTokenRepairStructuralOnly=true
+```
+
+This stage changes extracted text only; it does not read questions, options,
+case ids, split membership, or labels. Runtime caching includes the repair
+configuration so repaired and unrepaired PDF representations cannot collide.
+
+## Production scope after iteration 165
+
+Rejected T1–T4 runtime implementations, disabled flags, experiment-only
+provenance, tests, and the table-grid audit were removed after validation. The
+production predictor keeps only the accepted T5 document-internal split-token
+repair from this theory round.
+
+T6/T7 remain development-only measurement commands. They can run group
+stability and ablation audits, but are not imported by runtime inference and do
+not change selected answers.
+
+The accepted default reaches `2125/2867 = 0.7412` exact accuracy across all
+current keyed cases: single `1578/1905 = 0.8283`, multi exact-set
+`547/962 = 0.5686`. The frozen holdout remains `460/540 = 0.8519`.

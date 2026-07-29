@@ -237,3 +237,37 @@ residual counts and mutually exclusive error classes above remain current.
 Removing the disabled `condition_number_segment` implementation also produced
 no changed case, confirming that it was dead code rather than an active error
 signal. No new error category was introduced by this architecture-only stage.
+
+## Residuals after the improvement-theory round
+
+The expanded 47-PDF corpus has 742 remaining exact errors:
+
+- single: `327/1905` errors, accuracy `1578/1905 = 0.8283`;
+- multi: `415/962` exact-set errors, accuracy `547/962 = 0.5686`;
+- train: 467 errors;
+- dev: 107 errors (`59` single, `48` multi);
+- frozen holdout: 80 errors;
+- external: 88 errors, including the newly added difficult `51-travma`.
+
+The only repaired exact case is `15-toxic#54`, a multi question whose correct
+set became recoverable after a split syndrome heading was joined from
+document-internal evidence. No previous correct selection changed.
+
+The rejected theories sharpen the ownership diagnosis:
+
+- T1 found substantial table geometry but changed no selected set. On
+  `07-hron#7` both competing answers gained equally, showing that a better grid
+  does not automatically identify the semantic owner of a value.
+- T2/T3 found four complete contrastive sets (`41-destonia#33`–`#36`), but all
+  were already correct. The remaining cardinality errors do not expose the
+  complete, unambiguous substructure required by safe non-semantic completion.
+- T4's strict exclusion form had zero dev coverage. Relaxing it would turn
+  absence from a flattened paragraph into evidence, repeating the failure mode
+  from iteration 84.
+- The multi-heavy `51-travma` transfer check for combined T2/T3 changed neither
+  selections nor raw scores (`46/113` remained unchanged).
+
+Therefore the dominant unresolved class is still relation/ownership ambiguity,
+not missing retrieval or a globally wrong cardinality threshold. The safe
+structural signals are highly precise but now mostly overlap questions the
+predictor already solves.

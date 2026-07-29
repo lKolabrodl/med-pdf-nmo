@@ -1,14 +1,14 @@
-export const DATASET_MANIFEST_VERSION = 6;
+export const DATASET_MANIFEST_VERSION = 7;
 
 /**
  * SHA-256 over sorted `<group>:<pdf-sha256>` rows for the deduplicated local corpus.
  * The individual corpus files remain local, but this fingerprint prevents silent
  * replacement/addition/removal from changing evaluation composition.
  */
-export const DATASET_PDF_FINGERPRINT = "97babb222308b6cfd88cdaf2854bfffabe190ef696075db95a4a3109fb6f5f22";
+export const DATASET_PDF_FINGERPRINT = "311bf1cbdec7a6d02d86247f09ee7d62ff0c3167c1c4ef71f1513ff3f0e983c1";
 
 /** SHA-256 over stable parsed case tuples, including expected values. */
-export const DATASET_CASE_FINGERPRINT = "538a4c48ee220f79cd71d9044e5d65f476e6cb2e60c39b82baa09ff94ffc295c";
+export const DATASET_CASE_FINGERPRINT = "f16dead6fec4ed63b500bb2e7c990732611d8d4a6cf80b8d55c2cdd9e47b4cea";
 
 /**
  * Frozen PDF-level split for the deduplicated local corpus.
@@ -65,7 +65,7 @@ export const FROZEN_SPLIT_GROUPS = {
   ],
   // Added after the original split was frozen. Keep these newer PDFs separate
   // so their transfer result stays visible without moving established groups.
-  external: ["48-pereferi", "49-central-ceroz", "50-dr-gepatit"],
+  external: ["48-pereferi", "49-central-ceroz", "50-dr-gepatit", "51-travma"],
 } as const;
 
 export const DATASET_GROUPS = [

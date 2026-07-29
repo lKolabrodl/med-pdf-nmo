@@ -2,6 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { loadDataset, groupSplit } from "./cases.js";
+import { DEFAULT_CONFIG, type PredictorConfig } from "../src/predictor/config.js";
 import { predict } from "../src/predictor.js";
 
 const TARGET = 0.8;
@@ -21,6 +22,36 @@ function parseArgs(argv) {
     }
   }
   return args;
+}
+
+function parseConfigOverrides(value: string | boolean | undefined): Partial<PredictorConfig> {
+  if (typeof value !== "string" || !value.trim()) return {};
+  const overrides: Partial<PredictorConfig> = {};
+  const mutable = overrides as Record<string, boolean | number>;
+  for (const assignment of value.split(",")) {
+    const separator = assignment.indexOf("=");
+    if (separator < 1) throw new Error(`Invalid config assignment "${assignment}"`);
+    const key = assignment.slice(0, separator).trim();
+    const rawValue = assignment.slice(separator + 1).trim();
+    if (!(key in DEFAULT_CONFIG)) throw new Error(`Unknown predictor config key "${key}"`);
+    const defaultValue = DEFAULT_CONFIG[key as keyof PredictorConfig];
+    if (typeof defaultValue === "boolean") {
+      if (rawValue !== "true" && rawValue !== "false") {
+        throw new Error(`Config "${key}" requires true or false`);
+      }
+      mutable[key] = rawValue === "true";
+      continue;
+    }
+    const numeric = Number(rawValue);
+    if (!Number.isFinite(numeric)) throw new Error(`Config "${key}" requires a finite number`);
+    mutable[key] = numeric;
+  }
+  return overrides;
+}
+
+function safeReportTag(value: string | boolean | undefined): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^a-z0-9_-]+/giu, "-").replace(/^-+|-+$/gu, "");
 }
 
 function sameSet(left, right) {
@@ -92,14 +123,24 @@ function summarize(results, splitName, splitGroups) {
   };
 }
 
-async function evaluate(splitName, explicitGroup = "") {
+async function evaluate(
+  splitName,
+  explicitGroup = "",
+  configOverrides: Partial<PredictorConfig> = {},
+  reportTag = "",
+) {
   const root = process.cwd();
   const { groups, cases } = await loadDataset(root);
   if (explicitGroup && !groups.includes(explicitGroup)) {
     throw new Error(`Unknown PDF group "${explicitGroup}"`);
   }
   const splits = explicitGroup ? null : groupSplit(groups);
-  const selectedGroups = explicitGroup ? new Set([explicitGroup]) : splits[splitName];
+  const selectedGroups =
+    explicitGroup
+      ? new Set([explicitGroup])
+      : splitName === "all"
+        ? new Set(groups)
+        : splits[splitName];
   if (!selectedGroups) throw new Error(`Unknown split "${splitName}"`);
   const splitCases = cases.filter((testCase) => selectedGroups.has(testCase.pdfGroup));
   const skippedNoExpected = splitCases.filter((testCase) => !testCase.expectedIds.length);
@@ -124,7 +165,7 @@ async function evaluate(splitName, explicitGroup = "") {
         answers: testCase.answers,
         mode: testCase.mode,
       },
-      { includeSources: false },
+      { includeSources: false, ...configOverrides },
     );
     const correct = sameSet(output.selected, testCase.expectedIds);
     results.push({ case: testCase, output, correct });
@@ -133,10 +174,13 @@ async function evaluate(splitName, explicitGroup = "") {
     }
   }
 
-  const reportName = explicitGroup ? `group-${explicitGroup.replace(/[^a-z0-9_-]+/giu, "-")}` : splitName;
+  const baseReportName = explicitGroup ? `group-${explicitGroup.replace(/[^a-z0-9_-]+/giu, "-")}` : splitName;
+  const reportName = reportTag ? `${baseReportName}-${reportTag}` : baseReportName;
   const summary = {
     ...summarize(results, explicitGroup ? `group:${explicitGroup}` : splitName, selectedGroups),
     skippedNoExpected: skippedNoExpected.length,
+    configOverrides,
+    reportTag,
   };
   const reportDir = path.join(root, ".cache", "eval");
   await fs.mkdir(reportDir, { recursive: true });
@@ -189,9 +233,19 @@ async function evaluate(splitName, explicitGroup = "") {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const explicitGroup = typeof args.group === "string" ? args.group : "";
+  const configOverrides = parseConfigOverrides(args.config);
+  const reportTag = safeReportTag(args["report-tag"]);
   const splitName =
-    args.split === "external" ? "external" : args.split === "holdout" ? "holdout" : args.split === "train" ? "train" : "dev";
-  const summary = await evaluate(splitName, explicitGroup);
+    args.split === "all"
+      ? "all"
+      : args.split === "external"
+        ? "external"
+        : args.split === "holdout"
+          ? "holdout"
+          : args.split === "train"
+            ? "train"
+            : "dev";
+  const summary = await evaluate(splitName, explicitGroup, configOverrides, reportTag);
   process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
   if (!explicitGroup && splitName === "holdout" && summary.exactAccuracy < TARGET) {
     process.stderr.write(`holdout exact accuracy ${summary.exactAccuracy} is below target ${TARGET}\n`);

@@ -54,6 +54,13 @@ function objectKey(input: unknown): object | null {
   return input && typeof input === "object" ? input : null;
 }
 
+function runtimeVariantKey(options: PdfRuntimeOptions): string {
+  if (!options.documentTokenRepair) return "base";
+  const minFrequency = Math.max(1, Math.floor(Number(options.documentTokenRepairMinFrequency) || 1));
+  const scope = options.documentTokenRepairStructuralOnly ? "structural" : "all";
+  return `document-token-repair:${minFrequency}:${scope}`;
+}
+
 /**
  * Управляет извлеченным PDF-текстом, поисковыми чанками, BM25-индексом и
  * жизненным циклом runtime-кеша.
@@ -64,7 +71,7 @@ function objectKey(input: unknown): object | null {
  */
 export class PdfRuntimeStore {
   private readonly keyedRuntimeCache = new Map<string, Promise<PdfRuntime>>();
-  private readonly objectRuntimeCache = new WeakMap<object, Promise<PdfRuntime>>();
+  private readonly objectRuntimeCache = new WeakMap<object, Map<string, Promise<PdfRuntime>>>();
 
   constructor(
     private readonly dependencies: PdfRuntimeStoreDependencies = DEFAULT_RUNTIME_DEPENDENCIES,
@@ -77,11 +84,14 @@ export class PdfRuntimeStore {
     pdfInput: unknown,
     options: PdfRuntimeOptions = {},
   ): Promise<PdfRuntime> {
-    const cacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
+    const suppliedCacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
+    const variantKey = runtimeVariantKey(options);
+    const cacheKey = suppliedCacheKey ? `${suppliedCacheKey}\u0000${variantKey}` : null;
     if (cacheKey && this.keyedRuntimeCache.has(cacheKey)) return this.keyedRuntimeCache.get(cacheKey);
 
     const weakKey = objectKey(pdfInput);
-    if (!cacheKey && weakKey && this.objectRuntimeCache.has(weakKey)) return this.objectRuntimeCache.get(weakKey);
+    const objectVariants = weakKey ? this.objectRuntimeCache.get(weakKey) : null;
+    if (!cacheKey && objectVariants?.has(variantKey)) return objectVariants.get(variantKey);
 
     const runtimePromise = (async () => {
       const pdfText = await this.dependencies.extractPdfText(pdfInput, options);
@@ -91,7 +101,11 @@ export class PdfRuntimeStore {
     })();
 
     if (cacheKey) this.keyedRuntimeCache.set(cacheKey, runtimePromise);
-    else if (weakKey) this.objectRuntimeCache.set(weakKey, runtimePromise);
+    else if (weakKey) {
+      const variants = objectVariants ?? new Map<string, Promise<PdfRuntime>>();
+      variants.set(variantKey, runtimePromise);
+      this.objectRuntimeCache.set(weakKey, variants);
+    }
 
     return runtimePromise;
   }

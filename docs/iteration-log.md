@@ -1234,3 +1234,254 @@ Iteration 155 scorer-folder full regression audit: COMPLETE.
   source-backed answer `D` (`70% крови`) with confidence `0.9193`.
 - `npm pack --dry-run` succeeds with 166 package files, including every
   feature-folder facade and numeric internal module.
+
+Iteration 156 new `51-travma` transfer baseline: EVALUATION-ONLY.
+
+- Before changing predictor logic for the improvement-theory round, the newly
+  available `51-travma` PDF was added to the external split and frozen in
+  dataset-manifest version 7.
+- Dataset validation reports 47 unique PDF groups, 2,884 parsed cases, 2,867
+  keyed cases, no duplicate PDFs, no likely duplicate group pairs, and no
+  cross-split duplicate records.
+- The predictor was evaluated on `51-travma` before any of its labels or errors
+  informed a runtime change: `46/113 = 0.4071`; single `9/12 = 0.7500`; multi
+  exact set `37/101 = 0.3663`; `noEvidence = 0`.
+- Combining that frozen first result with the unchanged iteration-155
+  artifacts gives the round baseline:
+  - train: `1074/1541 = 0.6970`;
+  - dev: `415/523 = 0.7935`;
+  - holdout regression: `460/540 = 0.8519`;
+  - external transfer: `175/263 = 0.6654`;
+  - all keyed: `2124/2867 = 0.7408`;
+  - single: `1578/1905 = 0.8283`;
+  - multi exact set: `546/962 = 0.5676`.
+- The new labels are no longer blind after this baseline. `51-travma` is now a
+  transfer-development/regression group, not a sealed estimate.
+
+Iteration 157 T6 PDF-group stability/LOO tooling: KEPT, EVALUATION-ONLY.
+
+- Added config-overridden and uniquely tagged eval artifacts to `scripts/eval.ts`.
+  Runtime inference still receives only PDF/question/options/mode; the new
+  switches exist only in development tooling.
+- Added `scripts/eval-loo.ts` plus `npm run eval:loo` and `npm run eval:all`.
+  The runner evaluates PDF groups in isolated child processes with bounded
+  concurrency, aggregates exact/single/multi and per-PDF statistics, and records
+  mean, median, minimum, maximum, and standard deviation by PDF.
+- The output explicitly identifies itself as a fit-free group-stability audit.
+  Because the heuristic predictor has no per-fold fitting step, aggregating each
+  PDF once is not a blind learned-model LOO estimate.
+- Smoke validation on the independently selected `08-ask` group reproduced
+  `29/30 = 0.9667`, including single `28/29` and multi `1/1`.
+- A genuinely sealed test could not be manufactured from the repository:
+  every available case file already contains locally accessible labels.
+  Restoring a blind estimate requires a future PDF whose labels are held outside
+  the development workspace until predictor logic is frozen.
+
+Iteration 158 T7 top-level scorer ablation: TOOLING KEPT, RUNTIME UNCHANGED.
+
+- Added `scripts/ablation.ts` and `npm run ablation`. The tool disables active
+  boolean predictor mechanisms one at a time, runs tagged PDF-group stability
+  evaluations, and records exact, single, multi, macro, and per-PDF deltas.
+- The current config exposes 19 active boolean mechanisms. The audit is honest
+  about its boundary: evidence kinds without an independent toggle are not
+  claimed as individually ablated.
+- Full 19-flag smoke on `08-ask` was exact-neutral for every flag:
+  baseline and all variants remained `29/30`.
+- Full 19-flag audit on the new difficult `51-travma` group found:
+  - 14 zero-delta flags;
+  - disabling four useful mechanisms regressed exact accuracy:
+    `multiAllOptionsGuard -1`, `sharedMultiSegmentBoost -2`,
+    `singleSpecificityTieBreak -2`, `multiCrowdedTailGuard -3`;
+  - disabling `optionFamilyCompactComboGuard` produced the only apparent gain,
+    `46 -> 47/113`, changing `51-travma#93` wrong-to-right.
+- The only positive candidate failed transfer validation. On full dev,
+  disabling `optionFamilyCompactComboGuard` changed `415 -> 414/523` and broke
+  `07-hron#43` right-to-wrong. Combined dev plus new-external delta is zero and
+  dev regresses, so the guard remains enabled and no runtime ablation is kept.
+
+Iteration 159 T4 Cyrillic negation intent: REJECTED, DEFAULT OFF.
+
+- Added a feature-gated intent detector that evaluates semantic negation before
+  Cyrillic/Latin lookalike folding. Focused tests cover `кроме`,
+  `не относится`, `не рекомендовано`, and `не характерно`, while protecting
+  numeric bounds such as `не менее` and `не более`.
+- The first broad draft appeared to improve dev from `415 -> 416/523`, but its
+  only changed case was `28-tanzilt#2`. The cause was invalid: the positive
+  question `Абсолютные противопоказания ... включают` was misclassified as a
+  negative question merely because it contained `противопоказания`.
+- The invalid cue was removed before accepting any result. The refined full-dev
+  result returned to exactly `415/523 = 0.7935`; single `0.8392`; multi exact
+  `0.6859`; macro-by-PDF `0.8011`.
+- Exact artifact comparison found zero changed selected sets versus baseline.
+  The technically corrected detector therefore has no measured accuracy gain
+  by itself and `questionNegationIntentV2` remains disabled.
+
+Iteration 160 T4 closed sibling-list exclusion: ZERO-COVERAGE, DEFAULT OFF.
+
+- Added a separately gated `sibling_list_exclusion` resolver. It requires an
+  explicit question-level exclusion cue, a uniquely question-matched sibling
+  block, at least two proven target members, explicit sibling membership for
+  every complement answer, and an unambiguous mapping for every option.
+- Absence from a paragraph is never evidence. Blocks containing membership
+  negation are rejected, which also makes mixed positive/negative blocks
+  abstain. Focused tests cover a proven complement, mixed-polarity abstention,
+  and existing sibling-list behavior.
+- Full dev remained exactly `415/523 = 0.7935`; single `0.8392`; multi exact
+  `0.6859`; macro-by-PDF `0.8011`.
+- The tagged artifacts contained zero `sibling_list_exclusion` evidence items
+  and zero selected-set changes. The safe structure required by T4 does not
+  occur in the current dev questions. Loosening the resolver to infer an answer
+  from non-occurrence would violate the theory's own safety gate, so
+  `siblingListExclusionResolver` remains disabled.
+
+Iteration 161 T5 document-internal split-token repair: STRUCTURAL VERSION KEPT.
+
+- Added extraction-time repair backed only by the current PDF. A split pair is
+  joined only when the intact Cyrillic token occurs in the same document at
+  least twice, neither fragment is a stop-word, neither fragment occurs
+  independently outside that pair, no number is involved, and overlapping
+  repairs are unambiguous.
+- Added `npm run token-repair:audit`, which reads PDFs without case labels and
+  reports every performed repair. The full-text frequency-2 version repaired
+  38 occurrences in three dev PDFs. A frequency-1 version repaired 48, but
+  produced exactly the same selected sets; frequency 2 is retained as the safer
+  threshold.
+- The unrestricted frequency-2 version improved dev from `415 -> 416/523`, but
+  regressed train from `1074 -> 1073/1541`. Error analysis showed why: repairing
+  a split token in an ordinary distractor paragraph strengthened broad phrase
+  evidence even though the repair itself was linguistically correct.
+- The final version restricts repair to structurally marked lines: numbered or
+  Roman rows, bullets, headings, and short label lines ending in a colon. On
+  dev this reduced 38 text changes to four while retaining the useful repair
+  `энцефал опатии -> энцефалопатии` in a syndrome heading.
+- Final frozen results:
+  - train: `1074/1541 = 0.6970`, unchanged;
+  - dev: `416/523 = 0.7954`, `+1`;
+  - holdout: `460/540 = 0.8519`, unchanged and above the `0.80` gate;
+  - external: `175/263 = 0.6654`, unchanged;
+  - all keyed: `2125/2867 = 0.7412`, up from `2124/2867 = 0.7408`.
+- The only exact fix is `15-toxic#54`: restoring the split heading binds the
+  correct complete multi-answer set. Focused repair tests cover positive repair,
+  ordinary-word-pair abstention, stop-word/number guards, frequency gating, and
+  structural-only scope. `documentTokenRepair=true`,
+  `documentTokenRepairMinFrequency=2`, and
+  `documentTokenRepairStructuralOnly=true` are now defaults.
+
+Iteration 162 T1 unified table-grid representation: NO ACCURACY GAIN, DEFAULT OFF.
+
+- Added one cached `TableGrid` representation over coordinate `lineItems` with
+  stable X anchors, cell bbox/column ownership, merged-cell `colSpan`,
+  confidence/`lowConfidence`, prose rejection, repeated headers, and caption
+  inheritance across adjacent page breaks.
+- Low-confidence regions never reach existing scorers. High-confidence rows
+  are adapted to the existing `coordinate_table_row`, `coordinate_table_group`,
+  `coordinate_multicell_row`, and `coordinate_table_membership` contracts; no
+  new medical or broad retrieval score was introduced.
+- Added `npm run table-grid:audit`. On the nine dev PDFs it found 819 candidate
+  grids: 124 high-confidence and 695 rejected as low-confidence. The safe grids
+  contained 752 merged cells, two continued-page regions, and 140 rows absent
+  from the legacy coordinate-row map.
+- Focused tests cover merged cells, inherited captions, prose abstention,
+  recovery beyond the legacy numeric gate, and adaptation to existing multi
+  consumers.
+- Full dev with `unifiedTableGridRows=true` remained
+  `416/523 = 0.7954`; single `0.8392`; multi exact `0.6923`; macro-by-PDF
+  `0.8027`. Exact comparison found zero changed selected sets.
+- One case, `07-hron#7`, received new grid-backed evidence, but both competing
+  answers were raised by the same amount and the wrong selection remained.
+  This is direct evidence that reconstruction alone did not resolve ownership
+  for the reachable dev slice.
+- Because dev gained nothing, the candidate was rejected before consulting
+  holdout and `unifiedTableGridRows` remains disabled. The representation and
+  read-only audit stay available for future consumers, but are not claimed as
+  a quality improvement.
+
+Iteration 163 T2/T3 contrastive structural sets: NO ACCURACY GAIN, DEFAULT OFF.
+
+- Extended structural evidence with optional source-derived `blockId`,
+  `elementId`, completeness, and member-count provenance. Sibling and
+  hierarchical resolvers tag only blocks that already passed their existing
+  contrast and uniqueness gates; coordinate table groups tag physical rows.
+- Added a strict T2 `StructuralCardinalityProcessor`. It can complete a set only
+  when exactly one block maps every answer option unambiguously to the target or
+  a sibling, every target answer maps to a distinct element, the derived member
+  count agrees for all members, and no outside option has strong independent
+  structural evidence.
+- Added a separate T3 `SubsetCoherenceProcessor`. It applies only a soft
+  preference when one block has at least two distinct elements and dominates
+  every competing block. Equal blocks, strong independent evidence, and all
+  flat lists without provenance abstain.
+- Focused tests cover complete-set application, flat-list no-op, competing-block
+  abstention, dominant-subset preference, tied-block abstention, and provenance
+  emitted by the existing sibling/hierarchical resolvers.
+- Full dev results against the accepted T5 baseline:
+  - T2 only: `416/523 = 0.7954`, zero selected-set changes;
+  - T3 only: `416/523 = 0.7954`, zero selected-set changes;
+  - T2+T3: `416/523 = 0.7954`, zero selected-set changes.
+- All three variants reached only four questions:
+  `41-destonia#33` through `#36`. Those four exact sets were already correct;
+  T2/T3 only equalized scores within their proven target sets.
+- The combined transfer check on the multi-heavy `51-travma` group remained
+  `46/113 = 0.4071`, with zero selected-set and zero raw-score changes.
+- Since neither independent nor combined variants improved dev, holdout was not
+  consulted. `structuralCardinality=false` and `subsetCoherence=false` remain
+  defaults. This reproduces the practical ceiling described by iteration 84:
+  safe contrastive structure is accurate where it fires, but its incremental
+  coverage is too small to improve the current corpus.
+
+Iteration 164 improvement-theory final regression: COMPLETE.
+
+- All seven theories in `docs/improvement-theories.md` were implemented or
+  measured in their safe stated form. T5 is the only accepted accuracy change;
+  T1–T4 remain feature-gated off, T6/T7 remain development tooling.
+- Full default regression:
+  - train: `1074/1541 = 0.6970`;
+  - dev: `416/523 = 0.7954`;
+  - holdout: `460/540 = 0.8519`;
+  - external: `175/263 = 0.6654`;
+  - all keyed: `2125/2867 = 0.7412`;
+  - single: `1578/1905 = 0.8283`;
+  - multi exact set: `547/962 = 0.5686`.
+- Case-level comparison against the accepted iteration-161 artifacts found zero
+  changed selected sets and zero raw-score changes on all 2,867 cases after the
+  later disabled experiments and provenance refactors.
+- `npm run eval:holdout` exits zero above the `0.80` acceptance threshold.
+- `npm test` passes 754 focused/architecture/leakage tests; 2,884 corpus fixtures
+  remain intentionally skipped and are covered by eval.
+- Normal typecheck, strict coordinate scope, dataset validation, and Node/IIFE/ESM
+  builds pass. Dataset validation reports 47 unique PDF groups, 2,867 keyed
+  cases, no duplicate PDFs, no cross-split duplicates, and no likely duplicate
+  group pairs.
+- Net improvement for this theory round is one exact case:
+  `2124/2867 = 0.7408 -> 2125/2867 = 0.7412`. No larger gain was found without
+  weakening structural ownership gates or repeating an already rejected
+  test-sensitive heuristic.
+
+Iteration 165 production cleanup: ONLY T5 RUNTIME CHANGE RETAINED.
+
+- After reviewing the measured theory results, the production decision is to
+  keep only T5 document-internal structural split-token repair.
+- Removed the rejected T1 table-grid implementation, config flag, focused tests,
+  and table-grid audit.
+- Removed the rejected T2/T3 cardinality/coherence processors, their config
+  flags, structural provenance fields, registry entries, and focused tests.
+- Removed the rejected T4 alternate negation detector and sibling-list exclusion
+  resolver, including their flags, evidence kind, and focused tests.
+- T6 PDF-group stability and T7 ablation commands remain development-only
+  measurement tooling. They are not imported by runtime inference and cannot
+  change selected answers. The experiment history remains in the documentation.
+- Runtime search confirms that none of the removed flags, evidence kinds,
+  `TableGrid` contracts, or structural-set provenance fields remain under
+  `src/`.
+- Post-cleanup regression:
+  - `npm test`: 47 files, 739 tests passed; 2,884 corpus fixtures remain
+    intentionally skipped and are covered by eval;
+  - normal typecheck, strict coordinate scope, dataset validation, and all
+    Node/IIFE/ESM builds pass;
+  - dev: `416/523 = 0.7954`;
+  - holdout: `460/540 = 0.8519`, above the `0.80` acceptance gate;
+  - exact comparison with the accepted T5 artifacts found zero selected-set
+    changes and zero raw-score changes across all 523 dev and 540 holdout cases.
+- Therefore cleanup changes no measured answer. The accepted corpus result
+  remains `2125/2867 = 0.7412`, with the round's only gain still
+  `15-toxic#54` from structural split-token repair.

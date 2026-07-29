@@ -376,3 +376,40 @@ signatures. Instead of widening the newly strict numeric files with `any`,
 signatures without wrapping or changing their runtime behavior. This removes all
 158 numeric-scope strict errors while keeping the broader strict migration
 incremental.
+
+## Improvement-theory validation round (iterations 156–163)
+
+The round tested every theory in `docs/improvement-theories.md` without adding a
+runtime LLM, learned model, external inference service, or dataset-specific
+medical fact.
+
+The extraction experiments were structurally meaningful but had little
+incremental decision headroom:
+
+- a shared coordinate grid reconstructed 124 high-confidence dev regions, 752
+  merged cells, two page continuations, and 140 rows skipped by the legacy
+  numeric row gate;
+- adapting those rows to the existing row/group/multicell/membership scorers
+  changed no selected answer;
+- strict contrastive cardinality and subset coherence reached only four dev
+  questions, all already correct;
+- a corrected Unicode-aware negation detector was behavior-neutral, while a
+  sibling-list exclusion resolver found no fully mapped safe case.
+
+The only accepted accuracy change is document-internal split-token repair.
+Broad repair was rejected despite a dev gain because it regressed train.
+Restricting repair to structural lines retained the valid
+`энцефал опатии -> энцефалопатии` heading repair and removed the regression.
+This confirms the earlier research conclusion: improving text normalization is
+useful only when source ownership is preserved.
+
+The ablation study also found no removable active mechanism with a transferable
+gain. Disabling `optionFamilyCompactComboGuard` fixed one question in the now
+development-visible `51-travma` group but broke one dev question. Four other
+disabled mechanisms regressed `51-travma`; fourteen were neutral on that group.
+
+The added `eval:loo` command is intentionally described as a fit-free PDF-group
+stability audit. The predictor has no fitting phase per fold, and all labels in
+the repository are accessible to development, so calling this a new blind LOO
+estimate would overstate the evidence. A genuinely sealed future PDF set remains
+the required next measurement asset.

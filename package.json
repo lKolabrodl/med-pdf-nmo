@@ -70,10 +70,14 @@
     "diagnostics": "tsx scripts/diagnostics.ts",
     "features:export": "tsx scripts/export-features.ts",
     "calibrator:experiment": "tsx scripts/calibrator-experiment.ts",
+    "ablation": "tsx scripts/ablation.ts",
+    "token-repair:audit": "tsx scripts/token-repair-audit.ts",
     "eval": "tsx scripts/eval.ts --split dev",
     "eval:train": "tsx scripts/eval.ts --split train",
     "eval:holdout": "tsx scripts/eval.ts --split holdout",
-    "eval:external": "tsx scripts/eval.ts --split external"
+    "eval:external": "tsx scripts/eval.ts --split external",
+    "eval:all": "tsx scripts/eval-loo.ts --split all --report-tag all",
+    "eval:loo": "tsx scripts/eval-loo.ts --split all --report-tag loo"
   },
   "dependencies": {
     "pdfjs-dist": "^5.7.284"

@@ -1,4 +1,4 @@
-import { normalizeForSearch, normalizeText } from "./normalize.js";
+import {normalizeForSearch, normalizeText, RUSSIAN_STOPWORDS} from "./normalize.js";
 
 export type PdfTextItem = {
   text: string;
@@ -48,13 +48,26 @@ export type ExtractedPdfText = {
   extractedAt: string;
   pages: PdfPage[];
   abbreviations: PdfAbbreviation[];
+  tokenRepairs?: PdfTokenRepair[];
   ocrNeeded: boolean;
 };
 
 export type PdfExtractionOptions = {
   cacheKey?: string;
+  documentTokenRepair?: boolean;
+  documentTokenRepairMinFrequency?: number;
+  documentTokenRepairStructuralOnly?: boolean;
   pdfjsLib?: PdfJsModule;
   pdfVerbosity?: number;
+};
+
+export type PdfTokenRepair = {
+  page: number;
+  line: number;
+  original: string;
+  repaired: string;
+  joinedToken: string;
+  intactFrequency: number;
 };
 
 type PdfJsTextItem = {
@@ -328,6 +341,150 @@ function rebuildPage(page: PdfPage) {
   page.text = buildPageText(page.lines);
   page.normalized = normalizeForSearch(page.text);
   page.charLength = page.text.length;
+}
+
+type CyrillicTokenSpan = {
+  text: string;
+  key: string;
+  start: number;
+  end: number;
+  tokenIndex: number;
+};
+
+type SplitTokenCandidate = {
+  left: CyrillicTokenSpan;
+  right: CyrillicTokenSpan;
+  key: string;
+  joined: string;
+};
+
+/**
+ * Возвращает позиции кириллических слов длиной не менее двух символов.
+ */
+function cyrillicTokenSpans(text: string): CyrillicTokenSpan[] {
+  return [...String(text ?? "").matchAll(/\p{Script=Cyrillic}{2,}/gu)].map((match, tokenIndex) => ({
+    text: match[0],
+    key: normalizeText(match[0]),
+    start: match.index,
+    end: match.index + match[0].length,
+    tokenIndex,
+  }));
+}
+
+/**
+ * Находит соседние кириллические фрагменты, разделённые только пробелами.
+ */
+function splitTokenCandidates(text: string): SplitTokenCandidate[] {
+  const spans = cyrillicTokenSpans(text);
+  const out: SplitTokenCandidate[] = [];
+  for (let index = 0; index < spans.length - 1; index += 1) {
+    const left = spans[index];
+    const right = spans[index + 1];
+    if (!/^\s+$/u.test(text.slice(left.end, right.start))) continue;
+    const joined = `${left.text}${right.text}`;
+    out.push({left, right, key: `${left.key}\u0000${right.key}`, joined});
+  }
+  return out;
+}
+
+/**
+ * Определяет строки с явной структурной ролью: заголовок, нумерованный/римский
+ * пункт, bullet или короткая строка-метка с завершающим двоеточием.
+ */
+function structuralRepairLine(text: string): boolean {
+  const raw = String(text ?? "").trim();
+  if (!raw || raw.length > 240) return false;
+  return (
+    /^(?:\d+(?:\.\d+)*|[ivx]{1,8})\s*[.)]?\s+\S/iu.test(raw) ||
+    /^[-\u2010-\u2015\u2022\u25aa\u25e6*]\s+\S/u.test(raw) ||
+    /:\s*$/u.test(raw)
+  );
+}
+
+/**
+ * Склеивает внутрисловные пробельные разрывы только по доказательству из этого
+ * же PDF: цельное слово должно встречаться отдельно, а оба фрагмента не должны
+ * встречаться как самостоятельные слова вне той же пары.
+ *
+ * Функция изменяет страницы на месте и пересобирает их text/blocks/normalized.
+ *
+ * @param pages Извлечённые страницы одного PDF.
+ * @param minFrequency Минимальное число цельных вхождений склеенной формы.
+ * @param structuralOnly Ограничивает замену строками с явной структурной ролью.
+ * @returns Список реально выполненных замен для аудита.
+ */
+export function repairDocumentSplitTokens(
+  pages: PdfPage[],
+  minFrequency = 2,
+  structuralOnly = false,
+): PdfTokenRepair[] {
+  const threshold = Math.max(1, Math.floor(Number(minFrequency) || 1));
+  const wordFrequency = new Map<string, number>();
+  const pairFrequency = new Map<string, number>();
+
+  for (const page of pages) {
+    for (const line of page.lines) {
+      for (const token of cyrillicTokenSpans(line)) {
+        wordFrequency.set(token.key, (wordFrequency.get(token.key) ?? 0) + 1);
+      }
+      for (const candidate of splitTokenCandidates(line)) {
+        pairFrequency.set(candidate.key, (pairFrequency.get(candidate.key) ?? 0) + 1);
+      }
+    }
+  }
+
+  const repairs: PdfTokenRepair[] = [];
+  const touchedPages = new Set<number>();
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex];
+    for (let lineIndex = 0; lineIndex < page.lines.length; lineIndex += 1) {
+      const original = page.lines[lineIndex];
+      if (structuralOnly && !structuralRepairLine(original)) continue;
+      const candidates = splitTokenCandidates(original).filter((candidate) => {
+        const joinedKey = normalizeText(candidate.joined);
+        const intactFrequency = wordFrequency.get(joinedKey) ?? 0;
+        if (joinedKey.length < 5 || intactFrequency < threshold) return false;
+        if (RUSSIAN_STOPWORDS.has(candidate.left.key) || RUSSIAN_STOPWORDS.has(candidate.right.key)) return false;
+        const pairCount = pairFrequency.get(candidate.key) ?? 0;
+        const leftPairedOccurrences = pairCount * (candidate.left.key === candidate.right.key ? 2 : 1);
+        const rightPairedOccurrences = pairCount * (candidate.left.key === candidate.right.key ? 2 : 1);
+        if ((wordFrequency.get(candidate.left.key) ?? 0) > leftPairedOccurrences) return false;
+        if ((wordFrequency.get(candidate.right.key) ?? 0) > rightPairedOccurrences) return false;
+        return true;
+      });
+      const unambiguous = candidates.filter((candidate) =>
+        candidates.every(
+          (other) =>
+            other === candidate ||
+            (other.right.tokenIndex < candidate.left.tokenIndex ||
+              other.left.tokenIndex > candidate.right.tokenIndex),
+        ),
+      );
+      if (!unambiguous.length) continue;
+
+      let repaired = original;
+      for (const candidate of [...unambiguous].sort((left, right) => right.left.start - left.left.start)) {
+        repaired =
+          repaired.slice(0, candidate.left.start) +
+          candidate.joined +
+          repaired.slice(candidate.right.end);
+        repairs.push({
+          page: page.page,
+          line: lineIndex,
+          original,
+          repaired,
+          joinedToken: candidate.joined,
+          intactFrequency: wordFrequency.get(normalizeText(candidate.joined)) ?? 0,
+        });
+      }
+      page.lines[lineIndex] = repaired;
+      if (page.lineItems[lineIndex]) page.lineItems[lineIndex].text = repaired;
+      touchedPages.add(pageIndex);
+    }
+  }
+
+  for (const pageIndex of touchedPages) rebuildPage(pages[pageIndex]);
+  return repairs;
 }
 
 /**
@@ -705,16 +862,24 @@ export async function extractPdfText(
   removeFrontMatterAppendixList(pages);
   removeBibliographySection(pages);
   removeMetadataAppendices(pages, 1, 2);
+  const tokenRepairs = options.documentTokenRepair
+    ? repairDocumentSplitTokens(
+        pages,
+        options.documentTokenRepairMinFrequency,
+        options.documentTokenRepairStructuralOnly,
+      )
+    : [];
   const abbreviations = extractAndCleanAbbreviationLists(pages);
 
   const pageTextChars = pages.reduce((sum, page) => sum + page.text.length, 0);
   return {
     pdfId: options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : "<browser-pdf>"),
-    cacheVersion: 2,
+    cacheVersion: options.documentTokenRepair ? 3 : 2,
     pageCount: pdf.numPages,
     extractedAt: new Date().toISOString(),
     pages,
     abbreviations,
+    tokenRepairs,
     ocrNeeded: pageTextChars < Math.max(1000, pdf.numPages * 100),
   };
 }

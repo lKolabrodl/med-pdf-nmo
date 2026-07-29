@@ -22,6 +22,7 @@ __test__/*
 !__test__/recommendation-proposition.test.ts
 !__test__/predictor-architecture.test.ts
 !__test__/scorer-test-support.ts
+!__test__/pdf-token-repair.test.ts
 !__test__/01-toksic-galogen/
 !__test__/01-toksic-galogen/**
 !__test__/02-metanol-glikol/

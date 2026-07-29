@@ -298,3 +298,46 @@ artifacts are stored under `.cache/experiments/` and are not runtime assets.
 The extractor sets `ocrNeeded: true` for low-text PDFs. No OCR fallback is
 implemented. Current PDFs are text-extractable, but recommendation and table
 layout can still be flattened by `pdfjs-dist`.
+
+## Iteration 163 corpus and final regression protocol
+
+Manifest version 7 contains 47 unique PDF groups and 2,867 keyed cases:
+
+- train: 1,541;
+- dev: 523;
+- frozen holdout regression: 540;
+- external transfer/development: 263.
+
+The new `51-travma` group was evaluated once at `46/113` before its labels
+informed any runtime change, then added to external. It is no longer a blind
+test. Its difficult multi-heavy composition explains why the expanded external
+percentage is lower than the historical three-PDF `129/150 = 0.8600`; the
+underlying older groups did not regress.
+
+`npm run eval:loo` evaluates each requested PDF group in an isolated process,
+then reports micro exact accuracy, macro/median/min/max per-PDF accuracy, and
+per-PDF standard deviation. It does not train or tune a model per fold, so the
+report identifies itself as `fit-free-pdf-group-stability`, not an unbiased
+learned-model LOO estimate.
+
+Candidate discipline used in iterations 159–163:
+
+1. Evaluate full dev with a uniquely tagged config override.
+2. Diff selected sets and raw scores case-by-case against the accepted default.
+3. Reject zero/negative dev candidates without opening holdout.
+4. For a positive dev candidate, verify train, frozen holdout, external, and all
+   keyed cases before changing the default.
+
+Only structural document-token repair passed this sequence. Final measured
+default results are:
+
+| split | exact |
+| --- | ---: |
+| train | `1074/1541 = 0.6970` |
+| dev | `416/523 = 0.7954` |
+| holdout | `460/540 = 0.8519` |
+| external | `175/263 = 0.6654` |
+| all | `2125/2867 = 0.7412` |
+
+The holdout command remains an executable acceptance gate and exits non-zero
+below `0.80`.
