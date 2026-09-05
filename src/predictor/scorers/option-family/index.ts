@@ -1,6 +1,7 @@
 import { extractNumbers, normalizeForSearch, uniqueTokens } from "../../../normalize.js";
 import { containsNormalizedPhrase } from "../../text-utils.js";
 import type {EvidenceItem} from "../../types.js";
+export {contrastiveOptionFamilyAdjustment, resolveContrastiveOptionFamily} from "./contrastive.js";
 
 type ComparatorDirection = "less" | "greater";
 

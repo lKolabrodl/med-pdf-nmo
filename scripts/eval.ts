@@ -1,11 +1,40 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import { loadDataset, groupSplit } from "./cases.js";
+import {DATASET_MANIFEST_VERSION, DATASET_PDF_FINGERPRINT, DATASET_CASE_FINGERPRINT} from "./dataset-manifest.js";
 import { DEFAULT_CONFIG, type PredictorConfig } from "../src/predictor/config.js";
 import { predict } from "../src/predictor.js";
 
 const TARGET = 0.8;
+
+async function runtimeProvenance(root: string, configOverrides: Partial<PredictorConfig>) {
+  const rows: string[] = [];
+  async function visit(directory: string) {
+    const entries = await fs.readdir(directory, {withFileTypes: true});
+    for (const entry of entries) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) await visit(file);
+      else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+        const hash = crypto.createHash("sha256").update(await fs.readFile(file)).digest("hex");
+        rows.push(`${path.relative(root, file).replace(/\\/gu, "/")}:${hash}`);
+      }
+    }
+  }
+  await visit(path.join(root, "src"));
+  rows.sort();
+  const pdfjsPackage = JSON.parse(await fs.readFile(path.join(root, "node_modules/pdfjs-dist/package.json"), "utf8"));
+  return {
+    runtimeSourceFingerprint: crypto.createHash("sha256").update(rows.join("\n")).digest("hex"),
+    datasetManifestVersion: DATASET_MANIFEST_VERSION,
+    datasetPdfFingerprint: DATASET_PDF_FINGERPRINT,
+    datasetCaseFingerprint: DATASET_CASE_FINGERPRINT,
+    nodeVersion: process.version,
+    pdfjsVersion: pdfjsPackage.version,
+    resolvedConfig: {...DEFAULT_CONFIG, includeSources: false, ...configOverrides},
+  };
+}
 
 function parseArgs(argv) {
   const args: Record<string, string | boolean> = { split: "dev" };
@@ -130,6 +159,7 @@ async function evaluate(
   reportTag = "",
 ) {
   const root = process.cwd();
+  const provenance = await runtimeProvenance(root, configOverrides);
   const { groups, cases } = await loadDataset(root);
   if (explicitGroup && !groups.includes(explicitGroup)) {
     throw new Error(`Unknown PDF group "${explicitGroup}"`);
@@ -181,6 +211,7 @@ async function evaluate(
     skippedNoExpected: skippedNoExpected.length,
     configOverrides,
     reportTag,
+    provenance,
   };
   const reportDir = path.join(root, ".cache", "eval");
   await fs.mkdir(reportDir, { recursive: true });

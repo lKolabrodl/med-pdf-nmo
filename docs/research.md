@@ -413,3 +413,46 @@ stability audit. The predictor has no fitting phase per fold, and all labels in
 the repository are accessible to development, so calling this a new blind LOO
 estimate would overstate the evidence. A genuinely sealed future PDF set remains
 the required next measurement asset.
+
+## September 2026: two hypotheses and unfinished local experiments
+
+The audit covered the 165 logged iterations, current source modules, and locally
+cached experiments absent from the log. The latter include native PDF structure
+trials and an unconnected contrastive option-family module. Cached dev scores
+alone are insufficient to accept that module: its complete source/config
+provenance was not saved, and counterexamples revealed invalid proof logic.
+
+H1 uses the PDF producer's own table hierarchy. PDF.js exposes `getStructTree`
+and `getTextContent({includeMarkedContent: true})`; content identifiers connect
+the hierarchy to text. This API is documented in the
+[official PDF.js reference](https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib.html).
+The installed package was also inspected rather than assuming all attributes in
+the latest online documentation exist locally. Seven of nine dev PDFs have tags;
+two have none. A strict row-and-column consumer changed neither raw scores nor
+answers on dev. This repeats the earlier coverage limit: available geometry is
+not the same thing as an unambiguous question-to-cell relation.
+
+H2 compares the parts in which the answer options differ, then checks those
+parts inside a local source fragment. It reuses the existing untracked prototype
+instead of inventing a second disconnected implementation. The unchanged
+prototype reproduced its cached dev result, 430/523, but failed synthetic
+nonmedical examples: a negated value was treated as positive, and a matching
+number could hide a conflicting color. Further checks exposed discarded shared
+numeric attributes and reversed negated comparator direction. These are general
+logic defects, so the earlier score is not treated as an accepted improvement.
+
+The validation order is fixed: synthetic invariants, dev, then train PDF-group
+stability. Only a frozen candidate reaches holdout and external reporting.
+Question text, answer text, patient facts, PDF names, case ids, label cardinality,
+and split membership are never used as runtime exceptions. All parsing, ranking,
+and inference remain local JavaScript/TypeScript; no library or inference service
+was added. The historical holdout and all current external groups were already
+observed before this round, so their results cannot establish blind accuracy.
+
+The final H2 candidate reached train `1080/1541`, dev `425/523`, holdout
+`458/540`, and external `222/332`. It therefore fails the whole-candidate
+retention criterion: holdout falls below its baseline `460/540`. Both hypotheses
+are disabled in the restored default. The experiment demonstrates a remaining
+gap between local attribute matching and actual condition/value ownership; a
+combined-category example can also be broader than the exact category requested.
+No transfer-specific exclusion or score correction was added after this result.

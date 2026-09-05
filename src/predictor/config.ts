@@ -3,6 +3,8 @@
  * измеримых валидационных прогонов.
  */
 export const DEFAULT_CONFIG = {
+  nativePdfStructure: false,
+  contrastiveOptionFamily: false,
   multiRelativeThreshold: 0.84,
   multiAbsoluteThreshold: 12,
   multiGapThreshold: 0.72,

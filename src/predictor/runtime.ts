@@ -55,6 +55,9 @@ function objectKey(input: unknown): object | null {
 }
 
 function runtimeVariantKey(options: PdfRuntimeOptions): string {
+  if (options.nativePdfStructure) {
+    return `native-structure:${runtimeVariantKey({...options, nativePdfStructure: false})}`;
+  }
   if (!options.documentTokenRepair) return "base";
   const minFrequency = Math.max(1, Math.floor(Number(options.documentTokenRepairMinFrequency) || 1));
   const scope = options.documentTokenRepairStructuralOnly ? "structural" : "all";

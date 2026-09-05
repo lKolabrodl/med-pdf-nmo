@@ -2,9 +2,9 @@
 
 ## Dataset
 
-The deduplicated local corpus contains 46 PDF groups under
-`__test__/NN-name/` and 2,771 parsed cases. Exact metrics exclude 17 cases with
-`expected: []`, leaving 2,754 keyed cases: 1,893 single-answer and 861
+The current local corpus contains 48 canonical PDF groups under
+`__test__/NN-name/` and 2,954 parsed cases. Exact metrics exclude 18 cases with
+`expected: []`, leaving 2,936 keyed cases: 1,945 single-answer and 991
 multi-answer cases.
 
 | split | PDF groups | parsed | keyed | single | multi |
@@ -12,8 +12,8 @@ multi-answer cases.
 | train | 25 | 1,558 | 1,541 | 1,001 | 540 |
 | dev | 9 | 523 | 523 | 367 | 156 |
 | holdout regression | 9 | 540 | 540 | 386 | 154 |
-| external transfer | 3 | 150 | 150 | 139 | 11 |
-| total | 46 | 2,771 | 2,754 | 1,893 | 861 |
+| external transfer | 5 | 333 | 332 | 191 | 141 |
+| total | 48 | 2,954 | 2,936 | 1,945 | 991 |
 
 Each group contains `doc.pdf` and `cases.test.ts`. Runtime receives only the PDF,
 question, answer variants, and mode. Expected labels are read only by development
@@ -29,9 +29,12 @@ Three duplicate groups were removed, leaving one canonical copy:
 | `18-gepatitabc` | `04-hep-d` | byte-identical PDF and all 70 case records identical |
 | `34-covid` | `09-covid` | same 171-page document in a different binary build; normalized token Jaccard `0.9937`, 107 pages exactly equal, 68/70 case records equal; the remaining two differ only by terminal punctuation |
 
-The final validator reports zero duplicate PDF hashes, zero likely near-duplicate
-group pairs, zero cross-split duplicate records, and zero same-split duplicate
-records.
+The current validator reports zero duplicate PDF hashes, zero likely duplicate
+group pairs, and zero cross-split duplicate records. Two repeated records within
+`52-infection` remain counted consistently in both baseline and candidate.
+`53-NOC_Blood` is a verified alias of train `12-nos`: both PDF bytes and parsed
+cases must match before the loader excludes the duplicate copy. A changed PDF or
+changed label in the alias makes validation fail; no source file is deleted.
 
 ## Frozen split
 
@@ -40,13 +43,13 @@ directory is added or removed.
 
 - dev: `07-hron`, `08-ask`, `15-toxic`, `25-shigez`, `28-tanzilt`, `31-hbs`, `32-gemor`, `41-destonia`, `42-skvoz`
 - holdout regression: `06-co-toksic`, `11-mening`, `14-sarkoidoz`, `17-gepatit`, `19-gepatitc`, `23-nimana`, `33-aorta`, `43-anomali`, `44-girshprunga`
-- external transfer: `48-pereferi`, `49-central-ceroz`, `50-dr-gepatit`
+- external transfer: `48-pereferi`, `49-central-ceroz`, `50-dr-gepatit`, `51-travma`, `52-infection`
 - train: `01-toksic-galogen`, `02-metanol-glikol`, `03-chadlv`, `04-hep-d`, `05-bronhit-hron`, `09-covid`, `10-LPP`, `12-nos`, `13-pisha`, `20-hron`, `21-citovirus`, `22-eozif`, `24-kalit`, `26-blevota`, `27-cistit`, `29-tpank`, `30-heart`, `35-cron`, `36-anrid`, `37-bazal`, `38-katarakta`, `39-glaurova`, `40-deficit`, `45-botulizm`, `46-yazva`
 
 The manifest also stores two integrity hashes:
 
-- PDF fingerprint: `97babb222308b6cfd88cdaf2854bfffabe190ef696075db95a4a3109fb6f5f22`;
-- parsed-case fingerprint, including expected values: `538a4c48ee220f79cd71d9044e5d65f476e6cb2e60c39b82baa09ff94ffc295c`.
+- PDF fingerprint: `7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2`;
+- parsed-case fingerprint, including expected values: `d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c`.
 
 An intentional corpus change requires an explicit manifest update; silent PDF,
 question, variant, or label changes fail `npm run dataset:validate`.
@@ -70,7 +73,84 @@ npm run predict -- --input request.json
 
 `npm run eval:holdout` exits non-zero when exact accuracy is below `0.80`.
 
-## Final result
+## Experiment integrity in iterations 166–175
+
+Train/dev/holdout group membership was preserved. Manifest v8 adds the already
+locally available `52-infection` only to external. Its unchanged-predictor score
+was recorded before this round's scorer changes. Old cache artifacts had already
+evaluated it, so it is not a new blind holdout. The verified `53-NOC_Blood` alias
+is never counted as an independent external PDF.
+
+Candidate logic is chosen from dev, train errors, and synthetic nonmedical
+counterexamples. Holdout/external runs are used after that choice to assess
+regression and transfer. All of these PDF collections have been inspected in
+prior work; an unbiased generalization estimate requires additional untouched
+PDF groups with complete independently prepared answer sets.
+
+New JSON summaries record the SHA-256 fingerprint of non-test runtime sources,
+the fully resolved configuration, manifest version and data fingerprints, and
+installed Node/PDF.js versions. The PDF-group runner refuses to aggregate reports
+with inconsistent provenance. It runs the fixed predictor separately on each
+PDF, without fitting per fold; it is a stability audit rather than trained-model
+leave-one-out validation.
+
+The old 47-PDF subset was rehashed independently: both its PDF fingerprint
+(`311bf1cbdec7a6d02d86247f09ee7d62ff0c3167c1c4ef71f1513ff3f0e983c1`)
+and parsed-case fingerprint including labels
+(`f16dead6fec4ed63b500bb2e7c990732611d8d4a6cf80b8d55c2cdd9e47b4cea`)
+still match manifest v7 exactly.
+
+## September candidate review
+
+| split | accepted baseline | rejected H2 candidate | net correct |
+| --- | ---: | ---: | ---: |
+| train | `1074/1541 = 0.6970` | `1080/1541 = 0.7008` | +6 |
+| dev | `416/523 = 0.7954` | `425/523 = 0.8126` | +9 |
+| holdout regression | `460/540 = 0.8519` | `458/540 = 0.8481` | −2 |
+| external transfer | `221/332 = 0.6657` | `222/332 = 0.6687` | +1 |
+| all keyed cases | `2171/2936 = 0.7394` | `2185/2936 = 0.7442` | +14 |
+
+H1 native tags changed no dev score or selected set and was rejected. H2 raised
+aggregate accuracy, but its holdout decline fails the retention criterion fixed
+before transfer review. The whole H2 candidate is disabled. Its earlier unsafe
+versions are not restored to recover a better score. Both experimental flags
+are false in the accepted default.
+
+The candidate fixes 17 cases and regresses three; there is also one
+wrong-to-wrong change. All three regressions are on holdout. Every multi selected
+set remains identical to baseline. The `0.80` holdout command passes even for
+this rejected candidate, illustrating why that absolute gate does not by itself
+establish improvement over an already stronger baseline.
+
+Machine-readable split, per-PDF, exact-set-change, and provenance details are in
+[`experiments/2026-09-05-results.json`](experiments/2026-09-05-results.json).
+The rejected source fingerprint is
+`bc01f27437cf01d3d37a167189956f392e7b326e0acc871f517792f05cba80b1`.
+
+Iteration 175 freshly reevaluated every split after disabling both experiments.
+All **2,936 keyed records** match baseline exactly, including selected-id order,
+raw/calibrated scores and confidence. The accepted result is the baseline column
+above. Holdout exits zero at `0.8519`; the full-corpus single accuracy is
+`1612/1945 = 0.8288` and multi exact is `559/991 = 0.5641`. Restored source
+fingerprint:
+`2065251f5544ea1680c5c50e127aa62755d545d8345c278fe251866e12d65a2f`.
+
+Validation: 825 unit/contract tests, normal typecheck, both existing strict
+scopes, all three Node/browser builds, dataset integrity, and source/packaged CLI
+smoke checks pass. Vitest intentionally skips 2,984 raw corpus fixtures (including
+the duplicate directory); canonical eval accounts for the 2,936 keyed records.
+
+Reproduce either disabled experiment explicitly on dev:
+
+```bash
+npm run eval -- --config nativePdfStructure=true,contrastiveOptionFamily=false --report-tag native-table-experiment
+npm run eval -- --config contrastiveOptionFamily=true --report-tag contrastive-experiment
+```
+
+On Windows PowerShell, use `npm.cmd` if a shell wrapper strips arguments after
+`--`. Running the commands without those overrides evaluates the accepted default.
+
+## Historical result before the expanded external set
 
 | split | exact | single | multi exact set | macro by PDF |
 | --- | ---: | ---: | ---: | ---: |

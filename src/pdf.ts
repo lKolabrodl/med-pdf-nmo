@@ -22,6 +22,24 @@ export type PdfPage = {
   lineItems: PdfTextLine[];
   normalized: string;
   charLength: number;
+  structure?: PdfStructureNode | null;
+};
+
+export type PdfStructureNode = {
+  role: string;
+  text: string;
+  children: PdfStructureNode[];
+  rowSpan?: number;
+  colSpan?: number;
+};
+
+type PdfJsStructureNode = {
+  role?: string;
+  type?: string;
+  id?: string;
+  children?: PdfJsStructureNode[];
+  rowSpan?: number;
+  colSpan?: number;
 };
 
 /** Минимальная страница для scorer-ов, работающих только с физическими строками. */
@@ -54,6 +72,7 @@ export type ExtractedPdfText = {
 
 export type PdfExtractionOptions = {
   cacheKey?: string;
+  nativePdfStructure?: boolean;
   documentTokenRepair?: boolean;
   documentTokenRepairMinFrequency?: number;
   documentTokenRepairStructuralOnly?: boolean;
@@ -80,11 +99,54 @@ type PdfJsTextItem = {
 };
 
 type PdfJsPage = {
+  getStructTree?(): Promise<PdfJsStructureNode | null>;
   getTextContent(options: {
     disableCombineTextItems: boolean;
     includeMarkedContent: boolean;
   }): Promise<{ items: PdfJsTextItem[] }>;
 };
+
+/**
+ * Resolves tagged PDF content into its declared hierarchy, preserving empty cells.
+ * @param items PDF.js text and marked-content events in stream order.
+ * @param tree Native structure tree, when supplied by the PDF producer.
+ * @returns A text-bearing hierarchy, or null for an untagged page.
+ */
+export function buildPdfStructure(items: PdfJsTextItem[], tree: PdfJsStructureNode | null): PdfStructureNode | null {
+  if (!tree) return null;
+  const content = new Map<string, string[]>();
+  const stack: Array<string | null> = [];
+  for (const item of items) {
+    if (item.type === "beginMarkedContent" || item.type === "beginMarkedContentProps") {
+      stack.push(item.id ?? null);
+    } else if (item.type === "endMarkedContent") {
+      stack.pop();
+    } else if (typeof item.str === "string" && item.str.trim()) {
+      for (const id of new Set(stack.filter((value): value is string => value !== null))) {
+        const parts = content.get(id) ?? [];
+        parts.push(item.str);
+        content.set(id, parts);
+      }
+    }
+  }
+  const resolve = (node: PdfJsStructureNode): PdfStructureNode | null => {
+    if (["TOC", "TOCI", "Artifact"].includes(node.role ?? "")) return null;
+    if (node.type === "object") return null;
+    if (node.type === "content") {
+      const text = (content.get(node.id ?? "") ?? []).join(" ").replace(/\s+/gu, " ").trim();
+      return {role: "content", text, children: []};
+    }
+    const children = (node.children ?? []).map(resolve).filter((child): child is PdfStructureNode => child !== null);
+    return {
+      role: node.role ?? "NonStruct",
+      children,
+      text: children.map((child) => child.text).filter(Boolean).join(" "),
+      ...(node.rowSpan ? {rowSpan: node.rowSpan} : {}),
+      ...(node.colSpan ? {colSpan: node.colSpan} : {}),
+    };
+  };
+  return resolve(tree);
+}
 
 type PdfJsDocument = {
   numPages: number;
@@ -841,8 +903,11 @@ export async function extractPdfText(
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent({
       disableCombineTextItems: false,
-      includeMarkedContent: false,
+      includeMarkedContent: Boolean(options.nativePdfStructure),
     });
+    const structure = options.nativePdfStructure && page.getStructTree
+      ? buildPdfStructure(content.items, await page.getStructTree())
+      : undefined;
     const lineObjects = stripLikelyBoilerplate(groupItemsIntoLineObjects(content.items));
     const lines = lineObjects.map((line) => line.text);
     const blocks = buildPageBlocks(lines);
@@ -855,6 +920,7 @@ export async function extractPdfText(
       lineItems: lineObjects,
       normalized: normalizeForSearch(text),
       charLength: text.length,
+      ...(structure !== undefined ? {structure} : {}),
     });
   }
 

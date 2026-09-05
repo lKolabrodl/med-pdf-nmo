@@ -353,3 +353,52 @@ not change selected answers.
 The accepted default reaches `2125/2867 = 0.7412` exact accuracy across all
 current keyed cases: single `1578/1905 = 0.8283`, multi exact-set
 `547/962 = 0.5686`. The frozen holdout remains `460/540 = 0.8519`.
+
+## September implementation: contrastive option constraints
+
+This experiment is **disabled by default**. Its final candidate improved dev and
+train but reduced holdout from `460/540` to `458/540`, so it was rejected under
+the retention criterion fixed before transfer review. The accepted production
+answer behavior remains iteration 165; the implementation is retained for
+reproducible research, not presented as a successful accuracy change.
+
+`contrastiveOptionFamily` gates the recovered and corrected option-family
+resolver. It is single-answer only. It separates common option text from
+changing lexical or numeric slots, then searches bounded physical-line and
+clause fragments of the current PDF. It checks explicit question qualifiers
+before comparing candidates and abstains when competing source fragments have
+insufficient separation. Mixed-case questions preserve uppercase abbreviations
+as explicit source anchors; units, Roman ordinals, and fully uppercase questions
+are handled separately. This is a syntax rule, not a clinical abbreviation list.
+
+The corrected proof is conjunctive. Every option number, including a number
+shared by all options, must be supported. Explicit units stay attached to their
+values; a unit may extend backward only through a numeric coordination such as
+`20 or 30 degrees`. Every changing lexical attribute must match. A numeric
+mismatch cannot be repaired by lexical similarity, and an absent adjective
+cannot be excused by a high average token overlap.
+
+Source negation causes abstention. Numeric bounds are parsed separately before
+lookalike folding: strict `<`/`>` and inclusive `≤`/`≥` retain distinct meanings.
+The resolver applies a fixed `3.6` adjustment only to a uniquely supported option
+and emits `option_family_contrastive_clause` evidence from that source. It does
+not alter multi-answer selection or estimate the expected answer count.
+
+Local co-occurrence is still insufficient to prove full relation ownership:
+one fragment can contain different values for different conditions, or describe
+a combined subtype when the question asks for one component. Additive support
+from that fragment can also displace an existing, more exact row-label match.
+These transfer failures require a different proof model, not a weight tuned
+against the observed holdout cases.
+
+The separate `nativePdfStructure` experiment reads PDF.js marked-content ids and
+native table tags. Its strict row-and-column consumer produced zero score or
+answer changes on dev and remains disabled. The experiment must not be described
+as an accuracy improvement.
+
+After rejection, both experimental flags are false. A fresh full-corpus run
+matches the accepted baseline on all 2,936 keyed cases, including every selected
+answer, raw/calibrated score, and confidence value. The restored default reaches
+`2171/2936 = 0.7394` overall and `460/540 = 0.8519` on the historical holdout.
+The larger corpus now includes an additional external PDF, so this overall
+fraction should not be compared directly with the earlier 2,867-case denominator.

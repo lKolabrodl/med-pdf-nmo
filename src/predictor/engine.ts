@@ -56,6 +56,7 @@ export class PredictorEngine {
 
     const runtime = await this.dependencies.runtimeStore.get(pdfInput, {
       cacheKey: input.cacheKey ?? input.pdfPath ?? input.pdfUrl ?? input.url,
+      nativePdfStructure: config.nativePdfStructure,
       documentTokenRepair: config.documentTokenRepair,
       documentTokenRepairMinFrequency: config.documentTokenRepairMinFrequency,
       documentTokenRepairStructuralOnly: config.documentTokenRepairStructuralOnly,

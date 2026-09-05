@@ -1,8 +1,77 @@
 # Error Analysis
 
-## Current error counts
+## September analysis, iterations 166–175
 
-These counts use the final deduplicated 46-PDF corpus and its frozen groups.
+Iteration 175 freshly restores these baseline counts on the expanded canonical
+corpus, with identical behavior on all 2,936 keyed records:
+
+| split | correct | errors | single errors | multi errors |
+| --- | ---: | ---: | ---: | ---: |
+| train | `1074/1541` | 467 | 208 | 259 |
+| dev | `416/523` | 107 | 59 | 48 |
+| holdout regression | `460/540` | 80 | 38 | 42 |
+| external transfer | `221/332` | 111 | 28 | 83 |
+| all keyed cases | `2171/2936` | 765 | 333 | 432 |
+
+Of the 432 multi-answer errors, 168 under-select, 122 over-select, and 142 have
+the right count but a wrong member. The rejected single-answer resolver does not
+change these sets. These counts include the expanded external corpus; older
+diagnostic tables below use a smaller historical corpus.
+
+The recovered option-family prototype initially reached `430/523` on dev, but
+that score concealed logical errors. Synthetic examples showed that it could
+accept a negated number, combine a number with the wrong color, ignore a shared
+numeric attribute, partially match a long option, and equate strict and inclusive
+bounds. Those versions were rejected despite their higher aggregate score.
+
+The corrected resolver requires joint support for these constraints inside a
+bounded source fragment. Eighteen invented nonmedical tests cover positive
+proofs and counterexamples, option-id/order invariance, source ambiguity, units,
+numeric signs, comparator boundaries, and explicit question identifiers.
+
+Train error review found one additional scope defect: a general statement was
+being used for a question containing a narrower uppercase identifier. The same
+syntactic preservation rule now applies to every such identifier, without a list
+of medical abbreviations. It restores one baseline-correct train answer while
+withdrawing other unsupported apparent gains. After that correction, dev gains
+nine correct answers and train gains six, with no previously correct answer lost
+in either split. Their multi-answer sets do not change.
+
+The native-tag hypothesis has a separate failure: incremental coverage is zero.
+Seven of nine dev PDFs expose some native tags, but the strict row/column proof
+produces no score or selected-set change. Tag availability is not evidence that a
+particular question can be answered from a complete tagged cell. The consumer
+remains off; broadening to adjacent cells would discard its ownership guarantee.
+
+The next unresolved areas are condition ownership across headings and clauses,
+complete table/list membership for multi answers, and documents whose extraction
+does not preserve those relations. A scalar cardinality threshold or a larger
+text window would not establish that missing structure. `noEvidence = 0` only
+means some evidence was returned; it does not prove that the correct passage was
+retrieved or that the answer follows from it. A new unseen PDF-group collection
+is also required for a blind generalization estimate.
+
+The frozen H2 candidate failed transfer retention: `458/540` on holdout versus
+`460/540`, with one fix and three regressions. Error review after rejection found
+two remaining classes: one physical fragment spans multiple condition/value
+pairs, and a combined-subtype example displaces a more exact category row. The
+new checks establish that attributes occur nearby, but do not prove that every
+attribute belongs to the same relation. No rule was then tuned on those errors.
+H2 is disabled with H1. The candidate's overall `2185/2936` is documented as a
+rejected result, not an accepted improvement over `2171/2936`.
+
+Next work should first define and test a condition-to-value representation on
+invented examples and train/dev source structures. It should distinguish a
+category from a conjunction of categories, and preserve explicit row-label
+evidence when a competing clause establishes only broader membership. Any new
+candidate needs independent PDF groups for a fresh transfer decision; the
+failure just inspected cannot remain a blind test for that future work.
+
+## Historical error counts on the 46-PDF corpus
+
+These historical counts use the earlier deduplicated 46-PDF corpus and its frozen
+groups. They are retained to explain earlier experiments; they are not the
+September 48-PDF result.
 
 | split | correct | errors | single errors | multi errors |
 | --- | ---: | ---: | ---: | ---: |

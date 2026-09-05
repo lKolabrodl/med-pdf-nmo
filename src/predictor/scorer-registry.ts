@@ -221,6 +221,22 @@ export const DIAGNOSTIC_STRUCTURAL_EVIDENCE_PREFIXES = [
 /** Единый runtime-каталог scorer-ов и их evidence-контрактов. */
 export const SCORER_REGISTRY: readonly ScorerRegistryEntry[] = [
   {
+    id: "contrastive-option-family",
+    module: "src/predictor/scorers/option-family/index.ts",
+    modes: ["single"],
+    evidenceKinds: ["option_family_contrastive_clause"],
+    purpose: "Conjunctive option constraints in one bounded source fragment.",
+    risk: "structural",
+  },
+  {
+    id: "native-table",
+    module: "src/predictor/scorers/native-table/index.ts",
+    modes: ["single"],
+    evidenceKinds: ["native_table_cell"],
+    purpose: "Experimental native row and column ownership; disabled by default.",
+    risk: "structural",
+  },
+  {
     id: "search",
     module: "src/predictor/scorers/search/index.ts",
     modes: ["single", "multi"],

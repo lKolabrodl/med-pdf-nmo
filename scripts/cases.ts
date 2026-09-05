@@ -1,15 +1,34 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
-import { DATASET_GROUPS, FROZEN_SPLIT_GROUPS } from "./dataset-manifest.js";
+import {DATASET_ALIASES, DATASET_GROUPS, FROZEN_SPLIT_GROUPS} from "./dataset-manifest.js";
 
 export async function loadDataset(rootDir = process.cwd()) {
   const testDir = path.join(rootDir, "__test__");
   const entries = await fs.readdir(testDir, { withFileTypes: true });
-  const groups = entries
+  const discoveredGroups = entries
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
     .sort((a, b) => a.localeCompare(b, "en"));
+
+  const aliases: Record<string, string> = {};
+  for (const [alias, canonical] of Object.entries(DATASET_ALIASES)) {
+    if (!discoveredGroups.includes(alias)) continue;
+    const aliasDir = path.join(testDir, alias);
+    const canonicalDir = path.join(testDir, canonical);
+    const [aliasPdf, canonicalPdf, aliasCases, canonicalCases] = await Promise.all([
+      fs.readFile(path.join(aliasDir, "doc.pdf")),
+      fs.readFile(path.join(canonicalDir, "doc.pdf")),
+      fs.readFile(path.join(aliasDir, "cases.test.ts"), "utf8"),
+      fs.readFile(path.join(canonicalDir, "cases.test.ts"), "utf8"),
+    ]);
+    if (!aliasPdf.equals(canonicalPdf) ||
+        JSON.stringify(parseCasesSource(aliasCases)) !== JSON.stringify(parseCasesSource(canonicalCases))) {
+      throw new Error(`Dataset alias ${alias} differs from ${canonical}; reconcile it before evaluation.`);
+    }
+    aliases[alias] = canonical;
+  }
+  const groups = discoveredGroups.filter((group) => !aliases[group]);
 
   const cases = [];
   for (const group of groups) {
@@ -39,7 +58,7 @@ export async function loadDataset(rootDir = process.cwd()) {
       });
     });
   }
-  return { groups, cases };
+  return {groups, cases, aliases};
 }
 
 export function parseCasesSource(source, fileName = "cases.test.ts") {

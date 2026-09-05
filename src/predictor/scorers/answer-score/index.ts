@@ -4,6 +4,7 @@ import type {
   AnswerScoringContext,
 } from "../../contracts.js";
 import { bestAbbreviationAliasSupport } from "../abbreviation-alias/index.js";
+import {nativeTableAdjustment} from "../native-table/index.js";
 import {
   bestAgeFormSupport,
   bestAnswerOrdinalRowSupport,
@@ -81,6 +82,7 @@ import {
 } from "../numeric/index.js";
 import { bestCyrillicOcrSupport } from "../ocr-fuzzy/index.js";
 import {
+  contrastiveOptionFamilyAdjustment,
   optionFamilyCompactComboAdjustment,
   optionFamilyComparatorAdjustment,
 } from "../option-family/index.js";
@@ -366,6 +368,16 @@ export function scoreAnswer(
   const contrastCue = contrastCueMismatchAdjustment(context, evidence.sort((a, b) => b.score - a.score));
   raw += contrastCue.adjustment;
   if (contrastCue.evidence) evidence.push(contrastCue.evidence);
+  if (context.config.contrastiveOptionFamily) {
+    const contrastiveFamily = contrastiveOptionFamilyAdjustment(context);
+    raw += contrastiveFamily.adjustment;
+    if (contrastiveFamily.evidence) evidence.push(contrastiveFamily.evidence);
+  }
+  if (context.config.nativePdfStructure) {
+    const nativeTable = nativeTableAdjustment(context);
+    raw += nativeTable.adjustment;
+    if (nativeTable.evidence) evidence.push(nativeTable.evidence);
+  }
   if (context.config?.optionFamilyComparatorGuard) {
     const optionFamilyComparator = optionFamilyComparatorAdjustment({ answer: context.answer, answers: context.answers, evidence });
     raw += optionFamilyComparator.adjustment;

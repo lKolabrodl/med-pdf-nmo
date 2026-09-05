@@ -32,7 +32,7 @@ async function sha256(filePath: string) {
 
 async function main() {
   const root = process.cwd();
-  const { groups, cases } = await loadDataset(root);
+  const {groups, cases, aliases} = await loadDataset(root);
   const splits = groupSplit(groups);
   const splitByGroup = new Map<string, string>();
   for (const split of ["train", "dev", "holdout", "external"] as const) {
@@ -133,6 +133,7 @@ async function main() {
     manifestFingerprint: DATASET_PDF_FINGERPRINT,
     caseFingerprint: DATASET_CASE_FINGERPRINT,
     groups: groups.length,
+    verifiedAliases: aliases,
     parsedCases: cases.length,
     keyedCases: cases.filter((testCase) => testCase.expectedIds.length).length,
     singleCases: cases.filter((testCase) => testCase.expectedIds.length && testCase.mode === "single").length,

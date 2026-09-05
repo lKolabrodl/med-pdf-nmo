@@ -1,14 +1,14 @@
-export const DATASET_MANIFEST_VERSION = 7;
+export const DATASET_MANIFEST_VERSION = 8;
 
 /**
  * SHA-256 over sorted `<group>:<pdf-sha256>` rows for the deduplicated local corpus.
  * The individual corpus files remain local, but this fingerprint prevents silent
  * replacement/addition/removal from changing evaluation composition.
  */
-export const DATASET_PDF_FINGERPRINT = "311bf1cbdec7a6d02d86247f09ee7d62ff0c3167c1c4ef71f1513ff3f0e983c1";
+export const DATASET_PDF_FINGERPRINT = "7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2";
 
 /** SHA-256 over stable parsed case tuples, including expected values. */
-export const DATASET_CASE_FINGERPRINT = "f16dead6fec4ed63b500bb2e7c990732611d8d4a6cf80b8d55c2cdd9e47b4cea";
+export const DATASET_CASE_FINGERPRINT = "d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c";
 
 /**
  * Frozen PDF-level split for the deduplicated local corpus.
@@ -65,8 +65,11 @@ export const FROZEN_SPLIT_GROUPS = {
   ],
   // Added after the original split was frozen. Keep these newer PDFs separate
   // so their transfer result stays visible without moving established groups.
-  external: ["48-pereferi", "49-central-ceroz", "50-dr-gepatit", "51-travma"],
+  external: ["48-pereferi", "49-central-ceroz", "50-dr-gepatit", "51-travma", "52-infection"],
 } as const;
+
+/** Duplicate local copies must match both PDF bytes and parsed cases before exclusion. */
+export const DATASET_ALIASES: Readonly<Record<string, string>> = {"53-NOC_Blood": "12-nos"};
 
 export const DATASET_GROUPS = [
   ...FROZEN_SPLIT_GROUPS.train,

@@ -1485,3 +1485,239 @@ Iteration 165 production cleanup: ONLY T5 RUNTIME CHANGE RETAINED.
 - Therefore cleanup changes no measured answer. The accepted corpus result
   remains `2125/2867 = 0.7412`, with the round's only gain still
   `15-toxic#54` from structural split-token repair.
+
+Iteration 166 repository/history audit and reproduced baseline (2026-09-05): COMPLETE.
+
+- Read the tracked history through iteration 165 and the untracked experiment
+  artifacts. The working tree initially contained `src/pdf.test.ts` and
+  `option-family/contrastive.ts`; these were unfinished work, not active runtime.
+  Baseline tests had four failures caused by the missing structure builder and
+  missing contract inventory for that prototype. Typecheck failures were not
+  introduced by the new predictor experiments.
+- Historical cache artifacts also contain an undocumented native-structure
+  round (dev 416 -> 417, final train 1074) and sixteen contrastive prototypes
+  (latest cached dev 430/523). Their source/config provenance is incomplete;
+  these are research leads, not accepted results for the current checkout.
+- Fresh unchanged predictor dev: `416/523 = 0.7954`, single `0.8392`,
+  multi exact `0.6923`, 107 errors, zero missing-evidence outputs.
+- The new local `52-infection` reproduces `46/69 = 0.6667` (one unkeyed
+  case excluded). Earlier artifacts already evaluated this group, so the result
+  is not described as blind. Its labels are not used to select this round's rules.
+- Found `53-NOC_Blood` to be a byte-identical copy of train `12-nos` with
+  identical parsed cases. Counting it as external would create 30 cross-split
+  duplicates. The loader now verifies both files and case content before treating
+  it as an alias. Files and labels remain unchanged; a divergent alias is an error.
+- Manifest v8 adds only `52-infection` to external. Old train/dev/holdout
+  memberships are unchanged: 48 canonical PDFs, 2,936 keyed cases, external 332.
+  Two repeated records within the new external group remain visible in the
+  validator; no cross-split duplicate remains.
+- Before new scoring changes, registered two hypotheses: H1 native tagged
+  row/column ownership, H2 contrastive option slots with local condition binding.
+  Both default off during testing. Dev and train determine acceptance; the
+  previously inspected holdout is a final regression gate. No new split, labels,
+  medical facts, fixture ids, or PDF-specific rules enter inference.
+
+Iteration 167 H2 recovered contrastive option-family prototype: REJECTED AS WRITTEN.
+
+- Connected the existing untracked prototype behind `contrastiveOptionFamily`.
+  The candidate adds a bounded per-answer adjustment only after one source
+  fragment uniquely matches the variable part of an option family, preserving
+  explicit numeric units, qualifiers, labels, and comparison direction.
+- This is a reproduction of unfinished work, not a claim that the old sixteen
+  variants are newly run iterations. Contract tests now explicitly cover its
+  fifty functions. Synthetic counterexamples and fresh full-dev validation are
+  required before deciding whether any of it belongs in the default runtime.
+- Fresh dev reproduces `430/523 = 0.8222` (14 fixes, zero regressions),
+  but the synthetic polarity and conjunctive-slot failures in iterations
+  169–170 invalidate the uncorrected proof logic. Accuracy does not override
+  those counterexamples. Holdout was not consulted for this version.
+
+Iteration 168 H1 native PDF row/column ownership: NO GAIN, REJECTED.
+
+- Implemented PDF.js marked-content/tree mapping and a separately gated cell
+  resolver. It preserves empty cells, ignores TOC branches, rejects missing
+  cells and unsupported spans, requires a unique row and (for wide tables) a
+  unique column header, and abstains on conflicting tables or answer matches.
+- The label-free dev PDF audit found native tags in seven of nine PDFs;
+  `07-hron` and `42-skvoz` are untagged. This supplies actual cell boundaries
+  that the earlier coordinate-only table-grid experiment did not have.
+- Fourteen extraction/native-table tests pass, including wrong-column,
+  missing-cell, numeric-boundary, negation, and ambiguous-row counterexamples.
+  Full dev with H2 disabled remains `416/523 = 0.7954`: zero changed selected
+  sets and zero changed raw scores. The strict cell proof has no incremental
+  coverage on dev. Increasing its score cannot repair a zero-coverage parser;
+  the consumer is rejected without consulting holdout.
+
+Iteration 169 H2 local source polarity: SAFETY CORRECTION, NOT FINAL.
+
+- An invented sensor-temperature example exposed a counterexample in the
+  recovered prototype: `not equal to 20 degrees` was accepted as proof of
+  `20 degrees`. The original version is rejected irrespective of its dev score.
+- Added source-polarity abstention before lookalike folding. Explicit numeric
+  bounds such as `not less than` retain their comparator role. No clinical
+  statement, fixture answer, or label was added. Eight initial synthetic tests
+  passed. Full dev is `427/523 = 0.8164`; three of the original prototype's
+  fourteen apparent fixes no longer receive this unsafe support.
+
+Iteration 170 H2 conjunctive variable slots: SAFETY CORRECTION, NOT FINAL.
+
+- Another synthetic example exposed an OR bug: a source describing a red item
+  of mass 20 could prove a blue item of mass 20. The numeric and lexical paths
+  had been independent positive signals.
+- A numeric option family now requires the numeric slot, its label/unit/
+  comparator binding, and every changing lexical attribute jointly. Textual
+  similarity cannot recover a failed numeric check. Ordinal syntax retains its
+  separate existing label parser. This is a logical correction established
+  without inspecting corpus mistakes. Full dev remains `427/523 = 0.8164`.
+  Train is `1081/1541 = 0.7015`, versus the accepted baseline `1074/1541`;
+  multi exact remains unchanged. Additional synthetic checks exposed missing
+  common-attribute and inclusive-bound constraints, so this is not the final candidate.
+
+Iteration 171 H2 complete option constraints: MEASURED, SUPERSEDED BY SCOPE FIX.
+
+- Counterexamples require every numeric attribute, including numbers shared by
+  all options, and every changing lexical attribute. They reject a partly
+  matching option even when it would have been the only candidate left.
+- Comparator parsing now precedes Cyrillic lookalike folding and distinguishes
+  strict from inclusive bounds. `not more than` is an upper bound, and `not less
+  than` is a lower bound. Neither is silently equated with a strict inequality.
+- A shared unit is propagated only across explicit numeric coordination
+  (`20 or 30 degrees`), never across intervening object words. This preserves
+  ambiguity between the values instead of favoring only the last one.
+- All changes were motivated by invented nonmedical counterexamples. Full dev
+  and train are rerun before any holdout/external inspection. New eval artifacts
+  now include source/data fingerprints, resolved configuration, and installed
+  Node/PDF.js versions to avoid the provenance gap found in the older cache.
+- Full dev: `426/523 = 0.8145`, ten fixes, zero regressions, one wrong-to-wrong
+  change. Train: `1081/1541 = 0.7015`, eight fixes and one regression. All 25
+  train group reports have the same runtime fingerprint. Multi sets are unchanged.
+
+Iteration 172 integration and attempted final check: SUPERSEDED BEFORE TRANSFER REVIEW.
+
+- Enabled the measured H2 candidate, routed its consumer through the feature
+  `index.ts`, and registered the two new evidence kinds without changing any
+  selection or confidence weights. Native table matching stays off.
+- Tests: 822 pass; typecheck and Node/browser builds pass. A temporary archived
+  test copy was initially collected by Vitest; renamed the archive to `.txt`
+  rather than weakening test discovery or excluding production tests.
+- Verified the older 47-PDF subset still has exactly the original v7 PDF and
+  case fingerprints. No pre-existing PDF, question, option, or label changed.
+- During final checks, train regression review identified a missing qualifier:
+  a general duration statement was accepted without the uppercase identifier
+  explicitly present in the question (`21-citovirus#9`). This is a source-scope
+  defect, not a reason to edit the medical key. The transfer runs are preserved
+  but their results were not inspected before deciding the next source fix.
+- Retrospective read only after iteration 173 was frozen: dev `426/523`,
+  holdout `460/540`, external `222/332`, all with runtime fingerprint
+  `26c0747fa6d565f47e432ce1dee4354f69689f94bbc1c36524a611670fd22ff9`.
+  These are superseded measurements, not the final default result and not a
+  source of rules for the iteration-173 change.
+
+Iteration 173 H2 explicit abbreviation scope: ACCEPTED FOR FINAL TRANSFER CHECK.
+
+- Extended identifier preservation to uppercase abbreviations in mixed-case
+  questions. It is syntax-based, with no list of clinical abbreviations or facts.
+  Units and Roman ordinals retain their own parsers; fully uppercased questions
+  are not misread as abbreviation lists.
+- A synthetic sensor identifier reproduced the missing-qualifier error before
+  the change. Positive local-identifier and all-uppercase-question controls
+  accompany the rejection test. All eighteen synthetic constraint tests pass.
+- Dev and train are rerun before transfer results are read. No rule was chosen
+  from holdout/external labels or errors.
+- The focused train-PDF comparison restores the baseline-correct
+  `21-citovirus#9` but withdraws the unsupported new fix of `21-citovirus#10`.
+  An absent identifier must cause abstention in both cases; the rule is not
+  relaxed to retain the apparent gain.
+- Validation: 825 unit/contract tests pass, including all eighteen synthetic
+  constraints; 2,984 raw corpus fixtures are intentionally skipped by Vitest
+  and evaluated through the canonical dataset runner. Normal typecheck, both
+  existing strict scopes, all three builds, dataset validation, and a real CLI
+  prediction with only PDF/question/options/mode pass. Repository-wide strict
+  mode still has 250 known errors outside the two checked scopes.
+- Full dev: `425/523 = 0.8126`, nine fixes, zero regressions, one wrong-to-wrong
+  change relative to iteration 166. Train: `1080/1541 = 0.7008`, six fixes and
+  zero regressions. Multi-answer sets are unchanged in both splits. Compared
+  with iteration 171, stricter scope also withdraws one dev and one additional
+  train fix; those unsupported gains are not recovered by weakening the rule.
+- Freeze runtime fingerprint
+  `bc01f27437cf01d3d37a167189956f392e7b326e0acc871f517792f05cba80b1`
+  with `contrastiveOptionFamily=true`, `nativePdfStructure=false` before the
+  final transfer review. All 25 train reports have matching provenance.
+
+Iteration 174 frozen candidate transfer and final audit: REJECTED.
+
+- Run the unchanged iteration-173 source on all 540 holdout and 332 external
+  keyed cases. No threshold, source rule, or dataset label will be selected from
+  these results; they determine whether the whole candidate is retained.
+- The baseline for the expanded external set is `221/332` (the earlier
+  `175/263` plus the pre-change `46/69` on `52-infection`). Comparison uses the
+  same canonical records and exact-set criteria.
+- Before reading transfer metrics, the retention criterion is: the holdout
+  acceptance command passes and neither holdout nor external exact count falls
+  below its baseline (`460/540` and `221/332`). A failure rejects this complete
+  candidate rather than prompting answer-specific tuning on those splits.
+- External finishes at `222/332 = 0.6687`, single `164/191`, multi exact
+  `58/141`, versus the baseline `221/332`. The final external runtime fingerprint
+  matches iteration 173. No further predictor edits are made.
+- Holdout: `458/540 = 0.8481`, one fix and three regressions, versus baseline
+  `460/540`. The command's `0.80` gate passes, but the predeclared no-degradation
+  retention criterion fails. The entire H2 candidate is rejected. Its aggregate
+  `2185/2936 = 0.7442` versus `2171/2936 = 0.7394` does not override that rule.
+- Full comparison: train +6/−0, dev +9/−0 plus one wrong-to-wrong change,
+  holdout +1/−3, external +1/−0. No multi selected set changes on any split.
+  All final reports share the iteration-173 runtime and data provenance.
+- Regressions are recorded for error analysis only. No PDF-specific exclusion,
+  case-specific weight, label edit, or follow-up rule tuned on those holdout
+  errors is introduced. The unsafe earlier prototypes are not substituted back
+  merely because their holdout aggregate was higher.
+
+Iteration 175 restore accepted default and verify: COMPLETE, ACCEPTED DEFAULT RESTORED.
+
+- Set `contrastiveOptionFamily=false`; `nativePdfStructure` remains false.
+  Both tested implementations and their synthetic tests remain available as
+  explicitly disabled experiments. The production answer algorithm returns to
+  the accepted iteration-165 behavior.
+- Rerun dev, holdout, external, and train PDF-group stability on this restored
+  default, plus tests and builds. Dataset deduplication and report provenance
+  improvements are retained independently of the rejected scoring candidates.
+- Fresh dev returns `416/523`, holdout `460/540`, external `221/332`.
+  The holdout command exits zero. Strict result comparison on all 1,063 dev
+  and holdout cases confirms identical selected-id order, raw scores, calibrated
+  scores, and confidence to baseline. Tests: 825 pass. Typecheck and all three
+  builds pass; the packaged `dist/cli.js` also completes a real PDF prediction.
+- Fresh train finishes at `1074/1541`; all 25 group reports and all four splits
+  share restored source fingerprint
+  `2065251f5544ea1680c5c50e127aa62755d545d8345c278fe251866e12d65a2f`.
+- Final all-corpus comparison is zero-delta on **all 2,936 keyed cases**:
+  selected-id order, raw/calibrated scores, confidence, and correctness match
+  baseline exactly. Accepted total is `2171/2936 = 0.7394`, single
+  `1612/1945 = 0.8288`, multi exact `559/991 = 0.5641`.
+- The rejected candidate and the restored default, with their separate source
+  fingerprints, are saved in `docs/experiments/2026-09-05-results.json`.
+  No PDF, question, variant, or answer label was edited. Old subset fingerprints
+  remain unchanged. This round yields no accepted accuracy gain; it adds
+  verified alias handling, reproducible provenance, two disabled implementations,
+  and counterexamples explaining why further relation modeling is needed.
+
+September round summary (counts are exact matches):
+
+| iteration | dev | train | holdout | external | decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 166 | 416/523 | 1074/1541* | 460/540* | 221/332* | reproduced baseline and corpus audit |
+| 167 | 430/523 | — | — | — | original H2 proof rejected on synthetic failures |
+| 168 | 416/523 | — | — | — | H1 has zero incremental coverage |
+| 169 | 427/523 | — | — | — | source polarity corrected; intermediate |
+| 170 | 427/523 | 1081/1541 | — | — | variable slots corrected; intermediate |
+| 171 | 426/523 | 1081/1541 | — | — | complete option constraints; train scope defect remains |
+| 172 | 426/523 | — | 460/540 | 222/332 | superseded before transfer metrics were inspected |
+| 173 | 425/523 | 1080/1541 | — | — | scope corrected; candidate frozen |
+| 174 | 425/523† | 1080/1541† | 458/540 | 222/332 | rejected: holdout regression |
+| 175 | 416/523 | 1074/1541 | 460/540 | 221/332 | restored default; all 2936 records zero-delta |
+
+* Iteration 166 reuses accepted train/holdout/old-external artifacts from iteration
+165; dev and added external `52-infection` were freshly run. The latter contributes
+46/69 to the expanded external baseline. Iteration 175 freshly verifies every
+canonical record against this baseline.
+
+† Iteration 174 uses the already completed dev/train results of the identical
+frozen iteration-173 source. It does not claim those were additional runs.

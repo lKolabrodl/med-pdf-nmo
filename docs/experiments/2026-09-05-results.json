@@ -1,0 +1,1262 @@
+{
+  "date": "2026-09-05",
+  "iterations": [
+    166,
+    167,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    174,
+    175
+  ],
+  "note": "Previously inspected PDF groups; regression and transfer measurement, not a blind generalization estimate. No fitting per fold.",
+  "baselineNote": "Fresh dev and added external group; accepted iteration-165 train/holdout/old external artifacts. The original 47-PDF/data fingerprints were independently verified unchanged.",
+  "selection": "Runtime frozen after dev/train and synthetic constraints; holdout/external decide whole-candidate retention without rule tuning.",
+  "retention": {
+    "accepted": false,
+    "holdoutMinimumCorrect": 460,
+    "externalMinimumCorrect": 221,
+    "holdoutAcceptanceTarget": 0.8
+  },
+  "validation": {
+    "unitTestsPassed": 825,
+    "syntheticConstraintTests": 18,
+    "typecheck": "passed",
+    "scopedStrictChecks": "passed",
+    "builds": "Node ESM, browser IIFE, browser ESM passed",
+    "cli": "passed",
+    "dataset": "passed"
+  },
+  "provenance": {
+    "runtimeSourceFingerprint": "bc01f27437cf01d3d37a167189956f392e7b326e0acc871f517792f05cba80b1",
+    "datasetManifestVersion": 8,
+    "datasetPdfFingerprint": "7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2",
+    "datasetCaseFingerprint": "d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c",
+    "nodeVersion": "v22.23.2",
+    "pdfjsVersion": "5.7.284",
+    "resolvedConfig": {
+      "nativePdfStructure": false,
+      "contrastiveOptionFamily": true,
+      "multiRelativeThreshold": 0.84,
+      "multiAbsoluteThreshold": 12,
+      "multiGapThreshold": 0.72,
+      "multiMinAnswers": 2,
+      "multiThirdGapThreshold": 0.45,
+      "multiThirdRelativeThreshold": 0.55,
+      "frozenFeatureRanker": true,
+      "multiCardinalityModel": true,
+      "multiAllOptionsGuard": true,
+      "multiCrowdedTailGuard": true,
+      "pairwiseContrastRanker": true,
+      "structuralClusterAdjustments": true,
+      "singleSpecificityTieBreak": true,
+      "singleTieMaxRawGap": 0.2,
+      "singleTieMinRawRatio": 0.94,
+      "singleTieSpecificityGap": 0.5,
+      "sharedMultiSegmentBoost": true,
+      "countRelationBoost": true,
+      "optionFamilyComparatorGuard": true,
+      "optionFamilyCompactComboGuard": true,
+      "relationTupleResolver": true,
+      "intervalRelationTupleResolver": true,
+      "clauseLocalCountTupleResolver": true,
+      "negationPairClauseResolver": false,
+      "documentTokenRepair": true,
+      "documentTokenRepairMinFrequency": 2,
+      "documentTokenRepairStructuralOnly": true,
+      "explicitOrdinalRangeSetDecoder": true,
+      "siblingListMultiResolver": true,
+      "siblingListSingleResolver": true,
+      "hierarchicalListResolver": true,
+      "recommendationPropositionResolver": true,
+      "topQuestionChunks": 28,
+      "evidenceLimit": 8,
+      "includeSources": false
+    }
+  },
+  "splits": {
+    "train": {
+      "baseline": {
+        "total": 1541,
+        "correct": 1074,
+        "byPdf": {
+          "01-toksic-galogen": {
+            "total": 68,
+            "correct": 52
+          },
+          "02-metanol-glikol": {
+            "total": 70,
+            "correct": 56
+          },
+          "03-chadlv": {
+            "total": 67,
+            "correct": 47
+          },
+          "04-hep-d": {
+            "total": 70,
+            "correct": 57
+          },
+          "05-bronhit-hron": {
+            "total": 70,
+            "correct": 47
+          },
+          "09-covid": {
+            "total": 70,
+            "correct": 59
+          },
+          "10-LPP": {
+            "total": 70,
+            "correct": 50
+          },
+          "12-nos": {
+            "total": 30,
+            "correct": 19
+          },
+          "13-pisha": {
+            "total": 70,
+            "correct": 45
+          },
+          "20-hron": {
+            "total": 70,
+            "correct": 52
+          },
+          "21-citovirus": {
+            "total": 70,
+            "correct": 52
+          },
+          "22-eozif": {
+            "total": 31,
+            "correct": 24
+          },
+          "24-kalit": {
+            "total": 70,
+            "correct": 40
+          },
+          "26-blevota": {
+            "total": 50,
+            "correct": 38
+          },
+          "27-cistit": {
+            "total": 30,
+            "correct": 23
+          },
+          "29-tpank": {
+            "total": 70,
+            "correct": 45
+          },
+          "30-heart": {
+            "total": 70,
+            "correct": 44
+          },
+          "35-cron": {
+            "total": 72,
+            "correct": 41
+          },
+          "36-anrid": {
+            "total": 70,
+            "correct": 45
+          },
+          "37-bazal": {
+            "total": 70,
+            "correct": 41
+          },
+          "38-katarakta": {
+            "total": 30,
+            "correct": 22
+          },
+          "39-glaurova": {
+            "total": 69,
+            "correct": 47
+          },
+          "40-deficit": {
+            "total": 50,
+            "correct": 39
+          },
+          "45-botulizm": {
+            "total": 49,
+            "correct": 37
+          },
+          "46-yazva": {
+            "total": 85,
+            "correct": 52
+          }
+        },
+        "exactAccuracy": 0.6969500324464634,
+        "macroAccuracyByPdf": 0.702962122227077,
+        "single": {
+          "total": 1001,
+          "correct": 793
+        },
+        "multi": {
+          "total": 540,
+          "correct": 281
+        },
+        "multiErrors": {
+          "underSelected": 111,
+          "overSelected": 71,
+          "rightCountWrongMember": 77
+        }
+      },
+      "candidate": {
+        "total": 1541,
+        "correct": 1080,
+        "byPdf": {
+          "01-toksic-galogen": {
+            "total": 68,
+            "correct": 52
+          },
+          "02-metanol-glikol": {
+            "total": 70,
+            "correct": 56
+          },
+          "03-chadlv": {
+            "total": 67,
+            "correct": 48
+          },
+          "04-hep-d": {
+            "total": 70,
+            "correct": 57
+          },
+          "05-bronhit-hron": {
+            "total": 70,
+            "correct": 47
+          },
+          "09-covid": {
+            "total": 70,
+            "correct": 60
+          },
+          "10-LPP": {
+            "total": 70,
+            "correct": 50
+          },
+          "12-nos": {
+            "total": 30,
+            "correct": 19
+          },
+          "13-pisha": {
+            "total": 70,
+            "correct": 45
+          },
+          "20-hron": {
+            "total": 70,
+            "correct": 53
+          },
+          "21-citovirus": {
+            "total": 70,
+            "correct": 52
+          },
+          "22-eozif": {
+            "total": 31,
+            "correct": 24
+          },
+          "24-kalit": {
+            "total": 70,
+            "correct": 40
+          },
+          "26-blevota": {
+            "total": 50,
+            "correct": 38
+          },
+          "27-cistit": {
+            "total": 30,
+            "correct": 23
+          },
+          "29-tpank": {
+            "total": 70,
+            "correct": 45
+          },
+          "30-heart": {
+            "total": 70,
+            "correct": 44
+          },
+          "35-cron": {
+            "total": 72,
+            "correct": 41
+          },
+          "36-anrid": {
+            "total": 70,
+            "correct": 45
+          },
+          "37-bazal": {
+            "total": 70,
+            "correct": 41
+          },
+          "38-katarakta": {
+            "total": 30,
+            "correct": 22
+          },
+          "39-glaurova": {
+            "total": 69,
+            "correct": 47
+          },
+          "40-deficit": {
+            "total": 50,
+            "correct": 39
+          },
+          "45-botulizm": {
+            "total": 49,
+            "correct": 39
+          },
+          "46-yazva": {
+            "total": 85,
+            "correct": 53
+          }
+        },
+        "exactAccuracy": 0.7008436080467229,
+        "macroAccuracyByPdf": 0.7068052355918258,
+        "single": {
+          "total": 1001,
+          "correct": 799
+        },
+        "multi": {
+          "total": 540,
+          "correct": 281
+        },
+        "multiErrors": {
+          "underSelected": 111,
+          "overSelected": 71,
+          "rightCountWrongMember": 77
+        }
+      },
+      "comparison": {
+        "fixed": [
+          "03-chadlv#45",
+          "09-covid#14",
+          "20-hron#23",
+          "45-botulizm#44",
+          "45-botulizm#46",
+          "46-yazva#57"
+        ],
+        "regressed": [],
+        "wrongToWrong": [],
+        "selectedSetChanges": 6,
+        "multiSetChanges": 0
+      }
+    },
+    "dev": {
+      "baseline": {
+        "total": 523,
+        "correct": 416,
+        "byPdf": {
+          "07-hron": {
+            "total": 71,
+            "correct": 55
+          },
+          "08-ask": {
+            "total": 30,
+            "correct": 29
+          },
+          "15-toxic": {
+            "total": 70,
+            "correct": 54
+          },
+          "25-shigez": {
+            "total": 70,
+            "correct": 52
+          },
+          "28-tanzilt": {
+            "total": 50,
+            "correct": 42
+          },
+          "31-hbs": {
+            "total": 43,
+            "correct": 34
+          },
+          "32-gemor": {
+            "total": 70,
+            "correct": 58
+          },
+          "41-destonia": {
+            "total": 69,
+            "correct": 60
+          },
+          "42-skvoz": {
+            "total": 50,
+            "correct": 32
+          }
+        },
+        "exactAccuracy": 0.7954110898661568,
+        "macroAccuracyByPdf": 0.8027149542952957,
+        "single": {
+          "total": 367,
+          "correct": 308
+        },
+        "multi": {
+          "total": 156,
+          "correct": 108
+        },
+        "multiErrors": {
+          "underSelected": 13,
+          "overSelected": 15,
+          "rightCountWrongMember": 20
+        }
+      },
+      "candidate": {
+        "total": 523,
+        "correct": 425,
+        "byPdf": {
+          "07-hron": {
+            "total": 71,
+            "correct": 56
+          },
+          "08-ask": {
+            "total": 30,
+            "correct": 29
+          },
+          "15-toxic": {
+            "total": 70,
+            "correct": 54
+          },
+          "25-shigez": {
+            "total": 70,
+            "correct": 56
+          },
+          "28-tanzilt": {
+            "total": 50,
+            "correct": 42
+          },
+          "31-hbs": {
+            "total": 43,
+            "correct": 34
+          },
+          "32-gemor": {
+            "total": 70,
+            "correct": 60
+          },
+          "41-destonia": {
+            "total": 69,
+            "correct": 61
+          },
+          "42-skvoz": {
+            "total": 50,
+            "correct": 33
+          }
+        },
+        "exactAccuracy": 0.8126195028680688,
+        "macroAccuracyByPdf": 0.8176362372263766,
+        "single": {
+          "total": 367,
+          "correct": 317
+        },
+        "multi": {
+          "total": 156,
+          "correct": 108
+        },
+        "multiErrors": {
+          "underSelected": 13,
+          "overSelected": 15,
+          "rightCountWrongMember": 20
+        }
+      },
+      "comparison": {
+        "fixed": [
+          "07-hron#29",
+          "25-shigez#31",
+          "25-shigez#37",
+          "25-shigez#38",
+          "25-shigez#61",
+          "32-gemor#10",
+          "32-gemor#51",
+          "41-destonia#8",
+          "42-skvoz#9"
+        ],
+        "regressed": [],
+        "wrongToWrong": [
+          "25-shigez#55"
+        ],
+        "selectedSetChanges": 10,
+        "multiSetChanges": 0
+      }
+    },
+    "holdout": {
+      "baseline": {
+        "total": 540,
+        "correct": 460,
+        "byPdf": {
+          "06-co-toksic": {
+            "total": 70,
+            "correct": 60
+          },
+          "11-mening": {
+            "total": 70,
+            "correct": 62
+          },
+          "14-sarkoidoz": {
+            "total": 80,
+            "correct": 72
+          },
+          "17-gepatit": {
+            "total": 70,
+            "correct": 61
+          },
+          "19-gepatitc": {
+            "total": 50,
+            "correct": 42
+          },
+          "23-nimana": {
+            "total": 70,
+            "correct": 59
+          },
+          "33-aorta": {
+            "total": 70,
+            "correct": 58
+          },
+          "43-anomali": {
+            "total": 30,
+            "correct": 25
+          },
+          "44-girshprunga": {
+            "total": 30,
+            "correct": 21
+          }
+        },
+        "exactAccuracy": 0.8518518518518519,
+        "macroAccuracyByPdf": 0.8398941798941798,
+        "single": {
+          "total": 386,
+          "correct": 348
+        },
+        "multi": {
+          "total": 154,
+          "correct": 112
+        },
+        "multiErrors": {
+          "underSelected": 16,
+          "overSelected": 17,
+          "rightCountWrongMember": 9
+        }
+      },
+      "candidate": {
+        "total": 540,
+        "correct": 458,
+        "byPdf": {
+          "06-co-toksic": {
+            "total": 70,
+            "correct": 60
+          },
+          "11-mening": {
+            "total": 70,
+            "correct": 63
+          },
+          "14-sarkoidoz": {
+            "total": 80,
+            "correct": 69
+          },
+          "17-gepatit": {
+            "total": 70,
+            "correct": 61
+          },
+          "19-gepatitc": {
+            "total": 50,
+            "correct": 42
+          },
+          "23-nimana": {
+            "total": 70,
+            "correct": 59
+          },
+          "33-aorta": {
+            "total": 70,
+            "correct": 58
+          },
+          "43-anomali": {
+            "total": 30,
+            "correct": 25
+          },
+          "44-girshprunga": {
+            "total": 30,
+            "correct": 21
+          }
+        },
+        "exactAccuracy": 0.8481481481481481,
+        "macroAccuracyByPdf": 0.8373148148148147,
+        "single": {
+          "total": 386,
+          "correct": 346
+        },
+        "multi": {
+          "total": 154,
+          "correct": 112
+        },
+        "multiErrors": {
+          "underSelected": 16,
+          "overSelected": 17,
+          "rightCountWrongMember": 9
+        }
+      },
+      "comparison": {
+        "fixed": [
+          "11-mening#32"
+        ],
+        "regressed": [
+          "14-sarkoidoz#33",
+          "14-sarkoidoz#35",
+          "14-sarkoidoz#36"
+        ],
+        "wrongToWrong": [],
+        "selectedSetChanges": 4,
+        "multiSetChanges": 0
+      }
+    },
+    "external": {
+      "baseline": {
+        "total": 332,
+        "correct": 221,
+        "byPdf": {
+          "48-pereferi": {
+            "total": 50,
+            "correct": 46
+          },
+          "49-central-ceroz": {
+            "total": 30,
+            "correct": 24
+          },
+          "50-dr-gepatit": {
+            "total": 70,
+            "correct": 59
+          },
+          "51-travma": {
+            "total": 113,
+            "correct": 46
+          },
+          "52-infection": {
+            "total": 69,
+            "correct": 46
+          }
+        },
+        "exactAccuracy": 0.6656626506024096,
+        "macroAccuracyByPdf": 0.7273206911083018,
+        "single": {
+          "total": 191,
+          "correct": 163
+        },
+        "multi": {
+          "total": 141,
+          "correct": 58
+        },
+        "multiErrors": {
+          "underSelected": 28,
+          "overSelected": 19,
+          "rightCountWrongMember": 36
+        }
+      },
+      "candidate": {
+        "total": 332,
+        "correct": 222,
+        "byPdf": {
+          "48-pereferi": {
+            "total": 50,
+            "correct": 46
+          },
+          "49-central-ceroz": {
+            "total": 30,
+            "correct": 25
+          },
+          "50-dr-gepatit": {
+            "total": 70,
+            "correct": 59
+          },
+          "51-travma": {
+            "total": 113,
+            "correct": 46
+          },
+          "52-infection": {
+            "total": 69,
+            "correct": 46
+          }
+        },
+        "exactAccuracy": 0.6686746987951807,
+        "macroAccuracyByPdf": 0.7339873577749685,
+        "single": {
+          "total": 191,
+          "correct": 164
+        },
+        "multi": {
+          "total": 141,
+          "correct": 58
+        },
+        "multiErrors": {
+          "underSelected": 28,
+          "overSelected": 19,
+          "rightCountWrongMember": 36
+        }
+      },
+      "comparison": {
+        "fixed": [
+          "49-central-ceroz#21"
+        ],
+        "regressed": [],
+        "wrongToWrong": [],
+        "selectedSetChanges": 1,
+        "multiSetChanges": 0
+      }
+    }
+  },
+  "total": {
+    "baseline": {
+      "total": 2936,
+      "correct": 2171,
+      "byPdf": {
+        "01-toksic-galogen": {
+          "total": 68,
+          "correct": 52
+        },
+        "02-metanol-glikol": {
+          "total": 70,
+          "correct": 56
+        },
+        "03-chadlv": {
+          "total": 67,
+          "correct": 47
+        },
+        "04-hep-d": {
+          "total": 70,
+          "correct": 57
+        },
+        "05-bronhit-hron": {
+          "total": 70,
+          "correct": 47
+        },
+        "09-covid": {
+          "total": 70,
+          "correct": 59
+        },
+        "10-LPP": {
+          "total": 70,
+          "correct": 50
+        },
+        "12-nos": {
+          "total": 30,
+          "correct": 19
+        },
+        "13-pisha": {
+          "total": 70,
+          "correct": 45
+        },
+        "20-hron": {
+          "total": 70,
+          "correct": 52
+        },
+        "21-citovirus": {
+          "total": 70,
+          "correct": 52
+        },
+        "22-eozif": {
+          "total": 31,
+          "correct": 24
+        },
+        "24-kalit": {
+          "total": 70,
+          "correct": 40
+        },
+        "26-blevota": {
+          "total": 50,
+          "correct": 38
+        },
+        "27-cistit": {
+          "total": 30,
+          "correct": 23
+        },
+        "29-tpank": {
+          "total": 70,
+          "correct": 45
+        },
+        "30-heart": {
+          "total": 70,
+          "correct": 44
+        },
+        "35-cron": {
+          "total": 72,
+          "correct": 41
+        },
+        "36-anrid": {
+          "total": 70,
+          "correct": 45
+        },
+        "37-bazal": {
+          "total": 70,
+          "correct": 41
+        },
+        "38-katarakta": {
+          "total": 30,
+          "correct": 22
+        },
+        "39-glaurova": {
+          "total": 69,
+          "correct": 47
+        },
+        "40-deficit": {
+          "total": 50,
+          "correct": 39
+        },
+        "45-botulizm": {
+          "total": 49,
+          "correct": 37
+        },
+        "46-yazva": {
+          "total": 85,
+          "correct": 52
+        },
+        "07-hron": {
+          "total": 71,
+          "correct": 55
+        },
+        "08-ask": {
+          "total": 30,
+          "correct": 29
+        },
+        "15-toxic": {
+          "total": 70,
+          "correct": 54
+        },
+        "25-shigez": {
+          "total": 70,
+          "correct": 52
+        },
+        "28-tanzilt": {
+          "total": 50,
+          "correct": 42
+        },
+        "31-hbs": {
+          "total": 43,
+          "correct": 34
+        },
+        "32-gemor": {
+          "total": 70,
+          "correct": 58
+        },
+        "41-destonia": {
+          "total": 69,
+          "correct": 60
+        },
+        "42-skvoz": {
+          "total": 50,
+          "correct": 32
+        },
+        "06-co-toksic": {
+          "total": 70,
+          "correct": 60
+        },
+        "11-mening": {
+          "total": 70,
+          "correct": 62
+        },
+        "14-sarkoidoz": {
+          "total": 80,
+          "correct": 72
+        },
+        "17-gepatit": {
+          "total": 70,
+          "correct": 61
+        },
+        "19-gepatitc": {
+          "total": 50,
+          "correct": 42
+        },
+        "23-nimana": {
+          "total": 70,
+          "correct": 59
+        },
+        "33-aorta": {
+          "total": 70,
+          "correct": 58
+        },
+        "43-anomali": {
+          "total": 30,
+          "correct": 25
+        },
+        "44-girshprunga": {
+          "total": 30,
+          "correct": 21
+        },
+        "48-pereferi": {
+          "total": 50,
+          "correct": 46
+        },
+        "49-central-ceroz": {
+          "total": 30,
+          "correct": 24
+        },
+        "50-dr-gepatit": {
+          "total": 70,
+          "correct": 59
+        },
+        "51-travma": {
+          "total": 113,
+          "correct": 46
+        },
+        "52-infection": {
+          "total": 69,
+          "correct": 46
+        }
+      },
+      "exactAccuracy": 0.739441416893733,
+      "macroAccuracyByPdf": 0.7498778899775772,
+      "single": {
+        "total": 1945,
+        "correct": 1612
+      },
+      "multi": {
+        "total": 991,
+        "correct": 559
+      },
+      "multiErrors": {
+        "underSelected": 168,
+        "overSelected": 122,
+        "rightCountWrongMember": 142
+      }
+    },
+    "candidate": {
+      "total": 2936,
+      "correct": 2185,
+      "byPdf": {
+        "01-toksic-galogen": {
+          "total": 68,
+          "correct": 52
+        },
+        "02-metanol-glikol": {
+          "total": 70,
+          "correct": 56
+        },
+        "03-chadlv": {
+          "total": 67,
+          "correct": 48
+        },
+        "04-hep-d": {
+          "total": 70,
+          "correct": 57
+        },
+        "05-bronhit-hron": {
+          "total": 70,
+          "correct": 47
+        },
+        "09-covid": {
+          "total": 70,
+          "correct": 60
+        },
+        "10-LPP": {
+          "total": 70,
+          "correct": 50
+        },
+        "12-nos": {
+          "total": 30,
+          "correct": 19
+        },
+        "13-pisha": {
+          "total": 70,
+          "correct": 45
+        },
+        "20-hron": {
+          "total": 70,
+          "correct": 53
+        },
+        "21-citovirus": {
+          "total": 70,
+          "correct": 52
+        },
+        "22-eozif": {
+          "total": 31,
+          "correct": 24
+        },
+        "24-kalit": {
+          "total": 70,
+          "correct": 40
+        },
+        "26-blevota": {
+          "total": 50,
+          "correct": 38
+        },
+        "27-cistit": {
+          "total": 30,
+          "correct": 23
+        },
+        "29-tpank": {
+          "total": 70,
+          "correct": 45
+        },
+        "30-heart": {
+          "total": 70,
+          "correct": 44
+        },
+        "35-cron": {
+          "total": 72,
+          "correct": 41
+        },
+        "36-anrid": {
+          "total": 70,
+          "correct": 45
+        },
+        "37-bazal": {
+          "total": 70,
+          "correct": 41
+        },
+        "38-katarakta": {
+          "total": 30,
+          "correct": 22
+        },
+        "39-glaurova": {
+          "total": 69,
+          "correct": 47
+        },
+        "40-deficit": {
+          "total": 50,
+          "correct": 39
+        },
+        "45-botulizm": {
+          "total": 49,
+          "correct": 39
+        },
+        "46-yazva": {
+          "total": 85,
+          "correct": 53
+        },
+        "07-hron": {
+          "total": 71,
+          "correct": 56
+        },
+        "08-ask": {
+          "total": 30,
+          "correct": 29
+        },
+        "15-toxic": {
+          "total": 70,
+          "correct": 54
+        },
+        "25-shigez": {
+          "total": 70,
+          "correct": 56
+        },
+        "28-tanzilt": {
+          "total": 50,
+          "correct": 42
+        },
+        "31-hbs": {
+          "total": 43,
+          "correct": 34
+        },
+        "32-gemor": {
+          "total": 70,
+          "correct": 60
+        },
+        "41-destonia": {
+          "total": 69,
+          "correct": 61
+        },
+        "42-skvoz": {
+          "total": 50,
+          "correct": 33
+        },
+        "06-co-toksic": {
+          "total": 70,
+          "correct": 60
+        },
+        "11-mening": {
+          "total": 70,
+          "correct": 63
+        },
+        "14-sarkoidoz": {
+          "total": 80,
+          "correct": 69
+        },
+        "17-gepatit": {
+          "total": 70,
+          "correct": 61
+        },
+        "19-gepatitc": {
+          "total": 50,
+          "correct": 42
+        },
+        "23-nimana": {
+          "total": 70,
+          "correct": 59
+        },
+        "33-aorta": {
+          "total": 70,
+          "correct": 58
+        },
+        "43-anomali": {
+          "total": 30,
+          "correct": 25
+        },
+        "44-girshprunga": {
+          "total": 30,
+          "correct": 21
+        },
+        "48-pereferi": {
+          "total": 50,
+          "correct": 46
+        },
+        "49-central-ceroz": {
+          "total": 30,
+          "correct": 25
+        },
+        "50-dr-gepatit": {
+          "total": 70,
+          "correct": 59
+        },
+        "51-travma": {
+          "total": 113,
+          "correct": 46
+        },
+        "52-infection": {
+          "total": 69,
+          "correct": 46
+        }
+      },
+      "exactAccuracy": 0.7442098092643051,
+      "macroAccuracyByPdf": 0.7548880655633585,
+      "single": {
+        "total": 1945,
+        "correct": 1626
+      },
+      "multi": {
+        "total": 991,
+        "correct": 559
+      },
+      "multiErrors": {
+        "underSelected": 168,
+        "overSelected": 122,
+        "rightCountWrongMember": 142
+      }
+    },
+    "comparison": {
+      "fixed": [
+        "03-chadlv#45",
+        "09-covid#14",
+        "20-hron#23",
+        "45-botulizm#44",
+        "45-botulizm#46",
+        "46-yazva#57",
+        "07-hron#29",
+        "25-shigez#31",
+        "25-shigez#37",
+        "25-shigez#38",
+        "25-shigez#61",
+        "32-gemor#10",
+        "32-gemor#51",
+        "41-destonia#8",
+        "42-skvoz#9",
+        "11-mening#32",
+        "49-central-ceroz#21"
+      ],
+      "regressed": [
+        "14-sarkoidoz#33",
+        "14-sarkoidoz#35",
+        "14-sarkoidoz#36"
+      ],
+      "wrongToWrong": [
+        "25-shigez#55"
+      ],
+      "selectedSetChanges": 21,
+      "multiSetChanges": 0
+    }
+  },
+  "restoredDefault": {
+    "iteration": 175,
+    "note": "Both new scoring flags disabled. Fresh evaluation is identical to baseline for every selected-id order, raw/calibrated score, confidence, label, and correctness value.",
+    "provenance": {
+      "runtimeSourceFingerprint": "2065251f5544ea1680c5c50e127aa62755d545d8345c278fe251866e12d65a2f",
+      "datasetManifestVersion": 8,
+      "datasetPdfFingerprint": "7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2",
+      "datasetCaseFingerprint": "d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c",
+      "nodeVersion": "v22.23.2",
+      "pdfjsVersion": "5.7.284",
+      "resolvedConfig": {
+        "nativePdfStructure": false,
+        "contrastiveOptionFamily": false,
+        "multiRelativeThreshold": 0.84,
+        "multiAbsoluteThreshold": 12,
+        "multiGapThreshold": 0.72,
+        "multiMinAnswers": 2,
+        "multiThirdGapThreshold": 0.45,
+        "multiThirdRelativeThreshold": 0.55,
+        "frozenFeatureRanker": true,
+        "multiCardinalityModel": true,
+        "multiAllOptionsGuard": true,
+        "multiCrowdedTailGuard": true,
+        "pairwiseContrastRanker": true,
+        "structuralClusterAdjustments": true,
+        "singleSpecificityTieBreak": true,
+        "singleTieMaxRawGap": 0.2,
+        "singleTieMinRawRatio": 0.94,
+        "singleTieSpecificityGap": 0.5,
+        "sharedMultiSegmentBoost": true,
+        "countRelationBoost": true,
+        "optionFamilyComparatorGuard": true,
+        "optionFamilyCompactComboGuard": true,
+        "relationTupleResolver": true,
+        "intervalRelationTupleResolver": true,
+        "clauseLocalCountTupleResolver": true,
+        "negationPairClauseResolver": false,
+        "documentTokenRepair": true,
+        "documentTokenRepairMinFrequency": 2,
+        "documentTokenRepairStructuralOnly": true,
+        "explicitOrdinalRangeSetDecoder": true,
+        "siblingListMultiResolver": true,
+        "siblingListSingleResolver": true,
+        "hierarchicalListResolver": true,
+        "recommendationPropositionResolver": true,
+        "topQuestionChunks": 28,
+        "evidenceLimit": 8,
+        "includeSources": false
+      }
+    },
+    "splits": {
+      "train": {
+        "total": 1541,
+        "correct": 1074,
+        "exactAccuracy": 0.697,
+        "macroAccuracyByPdf": 0.703,
+        "changedBehavior": 0,
+        "errorBuckets": {
+          "confused_with_distractor": 285,
+          "multi_cardinality": 182
+        }
+      },
+      "dev": {
+        "total": 523,
+        "correct": 416,
+        "exactAccuracy": 0.7954,
+        "macroAccuracyByPdf": 0.8027,
+        "changedBehavior": 0,
+        "noEvidence": 0,
+        "errorBuckets": {
+          "confused_with_distractor": 79,
+          "multi_cardinality": 28
+        }
+      },
+      "holdout": {
+        "total": 540,
+        "correct": 460,
+        "exactAccuracy": 0.8519,
+        "macroAccuracyByPdf": 0.8399,
+        "changedBehavior": 0,
+        "noEvidence": 0,
+        "errorBuckets": {
+          "confused_with_distractor": 47,
+          "multi_cardinality": 33
+        }
+      },
+      "external": {
+        "total": 332,
+        "correct": 221,
+        "exactAccuracy": 0.6657,
+        "macroAccuracyByPdf": 0.7273,
+        "changedBehavior": 0,
+        "noEvidence": 0,
+        "errorBuckets": {
+          "confused_with_distractor": 64,
+          "multi_cardinality": 47
+        }
+      }
+    },
+    "total": {
+      "total": 2936,
+      "correct": 2171,
+      "exactAccuracy": 0.739441416893733,
+      "changedBehavior": 0
+    }
+  }
+}

@@ -22,3 +22,25 @@
 
 - `optionFamilyComparatorAdjustment(...)`;
 - `optionFamilyCompactComboAdjustment(...)`.
+
+## Contrastive constraints
+
+Experimental and disabled by default: the frozen candidate raised dev/train
+accuracy but regressed holdout, so it was rejected. Bounded co-occurrence still
+does not establish ownership across multiple condition/value pairs or combined
+categories. See `docs/iteration-log.md`, iterations 166–175.
+
+The `contrastive.ts` resolver is exposed through this feature's `index.ts`.
+`contrastiveOptionFamily` controls its single-answer adjustment. It requires
+joint support for option numbers, units, changing lexical attributes, question
+conditions, and comparison direction. Shared numeric attributes still constrain
+the proof. Unsupported source negation, ambiguous competing clauses, and
+incomplete variable slots cause abstention. Strict and inclusive bounds differ.
+Uppercase identifiers in mixed-case questions must appear in the same source
+fragment; units, Roman ordinals, and fully uppercase questions are not treated
+as lists of such identifiers.
+
+The fixed adjustment is 3.6; global selector thresholds and multi-answer
+cardinality are unchanged. Synthetic tests use nonmedical descriptions and
+check polarity, units, signed values, full attribute binding, and answer-order
+invariance. All corpus labels remain in development tooling.

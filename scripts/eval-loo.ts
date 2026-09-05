@@ -16,6 +16,7 @@ type GroupReport = {
     exactAccuracy: number;
     total: number;
     correct: number;
+    provenance?: Record<string, unknown>;
   };
   records: EvalRecord[];
   errors: Array<{bucket: string}>;
@@ -165,6 +166,12 @@ async function main(): Promise<void> {
     reports.push({group, report});
   }
 
+  const provenance = reports[0]?.report.summary.provenance;
+  if (reports.some(({report}) => !report.summary.provenance ||
+      JSON.stringify(report.summary.provenance) !== JSON.stringify(provenance))) {
+    throw new Error("PDF group reports have missing or inconsistent source/config/data provenance; rerun without changing the inputs.");
+  }
+
   const records = reports.flatMap(({report}) => report.records);
   const singles = records.filter((record) => record.mode === "single");
   const multis = records.filter((record) => record.mode === "multi");
@@ -201,6 +208,7 @@ async function main(): Promise<void> {
     maxAccuracyByPdf: round4(accuracies.length ? Math.max(...accuracies) : 0),
     config,
     reportTag,
+    provenance,
     errorBuckets: Object.fromEntries([...errorBuckets.entries()].sort((left, right) => right[1] - left[1])),
     perPdf,
   };
