@@ -1,0 +1,234 @@
+{
+  "date": "2026-10-01",
+  "iterations": [
+    176,
+    177,
+    178,
+    179,
+    180
+  ],
+  "accepted": true,
+  "note": "Only complete numeric-token lookup is retained if every split passes the predeclared rule. Historical holdout and external are observed regression sets. Broad parser revisions 178/179 were rejected on dev/train, without transfer review. Iteration 177 and the initial 180 preflight jobs were canceled for invented syntax counterexamples; partial reports are excluded.",
+  "validation": {
+    "syntheticScenarios": 16,
+    "focusedChecks": 80,
+    "fullPassedTests": 841,
+    "corpusFixturesSkipped": 2984,
+    "typecheck": true,
+    "builds": [
+      "Node ESM",
+      "browser IIFE",
+      "browser ESM"
+    ]
+  },
+  "rejected": [
+    {
+      "iteration": 178,
+      "splits": {
+        "dev": {
+          "correct": 416,
+          "total": 523,
+          "exactAccuracy": 0.7954
+        },
+        "train": {
+          "correct": 1073,
+          "total": 1541,
+          "exactAccuracy": 0.6963
+        }
+      },
+      "runtimeSourceFingerprint": "7ac5d3c200ec5b77ea5224af6f26f1fff5d704fe64fe936cf11bc94ad9446b0c",
+      "transferEvaluated": false
+    },
+    {
+      "iteration": 179,
+      "splits": {
+        "dev": {
+          "correct": 415,
+          "total": 523,
+          "exactAccuracy": 0.7935
+        },
+        "train": {
+          "correct": 1073,
+          "total": 1541,
+          "exactAccuracy": 0.6963
+        }
+      },
+      "runtimeSourceFingerprint": "9e61eda79149d79d4e02da0740432df9e0be8bcd1166caf96efb7bd60b32876a",
+      "transferEvaluated": false
+    }
+  ],
+  "provenance": {
+    "runtimeSourceFingerprint": "022fa533610332bc14cec0543d98034e198289ae2573476262e13fc52638c9fb",
+    "datasetManifestVersion": 8,
+    "datasetPdfFingerprint": "7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2",
+    "datasetCaseFingerprint": "d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c",
+    "nodeVersion": "v22.23.2",
+    "pdfjsVersion": "5.7.284",
+    "resolvedConfig": {
+      "nativePdfStructure": false,
+      "contrastiveOptionFamily": false,
+      "multiRelativeThreshold": 0.84,
+      "multiAbsoluteThreshold": 12,
+      "multiGapThreshold": 0.72,
+      "multiMinAnswers": 2,
+      "multiThirdGapThreshold": 0.45,
+      "multiThirdRelativeThreshold": 0.55,
+      "frozenFeatureRanker": true,
+      "multiCardinalityModel": true,
+      "multiAllOptionsGuard": true,
+      "multiCrowdedTailGuard": true,
+      "pairwiseContrastRanker": true,
+      "structuralClusterAdjustments": true,
+      "singleSpecificityTieBreak": true,
+      "singleTieMaxRawGap": 0.2,
+      "singleTieMinRawRatio": 0.94,
+      "singleTieSpecificityGap": 0.5,
+      "sharedMultiSegmentBoost": true,
+      "countRelationBoost": true,
+      "optionFamilyComparatorGuard": true,
+      "optionFamilyCompactComboGuard": true,
+      "relationTupleResolver": true,
+      "intervalRelationTupleResolver": true,
+      "clauseLocalCountTupleResolver": true,
+      "negationPairClauseResolver": false,
+      "documentTokenRepair": true,
+      "documentTokenRepairMinFrequency": 2,
+      "documentTokenRepairStructuralOnly": true,
+      "explicitOrdinalRangeSetDecoder": true,
+      "siblingListMultiResolver": true,
+      "siblingListSingleResolver": true,
+      "hierarchicalListResolver": true,
+      "recommendationPropositionResolver": true,
+      "topQuestionChunks": 28,
+      "evidenceLimit": 8,
+      "includeSources": false
+    }
+  },
+  "splits": {
+    "train": {
+      "baselineCorrect": 1074,
+      "correct": 1074,
+      "total": 1541,
+      "exactAccuracy": 0.697,
+      "macroAccuracyByPdf": 0.703,
+      "errorBuckets": {
+        "confused_with_distractor": 285,
+        "multi_cardinality": 182
+      },
+      "fixed": 0,
+      "regressed": 0,
+      "changed": {
+        "selected": 0,
+        "rawScores": 0,
+        "scores": 0,
+        "confidence": 0,
+        "correct": 0
+      },
+      "modes": {
+        "single": {
+          "correct": 793,
+          "total": 1001
+        },
+        "multi": {
+          "correct": 281,
+          "total": 540
+        }
+      }
+    },
+    "dev": {
+      "baselineCorrect": 416,
+      "correct": 416,
+      "total": 523,
+      "exactAccuracy": 0.7954,
+      "macroAccuracyByPdf": 0.8027,
+      "errorBuckets": {
+        "confused_with_distractor": 79,
+        "multi_cardinality": 28
+      },
+      "fixed": 0,
+      "regressed": 0,
+      "changed": {
+        "selected": 0,
+        "rawScores": 0,
+        "scores": 0,
+        "confidence": 0,
+        "correct": 0
+      },
+      "modes": {
+        "single": {
+          "correct": 308,
+          "total": 367
+        },
+        "multi": {
+          "correct": 108,
+          "total": 156
+        }
+      }
+    },
+    "holdout": {
+      "baselineCorrect": 460,
+      "correct": 460,
+      "total": 540,
+      "exactAccuracy": 0.8519,
+      "macroAccuracyByPdf": 0.8399,
+      "errorBuckets": {
+        "confused_with_distractor": 47,
+        "multi_cardinality": 33
+      },
+      "fixed": 0,
+      "regressed": 0,
+      "changed": {
+        "selected": 0,
+        "rawScores": 0,
+        "scores": 0,
+        "confidence": 0,
+        "correct": 0
+      },
+      "modes": {
+        "single": {
+          "correct": 348,
+          "total": 386
+        },
+        "multi": {
+          "correct": 112,
+          "total": 154
+        }
+      }
+    },
+    "external": {
+      "baselineCorrect": 221,
+      "correct": 221,
+      "total": 332,
+      "exactAccuracy": 0.6657,
+      "macroAccuracyByPdf": 0.7273,
+      "errorBuckets": {
+        "confused_with_distractor": 64,
+        "multi_cardinality": 47
+      },
+      "fixed": 0,
+      "regressed": 0,
+      "changed": {
+        "selected": 0,
+        "rawScores": 0,
+        "scores": 0,
+        "confidence": 0,
+        "correct": 0
+      },
+      "modes": {
+        "single": {
+          "correct": 163,
+          "total": 191
+        },
+        "multi": {
+          "correct": 58,
+          "total": 141
+        }
+      }
+    }
+  },
+  "total": {
+    "total": 2936,
+    "correct": 2171,
+    "exactAccuracy": 0.739441416893733
+  }
+}

@@ -456,3 +456,73 @@ are disabled in the restored default. The experiment demonstrates a remaining
 gap between local attribute matching and actual condition/value ownership; a
 combined-category example can also be broader than the exact category requested.
 No transfer-specific exclusion or score correction was added after this result.
+
+## October comparator parsing review, iterations 176–178
+
+The active comparator guard uses different grammars for an answer and its source.
+This is a representation defect worth testing before another broad scorer or
+weight search: spacing, Cyrillic boundaries and complete numeric-token identity
+should not depend on which side of the evidence comparison supplies the text.
+The hypothesis and retention rule are recorded before candidate evaluation in
+`iteration-log.md`.
+
+The replacement parser reads raw Unicode text, keeping code adjacency, decimal
+signs and comparison operators intact. It handles symbolic and common Russian
+verbal bounds with one grammar. Negated comparators are inclusive bounds with
+the reversed direction; opposing inclusive bounds share an endpoint and cannot
+prove a contradiction. A percent-marked value keeps its percent notation.
+
+The initial candidate fixed 13 independent synthetic failures but introduced a
+floating-point identity defect. A second review supplied two new counterexamples
+with distinct large integers and long decimals. Exact decimal-string
+canonicalization fixes these without choosing a precision threshold from the
+corpus. The final 29 invented scenarios include equivalent decimal spellings,
+signed zero, ambiguous evidence, ranges, codes, fractions, and id/order invariance.
+
+This remains a local contradiction guard, not a numerical entailment engine or
+a proof of condition ownership. It does not infer a bound from two separated
+range endpoints, parse attached letter units as scalar tokens, or compensate for
+missing context by widening evidence. No library, training data, medical fact,
+or external inference service is added. Aggregate results and acceptance are
+recorded separately after the frozen-source evaluation finishes.
+
+Iteration 178 is rejected before transfer reporting: dev is fully zero-delta,
+but train loses one exact multi set (`1073/1541`). Correct parsing makes a
+previously inactive comparison visible, while the guard itself does not verify
+that the alternatives form one numeric family. A penalty can also change a
+multi-answer cutoff and admit a different extra option.
+
+Iteration 179 tests the missing precondition rather than changing a weight.
+Every option must have one bound and an identical normalized non-bound
+signature. Only that explicit bound is removed: units, measurement words and
+other numbers remain. A heterogeneous list cannot qualify through an opposing
+pair alone. Four additional invented counterexamples fail the unscoped guard;
+these and an allowed shared-unit example bring the final syntax scenarios to
+34. All 101 focused checks and 862 full unit/contract tests pass before final
+candidate reporting. Neither transfer labels nor medical facts inform the rule.
+
+Iteration 179 also fails retention: dev `415/523`, train `1073/1541`. Its exact
+source and tests are archived as inactive text artifacts; production is restored
+before the next change. This shows that a broader syntax repair and a stricter
+family definition cannot simply replace a score heuristic without checking the
+whole decision pipeline.
+
+Iteration 180 therefore tests one smaller representation repair. Existing source
+cue interpretation is applied only to a complete numeric token; it cannot match
+the answer's digits inside another decimal, range, fraction, grouped integer or
+code. Power/product boundaries are kept before search normalization. No new
+answer grammar or adjustment weight is introduced. The overlapping intervals
+`>50` and `<50.5` provide a direct correctness counterexample. Sixteen focused
+scenarios pass, and complete dev/train are zero-delta on 2,064 keyed records.
+The final transfer gate determines retention; no corpus accuracy gain is claimed
+from the syntax checks alone.
+
+The final complete-token correction passes every split and is fully zero-delta
+on all 2,936 keyed records. Holdout stays `460/540` and external `221/332`; the
+accepted source fingerprint is
+`022fa533610332bc14cec0543d98034e198289ae2573476262e13fc52638c9fb`.
+It closes demonstrated numeric-identity failures without a measured accuracy
+gain. Larger gains still require evidence that the requested value belongs to
+the requested condition, and complete multi membership, rather than a wider
+comparator grammar alone. The failures in this round do not establish a
+non-LLM algorithmic ceiling.

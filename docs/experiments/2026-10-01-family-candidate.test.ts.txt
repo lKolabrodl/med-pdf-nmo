@@ -1,0 +1,180 @@
+import {describe, expect, it} from "vitest";
+import {defineScorerFunctionContract} from "../../../../__test__/scorer-test-support.js";
+import {optionFamilyComparatorAdjustment} from "./index.js";
+
+defineScorerFunctionContract(import.meta.url, {
+  "contrastive.ts": [
+    "hasUnsupportedSourceNegation",
+    "cachedContrastiveSources",
+    "canonicalScalarNumber",
+    "canonicalContrastiveNumber",
+    "unsignedContrastiveNumbers",
+    "readContrastiveUnitAtom",
+    "contrastiveUnitAfter",
+    "contrastiveQuantities",
+    "canonicalContrastiveNumbers",
+    "questionHasFixedMeasurementAnchor",
+    "embeddedNumberLabel",
+    "sourceMatchesEmbeddedNumberLabel",
+    "contrastiveComparatorDirections",
+    "contrastiveComparatorDirection",
+    "contrastiveTokenSequence",
+    "questionShortCondition",
+    "sourceMatchesQuestionCondition",
+    "negatedFocusTargets",
+    "sourceMatchesNegatedFocus",
+    "sourceMatchesQuestionModality",
+    "questionRequiresExclusion",
+    "questionResponseObjectAnchors",
+    "sourceMatchesQuestionResponseObject",
+    "contrastiveSeverityClasses",
+    "contrastiveSeverityClass",
+    "sourceMatchesQuestionSeverity",
+    "contrastiveMagnitudeClass",
+    "sourceMatchesQuestionMagnitude",
+    "contrastiveUnitClasses",
+    "requiredContrastiveUnits",
+    "contrastiveUnitSignatures",
+    "requiredContrastiveNumericUnit",
+    "sourceMatchesContrastiveUnits",
+    "contrastivePopulationClasses",
+    "sourceMatchesQuestionPopulation",
+    "questionCompoundConditions",
+    "questionContrastiveConditions",
+    "sourceMatchesQuestionConditions",
+    "questionMeasurementSubjectAnchors",
+    "sourceMatchesQuestionMeasurementSubject",
+    "questionAlphanumericAnchors",
+    "sourceMatchesQuestionAlphanumericAnchors",
+    "questionStructuralOrdinal",
+    "sourceMatchesQuestionOrdinal",
+    "sourceMatchesQuestionCount",
+    "buildContrastiveFamily",
+    "profileMatchesSource",
+    "scoreContrastiveFragment",
+    "resolveContrastiveOptionFamily",
+    "contrastiveCacheKey",
+    "contrastiveOptionFamilyAdjustment",
+  ],
+  "index.ts": [
+    "answerComparatorSpecs",
+    "canonicalComparatorNumber",
+    "comparatorSpecs",
+    "opposite",
+    "comparatorBoundsContradict",
+    "answerFamilyHasOppositeComparator",
+    "sourceComparatorSpecs",
+    "optionFamilyComparatorAdjustment",
+    "compactComboPhrases",
+    "validCompactComboPhrase",
+    "comboQuestion",
+    "alternativeComboTokens",
+    "evidenceHasCompactTokenPair",
+    "optionFamilyCompactComboAdjustment",
+  ],
+});
+
+describe("optionFamilyComparatorAdjustment", () => {
+  it("penalizes the opposite comparator within the same numeric family", () => {
+    const answer = {id: "A", text: "<50%"};
+    const result = optionFamilyComparatorAdjustment({
+      answer,
+      answers: [answer, {id: "B", text: ">50%"}],
+      evidence: [
+        {
+          answerId: answer.id,
+          page: 1,
+          text: "Порог показателя >50%.",
+          score: 10,
+          kind: "answer_window",
+        },
+      ],
+    });
+
+    expect(result.adjustment).toBeLessThan(0);
+    expect(result.evidence?.kind).toBe("option_family_comparator_mismatch");
+  });
+
+  it.each([
+    ["spaced signs", "< 50%", "> 50%", "Порог показателя > 50%."],
+    ["verbal bounds", "менее 50", "более 50", "Порог показателя более 50."],
+    ["negated upper bound", ">50", "не более 50", "Порог показателя не более 50."],
+    ["negated lower bound", "<50", "не менее 50", "Порог показателя не менее 50."],
+    ["inclusive symbol", "<50", "≥50", "Порог показателя ≥50."],
+    ["verbal comparison with чем", "менее чем 7,5", "более чем 7.5", "Порог больше чем 7,5."],
+    ["signed decimal", "> -5.5", "< -5.5", "Порог < -5,5."],
+    ["grouped integer", "<9 500", ">9500", "Порог >9 500."],
+    ["upper bound до", "до 50", ">50", "Порог >50."],
+    ["relative age words", "старше 50", "моложе 50", "Возраст моложе 50."],
+    ["suffix lower bound", "<50", "≥50", "Порог 50 и более."],
+    ["equivalent decimal notation", "< +0008.2500", ">8,25", "Порог >+0008.2500."],
+    ["equivalent signed zero", "< -0.00", ">+0", "Порог >0.0."],
+    ["same measurement and unit", "Скорость более 50 м/с", "Скорость менее 50 м/с", "Скорость менее 50 м/с."],
+  ])("recognizes %s without changing the scoring weight", (_name, answerText, otherText, source) => {
+    const answer = {id: "left", text: answerText};
+    const result = optionFamilyComparatorAdjustment({
+      answer,
+      answers: [answer, {id: "right", text: otherText}],
+      evidence: [{page: 3, text: source, score: 10, kind: "answer_window"}],
+    });
+
+    expect(result.adjustment).toBe(-4.2);
+    expect(result.evidence?.kind).toBe("option_family_comparator_mismatch");
+  });
+
+  it.each([
+    ["integer substring", "<50", ">50", "Порог более 150."],
+    ["decimal substring", "<50", ">50", "Порог >50.5."],
+    ["range endpoint", "<50", ">50", "Порог более 50–60."],
+    ["code suffix", "<50", ">50", "Порог более R50."],
+    ["fraction component", "<50", ">50", "Порог более 50/60."],
+    ["opposite numeric sign", "<50", ">50", "Порог более -50."],
+    ["distinct integers beyond floating point precision", "<9007199254740992", ">9007199254740992", "Порог >9007199254740993."],
+    ["distinct long decimals", "<0.1234567891234567801", ">0.1234567891234567801", "Порог >0.1234567891234567802."],
+    ["same direction", "<50", ">50", "Порог менее 50."],
+    ["negated comparator is compatible", "<50", ">50", "Порог не более 50."],
+    ["inclusive bounds overlap", "≤50", "≥50", "Порог ≥50."],
+    ["ambiguous evidence", "<50", ">50", "Первый порог <50, второй >50."],
+    ["multiple constraints", "<50 и >20", ">50", "Порог >50."],
+    ["different percentage notation", "<50%", ">50%", "Порог >50."],
+    ["negation outside the supported grammar", "<50", ">50", "Порог не только более 50."],
+    ["different measurement", "Скорость более 50", "Температура менее 50", "Порог <50."],
+    ["different unit", "более 50 кг", "менее 50 м", "Порог <50."],
+    ["different non-bound numeric condition", "При 20 более 50%", "При 30 менее 50%", "Порог <50%."],
+  ])("abstains for %s", (_name, answerText, otherText, source) => {
+    const answer = {id: "left", text: answerText};
+    const result = optionFamilyComparatorAdjustment({
+      answer,
+      answers: [answer, {id: "right", text: otherText}],
+      evidence: [{page: 3, text: source, score: 10, kind: "answer_window"}],
+    });
+
+    expect(result).toEqual({adjustment: 0, evidence: null});
+  });
+
+  it("depends on numeric text rather than option ids or their order", () => {
+    const answers = [{id: "first", text: "менее 8,25"}, {id: "second", text: "более 8.25"}];
+    const renamed = answers.map((answer, index) => ({...answer, id: `renamed-${index}`})).reverse();
+    const evidence = [{page: 7, text: "Порог больше 8.25.", score: 10, kind: "answer_window"}];
+    const original = optionFamilyComparatorAdjustment({answer: answers[0], answers, evidence});
+    const reordered = optionFamilyComparatorAdjustment({answer: renamed[1], answers: renamed, evidence});
+
+    expect(original.adjustment).toBe(-4.2);
+    expect(reordered.adjustment).toBe(original.adjustment);
+    expect(reordered.evidence?.kind).toBe(original.evidence?.kind);
+  });
+
+  it("does not treat an opposing pair inside a heterogeneous list as a dense numeric family", () => {
+    const answers = [
+      {id: "first", text: "<50%"},
+      {id: "second", text: ">50%"},
+      {id: "third", text: "Скорость более 10 м/с"},
+    ];
+    const result = optionFamilyComparatorAdjustment({
+      answer: answers[0], answers,
+      evidence: [{page: 2, text: "Порог >50%.", score: 10, kind: "answer_window"}],
+    });
+
+    expect(result).toEqual({adjustment: 0, evidence: null});
+  });
+});

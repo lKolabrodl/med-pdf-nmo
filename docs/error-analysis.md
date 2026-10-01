@@ -1,5 +1,36 @@
 # Error Analysis
 
+## October 2026 comparator experiments
+
+The audit finds an independent source representation failure: a substring search
+can manufacture an exact-bound contradiction from a decimal, range, fraction,
+or grouped integer. For example, `>50` overlaps `<50.5`, but reading the latter
+as `<50` falsely makes the intervals disjoint. Invented nonmedical checks isolate
+this without consulting corpus labels.
+
+A broad grammar repair fixes many syntax failures but train drops from
+`1074/1541` to `1073/1541` by adding an extra multi option. An additive penalty
+can move a global multi cutoff; improving one local comparison is not enough to
+improve the whole selected set. Requiring shared non-bound text restores the
+multi exact count, but loses one single answer on each of dev and train.
+Both broad candidates are rejected before transfer review.
+
+Iteration 180 retains the original grammar and tests only complete source-token
+identity. Sixteen invented scenarios cover partial matches, overlapping bounds,
+mathematical expressions, valid full bounds, and id/order invariance. Its fresh
+dev result is zero-delta (`416/523`), including every score and confidence value.
+Final train/transfer acceptance is recorded in the iteration log and archived
+report; this audit alone does not establish an accuracy gain or an algorithmic
+ceiling. Unresolved condition ownership and multi-set membership remain the
+larger error classes documented below.
+
+Final iteration 180 is accepted with fresh train `1074/1541`, holdout `460/540`
+and external `221/332`. All 2,936 predictions, scores, confidence values and
+labels match baseline. Consequently the 765 corpus errors and their categories
+are unchanged. The fixed numeric-token defect is demonstrated on independent
+syntax examples; neither the rejected aggregate losses nor these examples are
+presented as a corpus gain. No transfer-derived follow-up rule is added.
+
 ## September analysis, iterations 166–175
 
 Iteration 175 freshly restores these baseline counts on the expanded canonical

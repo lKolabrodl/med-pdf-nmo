@@ -421,3 +421,61 @@ default results are:
 
 The holdout command remains an executable acceptance gate and exits non-zero
 below `0.80`.
+
+## October 2026 exact-bound parser protocol
+
+Iteration 176 freshly reproduces dev `416/523` from accepted runtime fingerprint
+`2065251f5544ea1680c5c50e127aa62755d545d8345c278fe251866e12d65a2f`.
+The iteration-175 train/holdout/external reports provide same-corpus baselines
+of `1074/1541`, `460/540`, and `221/332`. The manifest, PDFs, cases, expected
+sets, and split assignments are unchanged.
+
+The development sequence uses invented syntax counterexamples before corpus
+evaluation. The first replacement parser is rejected for two new floating-point
+identity failures; its canceled dev/train jobs are not aggregate results. The
+exact-string parser then passes all 29 syntax scenarios and 857 total unit and
+contract tests. Dev and train are evaluated through isolated PDF processes,
+with all group provenance required to match. No per-fold fitting occurs.
+
+Retention is declared in iteration 177 before its candidate eval: no decrease
+in exact dev or train count, the holdout acceptance command must pass, and no
+decrease in either holdout or external exact count. A zero-delta fix may be
+retained for demonstrated parsing correctness, without reporting an accuracy
+gain. Only a frozen candidate can reach transfer reporting; the historical
+holdout and external sets remain observed regression sets. Transfer errors
+cannot be used to select case-specific repairs.
+
+Frozen iteration-178 runtime fingerprint:
+`7ac5d3c200ec5b77ea5224af6f26f1fff5d704fe64fe936cf11bc94ad9446b0c`.
+Use tagged reports so canceled and final revisions cannot be mixed. Selection
+sets, raw/calibrated scores, confidence, labels, and dataset provenance are
+compared against their accepted counterparts. Final results will be archived in
+`docs/experiments/2026-10-01-results.json` when the complete gate finishes.
+
+Iterations 178 and 179 fail the dev/train criterion and receive no transfer
+evaluation. The retained candidate under consideration is instead iteration
+180: complete source numeric-token lookup with the original answer grammar,
+cue rules and scoring weights. Its dev report is fully zero-delta on all 523
+records. Source fingerprint:
+`022fa533610332bc14cec0543d98034e198289ae2573476262e13fc52638c9fb`.
+Final reports use `r180-final-token`; canceled `r180-token` jobs are excluded.
+The frozen dev/train candidate must pass the same transfer gate. The rejected
+parser's archived text files are development artifacts and are not runtime
+dependencies or active tests.
+
+Final iteration 180 passes retention with fresh exact counts:
+
+| split | exact |
+| --- | ---: |
+| train | `1074/1541 = 0.6970` |
+| dev | `416/523 = 0.7954` |
+| holdout regression | `460/540 = 0.8519` |
+| external transfer | `221/332 = 0.6657` |
+| all keyed | `2171/2936 = 0.7394` |
+
+The holdout command exits zero. Strict all-record comparison confirms identical
+selected-id order, raw/calibrated scores, confidence, correctness and labels
+against accepted iteration 175. The source lookup is retained for demonstrated
+parsing correctness; it yields no corpus accuracy gain. Full tests pass (`841`),
+including the 16 added scenarios, typecheck and all three builds pass. Final
+and rejected summaries are archived in `docs/experiments/2026-10-01-results.json`.

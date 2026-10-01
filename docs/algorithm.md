@@ -402,3 +402,32 @@ answer, raw/calibrated score, and confidence value. The restored default reaches
 `2171/2936 = 0.7394` overall and `460/540 = 0.8519` on the historical holdout.
 The larger corpus now includes an additional external PDF, so this overall
 fraction should not be compared directly with the earlier 2,867-case denominator.
+
+## October complete numeric-token guard
+
+The focused iteration-180 correction changes only source lookup inside
+`optionFamilyComparatorAdjustment`. The lookup consumes complete decimal,
+signed, percent, grouped-integer and range tokens before checking existing local
+comparison cues. It cannot retrieve an answer's digits from a different decimal,
+range endpoint, identifier or fraction component. Numeric power/product
+boundaries are preserved before search normalization, which otherwise deletes
+some mathematical symbols.
+
+Matching uses strings; it neither rounds bounds through JavaScript `Number` nor
+infers arbitrary numerical entailment. In particular, `>50` and `<50.5` overlap,
+so the latter must not be treated as `<50`. Unsupported spelling/grammar forms
+abstain. Answer parsing, the `-4.2` adjustment, evidence thresholds, retrieval,
+and selection logic keep their original contracts.
+
+The broader shared grammar and dense-family rewrites are rejected in iterations
+178/179 because they reduce exact counts on dev/train. Their final source and
+tests are archived as text under `docs/experiments/2026-10-01-family-candidate*`.
+They are not imported by prediction. This source-lookup correction still does
+not establish condition ownership in a long fragment or complete multi-answer
+membership; those remain independent architecture limitations.
+
+The complete-token correction is accepted after fresh validation of all 2,936
+keyed records: predictions, scores and confidence are identical to baseline.
+Holdout remains `460/540`; corpus-wide exact remains `2171/2936`. The gain is
+limited to the demonstrated parser counterexamples, with no measured accuracy
+gain claimed on this corpus.

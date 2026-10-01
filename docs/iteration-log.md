@@ -1721,3 +1721,159 @@ canonical record against this baseline.
 
 † Iteration 174 uses the already completed dev/train results of the identical
 frozen iteration-173 source. It does not claim those were additional runs.
+
+## October 2026 comparator audit
+
+Iteration 176 reproduce baseline and isolate numeric parsing defects: COMPLETE.
+
+- Re-read repository instructions and the previous experiments. The accepted
+  runtime remains iteration 175; the native structure and contrastive prototypes
+  are still disabled. No dataset, label, split, or dependency is changed.
+- A fresh dev run (`r176-october-baseline`) reproduces `416/523 = 0.7954`.
+  Its runtime fingerprint matches the accepted September source. Train,
+  holdout, and external comparison baselines are the freshly verified
+  iteration-175 reports: `1074/1541`, `460/540`, and `221/332`.
+- Audit of the active option-family comparator guard finds asymmetric parsing:
+  answer signs require adjacent digits, Cyrillic cue boundaries use ASCII `\b`,
+  while source numbers are searched as substrings. A source `>50.5` therefore
+  incorrectly contradicts an option `<50` as if the bound were the same number.
+- Add 25 independent nonmedical scenarios before changing the runtime. They
+  cover spacing, Russian comparator grammar, negated bounds, signed decimals,
+  grouped integers, inclusive overlap, incomplete numeric matches, ranges,
+  identifiers, ambiguity, and option-id/order invariance. The original guard
+  fails 13 of these; the existing contract checks pass.
+
+Iteration 177 shared comparator parser: REJECTED ON SYNTHETIC REVIEW.
+
+- Hypothesis: a shared parser for answer/source bounds can correct these logical
+  failures without changing evidence thresholds or scoring weights.
+- The parser must preserve numeric sign, decimal precision, percent notation,
+  negated comparison direction, and inclusive/strict compatibility. It must
+  abstain on range endpoints, embedded codes, ambiguous source bounds, and
+  overlapping inclusive inequalities.
+- Before candidate evaluation, retention requires all synthetic checks and
+  no decrease in exact dev or train count. A frozen candidate must then pass
+  `npm run eval:holdout` and not decrease either holdout or external exact
+  count. The already inspected transfer sets are regression checks, not blind
+  evidence. A failure rejects the whole candidate, without tuning rules to
+  transfer errors. A zero-delta result can be retained as a demonstrated parser
+  correctness fix, with no claim of an accuracy gain.
+- Initial focused tests pass (`91/91` including function contracts), full tests
+  pass (`852`), typecheck and all three builds pass. Dev and train eval start.
+- Additional code review finds a new defect in the candidate: converting bounds
+  through JavaScript `Number` can merge distinct large integers or long decimals.
+  Two newly invented precision counterexamples fail; equivalent spellings and
+  signed-zero scenarios pass. No benchmark error is used to derive this repair.
+- Cancel the in-progress candidate evals before changing runtime source. Partial
+  group reports are not aggregate results and are not used to select rules.
+  No complete dev/train score or transfer score is claimed for iteration 177.
+
+Iteration 178 exact decimal identity without floating point: REJECTED ON TRAIN.
+
+- Canonicalize scalar bounds as decimal strings: remove grouping spaces,
+  normalize decimal commas, leading plus/zeros and insignificant trailing zeros;
+  retain every significant digit and the sign of nonzero values. This preserves
+  exact bound identity without a numerical tolerance or dataset-specific cutoff.
+- All 29 invented comparator scenarios pass, plus function contracts (`96/96`
+  focused checks). The iteration-177 retention criterion remains unchanged.
+- Rerun full dev and train using isolated PDF-group processes with frozen source.
+  This is fit-free group stability, not learned-model cross-validation. Transfer
+  results will only be inspected after candidate selection on dev/train.
+- Full dev is zero-delta on all 523 records: `416/523`, identical selections,
+  raw/calibrated scores, and confidence. Train is `1073/1541 = 0.6963` versus
+  `1074/1541`, with one multi-set regression and no fix. Five train records
+  change scores; four keep their selected set, one adds an extra option.
+- The predeclared train no-degradation criterion fails, so this complete
+  candidate is rejected without running or inspecting transfer results. The
+  parser alone does not repair the guard's missing family precondition: an
+  opposing bound pair can belong to different measurements or conditions.
+
+Iteration 179 require an actual shared numeric family: REJECTED ON DEV/TRAIN.
+
+- Hypothesis: the comparator guard is valid only when every option contains
+  one bound and all remaining text has the same normalized signature. Remove
+  only that bound expression when forming the signature; preserve units,
+  measurement words and every other numeric condition. Bound values may vary.
+- An opposing pair inside a heterogeneous list no longer qualifies. This is
+  the dense-family precondition claimed by the original guard's documentation,
+  not a medical fact, mode-specific exception or adjustment to the score weight.
+- Before editing the implementation, add five nonmedical scenarios: an allowed
+  shared measurement/unit and four abstention cases for changed measurements,
+  units, non-bound numeric conditions and an unrelated third option. Iteration
+  178 fails all four abstention cases. The revised guard passes all 34 invented
+  scenarios and all function contracts (`101/101` focused checks).
+- Repeat full dev and train with isolated groups. The earlier retention rule
+  remains: no split exact-count decrease and a passing holdout acceptance gate.
+- Full dev falls to `415/523 = 0.7935` (one single regression); train remains
+  below baseline at `1073/1541 = 0.6963` (single `792/1001`, multi `281/540`).
+  Source fingerprint is
+  `9e61eda79149d79d4e02da0740432df9e0be8bcd1166caf96efb7bd60b32876a`.
+  Full tests (`862`), typecheck and three builds pass, but the quality criterion
+  fails. No transfer result is requested or inspected for this revision.
+- Archive the exact rejected implementation and its tests under
+  `docs/experiments/2026-10-01-family-candidate*.ts.txt`, then restore the
+  production module from the accepted HEAD. The archive is not imported by
+  inference or collected by Vitest. A successful syntax test is not an accepted
+  predictor gain.
+
+Iteration 180 complete numeric-token lookup only: COMPLETE, ACCEPTED CORRECTNESS FIX.
+
+- Keep the original answer grammar, cue interpretation and scoring thresholds.
+  Replace only substring search in source evidence with complete token matching.
+  Signs, decimal tails, grouped integers and ranges are consumed as a whole;
+  identifier/fraction boundaries cannot supply the answer's scalar token.
+- Token identity uses strings, with no floating-point rounding or numeric
+  tolerance. Unsupported equivalent spellings abstain rather than broadening
+  the original guard's reach. No new clinical rule or family weight is added.
+- Add 13 nonmedical scenarios before the change. The original guard fails five
+  checks (decimal/range/fraction/grouped-prefix cases and the id/order invariant).
+  The fix passes all 77 focused tests, including existing function contracts.
+- Repeat dev and train before the final transfer gate. The original retention
+  criterion still applies; the rejected broad parser is not substituted back.
+- Extend the checks to powers, multiplication, and overlapping decimal bounds:
+  `>50` and `<50.5` can both hold, so a substring must not manufacture a
+  contradiction at `50`. There are now 16 focused nonmedical scenarios.
+- The power-expression preflight reveals that search normalization deletes `^`.
+  Cancel the prematurely started jobs before aggregate results, preserve numeric
+  power/product boundaries before normalization, and restart all groups with a
+  separate `r180-final-token` tag. Canceled reports are excluded. No benchmark
+  label or score prompts this correction; it is another invented expression.
+- Fresh final dev (`416/523`) and train (`1074/1541`) are fully zero-delta on
+  all 2,064 keyed cases: selected-id order, raw/calibrated scores and confidence
+  match baseline. All PDF-group reports have consistent provenance.
+- Full checks pass: `841` unit/contract tests, typecheck, Node ESM and both
+  browser builds. There are 80 focused module checks (16 added scenarios).
+- Freeze runtime fingerprint
+  `022fa533610332bc14cec0543d98034e198289ae2573476262e13fc52638c9fb`
+  before the holdout/external run. Neither transfer exact count may fall below
+  `460/540` or `221/332`. No further runtime edit is selected from those results.
+- Fresh holdout is `460/540 = 0.8519`; `npm run eval:holdout` exits zero.
+  Fresh external is `221/332 = 0.6657`. All four split reports share the frozen
+  source, dependency/config and unchanged dataset provenance. No runtime edit
+  follows transfer inspection.
+- Full 2,936-case comparison is zero-delta in selected-id order, raw/calibrated
+  scores, confidence, correctness and expected sets. Aggregate remains
+  `2171/2936 = 0.7394`, single `1612/1945`, multi exact `559/991`.
+- Retain only the complete-token source lookup and its 16 synthetic scenarios.
+  The expanded grammar and family definition remain rejected, archived as
+  inactive text. No LLM, new dependency, clinical fact, dataset label or split
+  exception is introduced. This is a demonstrated correctness fix with **no
+  measured corpus accuracy gain**, not evidence of improved blind accuracy.
+- Full results, source/config/data provenance and rejected revision scores are
+  saved in `docs/experiments/2026-10-01-results.json`.
+
+October round summary (counts are exact matches):
+
+| iteration | dev | train | holdout | external | decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 176 | 416/523 | 1074/1541* | 460/540* | 221/332* | reproduced baseline; synthetic defects isolated |
+| 177 | — | — | — | — | canceled for floating-point identity failures |
+| 178 | 416/523 | 1073/1541 | — | — | rejected: train multi regression |
+| 179 | 415/523 | 1073/1541 | — | — | rejected: dev/train single regressions |
+| 180 | 416/523 | 1074/1541 | 460/540 | 221/332 | accepted complete-token fix; all 2936 records zero-delta |
+
+* Iteration 176 uses iteration-175 train/transfer artifacts from the identical
+accepted source. Iteration 180 freshly verifies every canonical keyed record.
+Canceled partial reports are not aggregate scores and are not reused as final
+candidate reports. Historical holdout and external remain observed regression
+sets; a new PDF-group collection is required for a blind generalization claim.
