@@ -151,6 +151,7 @@ export function buildPdfStructure(items: PdfJsTextItem[], tree: PdfJsStructureNo
 type PdfJsDocument = {
   numPages: number;
   getPage(pageNumber: number): Promise<PdfJsPage>;
+  destroy?(): Promise<void>;
 };
 
 export type PdfJsModule = {
@@ -162,6 +163,7 @@ export type PdfJsModule = {
     verbosity: number;
   }): {
     promise: Promise<PdfJsDocument>;
+    destroy?(): Promise<void>;
   };
   VerbosityLevel?: {
     ERRORS?: number;
@@ -896,58 +898,71 @@ export async function extractPdfText(
     isEvalSupported: false,
     verbosity: pdfVerbosity(pdfjs, options),
   });
-  const pdf = await loadingTask.promise;
-  const pages: PdfPage[] = [];
+  let pdf: PdfJsDocument | undefined;
+  let extracted = false;
+  try {
+    pdf = await loadingTask.promise;
+    const pages: PdfPage[] = [];
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent({
-      disableCombineTextItems: false,
-      includeMarkedContent: Boolean(options.nativePdfStructure),
-    });
-    const structure = options.nativePdfStructure && page.getStructTree
-      ? buildPdfStructure(content.items, await page.getStructTree())
-      : undefined;
-    const lineObjects = stripLikelyBoilerplate(groupItemsIntoLineObjects(content.items));
-    const lines = lineObjects.map((line) => line.text);
-    const blocks = buildPageBlocks(lines);
-    const text = buildPageText(lines);
-    pages.push({
-      page: pageNumber,
-      text,
-      lines,
-      blocks,
-      lineItems: lineObjects,
-      normalized: normalizeForSearch(text),
-      charLength: text.length,
-      ...(structure !== undefined ? {structure} : {}),
-    });
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent({
+        disableCombineTextItems: false,
+        includeMarkedContent: Boolean(options.nativePdfStructure),
+      });
+      const structure = options.nativePdfStructure && page.getStructTree
+        ? buildPdfStructure(content.items, await page.getStructTree())
+        : undefined;
+      const lineObjects = stripLikelyBoilerplate(groupItemsIntoLineObjects(content.items));
+      const lines = lineObjects.map((line) => line.text);
+      const blocks = buildPageBlocks(lines);
+      const text = buildPageText(lines);
+      pages.push({
+        page: pageNumber,
+        text,
+        lines,
+        blocks,
+        lineItems: lineObjects,
+        normalized: normalizeForSearch(text),
+        charLength: text.length,
+        ...(structure !== undefined ? {structure} : {}),
+      });
+    }
+
+    removeTableOfContents(pages);
+    removeFrontMatterAppendixList(pages);
+    removeBibliographySection(pages);
+    removeMetadataAppendices(pages, 1, 2);
+    const tokenRepairs = options.documentTokenRepair
+      ? repairDocumentSplitTokens(
+          pages,
+          options.documentTokenRepairMinFrequency,
+          options.documentTokenRepairStructuralOnly,
+        )
+      : [];
+    const abbreviations = extractAndCleanAbbreviationLists(pages);
+
+    const pageTextChars = pages.reduce((sum, page) => sum + page.text.length, 0);
+    extracted = true;
+    return {
+      pdfId: options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : "<browser-pdf>"),
+      cacheVersion: options.documentTokenRepair ? 3 : 2,
+      pageCount: pdf.numPages,
+      extractedAt: new Date().toISOString(),
+      pages,
+      abbreviations,
+      tokenRepairs,
+      ocrNeeded: pageTextChars < Math.max(1000, pdf.numPages * 100),
+    };
+  } finally {
+    try {
+      if (loadingTask.destroy) await loadingTask.destroy();
+      else await pdf?.destroy?.();
+    } catch (error) {
+      // Preserve the original extraction error if cleanup also fails.
+      if (extracted) throw error;
+    }
   }
-
-  removeTableOfContents(pages);
-  removeFrontMatterAppendixList(pages);
-  removeBibliographySection(pages);
-  removeMetadataAppendices(pages, 1, 2);
-  const tokenRepairs = options.documentTokenRepair
-    ? repairDocumentSplitTokens(
-        pages,
-        options.documentTokenRepairMinFrequency,
-        options.documentTokenRepairStructuralOnly,
-      )
-    : [];
-  const abbreviations = extractAndCleanAbbreviationLists(pages);
-
-  const pageTextChars = pages.reduce((sum, page) => sum + page.text.length, 0);
-  return {
-    pdfId: options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : "<browser-pdf>"),
-    cacheVersion: options.documentTokenRepair ? 3 : 2,
-    pageCount: pdf.numPages,
-    extractedAt: new Date().toISOString(),
-    pages,
-    abbreviations,
-    tokenRepairs,
-    ocrNeeded: pageTextChars < Math.max(1000, pdf.numPages * 100),
-  };
 }
 
 /**

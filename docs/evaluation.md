@@ -479,3 +479,17 @@ against accepted iteration 175. The source lookup is retained for demonstrated
 parsing correctness; it yields no corpus accuracy gain. Full tests pass (`841`),
 including the 16 added scenarios, typecheck and all three builds pass. Final
 and rejected summaries are archived in `docs/experiments/2026-10-01-results.json`.
+
+
+## Iteration 181 lifecycle regression (2026-10-02)
+
+Fresh npm run eval and npm run eval:holdout runs with report tag r181-lifecycle
+return 416/523 and 460/540 respectively; the holdout acceptance command exits
+zero. All 1,063 records match accepted iteration 180 in selected IDs/order,
+raw/calibrated scores, confidence, correctness and expected labels. Dataset,
+configuration and dependency provenance are unchanged. Train/external were
+not rerun. This validates lifecycle changes, not an accuracy improvement or a
+new blind estimate. All 860 unit/contract tests, typecheck, three builds and
+dataset validation pass. Nineteen new tests exercise failure recovery, complete
+cache invalidation, races and PDF.js resource destruction. See the
+[tracked summary](experiments/2026-10-02-lifecycle-results.json).

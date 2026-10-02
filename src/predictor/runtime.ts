@@ -74,19 +74,16 @@ function runtimeVariantKey(options: PdfRuntimeOptions): string {
  */
 export class PdfRuntimeStore {
   private readonly keyedRuntimeCache = new Map<string, Promise<PdfRuntime>>();
-  private readonly objectRuntimeCache = new WeakMap<object, Map<string, Promise<PdfRuntime>>>();
+  private objectRuntimeCache = new WeakMap<object, Map<string, Promise<PdfRuntime>>>();
 
-  constructor(
+  public constructor(
     private readonly dependencies: PdfRuntimeStoreDependencies = DEFAULT_RUNTIME_DEPENDENCIES,
   ) {}
 
   /**
    * Создает или переиспользует runtime-состояние одного PDF.
    */
-  async get(
-    pdfInput: unknown,
-    options: PdfRuntimeOptions = {},
-  ): Promise<PdfRuntime> {
+  public async get(pdfInput: unknown, options: PdfRuntimeOptions = {}): Promise<PdfRuntime> {
     const suppliedCacheKey = options.cacheKey ?? (typeof pdfInput === "string" ? pdfInput : null);
     const variantKey = runtimeVariantKey(options);
     const cacheKey = suppliedCacheKey ? `${suppliedCacheKey}\u0000${variantKey}` : null;
@@ -110,15 +107,27 @@ export class PdfRuntimeStore {
       this.objectRuntimeCache.set(weakKey, variants);
     }
 
-    return runtimePromise;
+    try {
+      return await runtimePromise;
+    } catch (error) {
+      // A request started before clear() must not evict its replacement.
+      if (cacheKey && this.keyedRuntimeCache.get(cacheKey) === runtimePromise) {
+        this.keyedRuntimeCache.delete(cacheKey);
+      } else if (!cacheKey && weakKey) {
+        const variants = this.objectRuntimeCache.get(weakKey);
+        if (variants?.get(variantKey) === runtimePromise) variants.delete(variantKey);
+      }
+      throw error;
+    }
   }
 
   /**
-   * Очищает keyed-кеш. WeakMap сохраняет прежнюю семантику: его записи
-   * освобождаются сборщиком мусора вместе с исходными объектами PDF.
+   * Очищает кеш по ключам и объектам PDF. Уже запущенные запросы завершаются,
+   * но следующие обращения создают новое runtime-состояние.
    */
-  clear() {
+  public clear(): void {
     this.keyedRuntimeCache.clear();
+    this.objectRuntimeCache = new WeakMap();
   }
 }
 
@@ -135,7 +144,7 @@ export async function getPdfRuntime(
 }
 
 /**
- * Очищает keyed runtime-кеш PDF.
+ * Очищает runtime-кеш PDF по ключам и объектам.
  */
 export function clearPdfRuntimeCache() {
   defaultPdfRuntimeStore.clear();

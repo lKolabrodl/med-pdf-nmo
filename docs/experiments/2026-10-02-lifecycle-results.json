@@ -1,0 +1,86 @@
+{
+  "date": "2026-10-02",
+  "iteration": 181,
+  "scope": "PDF cache and resource lifecycle; scoring unchanged",
+  "baselineRuntimeSourceFingerprint": "022fa533610332bc14cec0543d98034e198289ae2573476262e13fc52638c9fb",
+  "provenance": {
+    "runtimeSourceFingerprint": "edfd5e552f45173e1c7496b1218b57a032fbe24a114a4dc3c7611e39d61b6b4e",
+    "datasetManifestVersion": 8,
+    "datasetPdfFingerprint": "7d990701f1f6c6ef730783ff305c9905f893a3d0d85f04386d92149ac31200a2",
+    "datasetCaseFingerprint": "d4323e60a8e01fb20751e182349686a0ff7ecc3ca56af081e5c82f451a479b4c",
+    "nodeVersion": "v22.23.2",
+    "pdfjsVersion": "5.7.284",
+    "resolvedConfig": {
+      "nativePdfStructure": false,
+      "contrastiveOptionFamily": false,
+      "multiRelativeThreshold": 0.84,
+      "multiAbsoluteThreshold": 12,
+      "multiGapThreshold": 0.72,
+      "multiMinAnswers": 2,
+      "multiThirdGapThreshold": 0.45,
+      "multiThirdRelativeThreshold": 0.55,
+      "frozenFeatureRanker": true,
+      "multiCardinalityModel": true,
+      "multiAllOptionsGuard": true,
+      "multiCrowdedTailGuard": true,
+      "pairwiseContrastRanker": true,
+      "structuralClusterAdjustments": true,
+      "singleSpecificityTieBreak": true,
+      "singleTieMaxRawGap": 0.2,
+      "singleTieMinRawRatio": 0.94,
+      "singleTieSpecificityGap": 0.5,
+      "sharedMultiSegmentBoost": true,
+      "countRelationBoost": true,
+      "optionFamilyComparatorGuard": true,
+      "optionFamilyCompactComboGuard": true,
+      "relationTupleResolver": true,
+      "intervalRelationTupleResolver": true,
+      "clauseLocalCountTupleResolver": true,
+      "negationPairClauseResolver": false,
+      "documentTokenRepair": true,
+      "documentTokenRepairMinFrequency": 2,
+      "documentTokenRepairStructuralOnly": true,
+      "explicitOrdinalRangeSetDecoder": true,
+      "siblingListMultiResolver": true,
+      "siblingListSingleResolver": true,
+      "hierarchicalListResolver": true,
+      "recommendationPropositionResolver": true,
+      "topQuestionChunks": 28,
+      "evidenceLimit": 8,
+      "includeSources": false
+    }
+  },
+  "validation": {
+    "newLifecycleTests": 19,
+    "baselineFailures": 15,
+    "fullPassedTests": 860,
+    "skippedCorpusFixtures": 2984,
+    "typecheck": true,
+    "builds": [
+      "Node ESM",
+      "browser IIFE",
+      "browser ESM"
+    ],
+    "datasetValidation": true,
+    "holdoutExitCode": 0
+  },
+  "splits": {
+    "dev": {
+      "correct": 416,
+      "total": 523,
+      "exactAccuracy": 0.7954,
+      "changedRecords": 0
+    },
+    "holdout": {
+      "correct": 460,
+      "total": 540,
+      "exactAccuracy": 0.8519,
+      "changedRecords": 0
+    }
+  },
+  "notRerun": [
+    "train",
+    "external"
+  ],
+  "note": "All 1063 dev/holdout records match iteration 180 in IDs, order, scores, confidence, correctness and expected labels. Historical observed regression sets; no accuracy or memory-reduction claim."
+}

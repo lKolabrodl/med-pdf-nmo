@@ -526,3 +526,26 @@ gain. Larger gains still require evidence that the requested value belongs to
 the requested condition, and complete multi membership, rather than a wider
 comparator grammar alone. The failures in this round do not establish a
 non-LLM algorithmic ceiling.
+
+
+## 2026-10-02: PDF runtime lifecycle (iteration 181)
+
+This change addresses operational failures rather than scorer accuracy. Three
+independent synthetic reproductions showed a cached rejected promise preventing
+retry, object-identity entries surviving an explicit cache clear, and missing
+PDF.js resource destruction. Nineteen new lifecycle scenarios cover both cache
+paths, concurrent failures, clear/settle races, all extraction failure stages,
+awaited cleanup, cleanup-error precedence, and custom-adapter compatibility.
+Fifteen of these scenarios fail on the previous implementation.
+
+Keep promise sharing, but evict a rejected promise only if it is still the
+current entry. Replace the WeakMap on clear instead of enumerating or retaining
+its keys. Destroy the loading task in finally (document fallback for custom
+adapters); this also handles failures before a document proxy exists. Cleanup
+must not replace an earlier extraction error. No additional library, inference
+service, medical rule, score weight, or selection threshold is introduced.
+
+The installed PDF.js type declarations document loading-task/document destroy
+methods. The implementation uses those existing methods; memory reduction is
+not quantified in this round. Corpus regression results are recorded separately
+in evaluation.md and iteration-log.md.

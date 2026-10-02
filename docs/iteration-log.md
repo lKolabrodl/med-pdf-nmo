@@ -1877,3 +1877,34 @@ accepted source. Iteration 180 freshly verifies every canonical keyed record.
 Canceled partial reports are not aggregate scores and are not reused as final
 candidate reports. Historical holdout and external remain observed regression
 sets; a new PDF-group collection is required for a blind generalization claim.
+
+
+## 2026-10-02 — iteration 181: PDF cache and resource lifecycle
+
+Accepted operational fix, with no measured accuracy gain. Failed runtime
+promises are evicted with identity checks; clear invalidates both keyed and
+object caches; PDF.js destruction is awaited in finally on success and failure.
+An older in-flight request cannot evict a replacement. Custom adapters may
+supply a loading-task or document destroy hook; missing hooks remain supported.
+An extraction failure takes precedence over a secondary cleanup failure.
+
+Nineteen new synthetic lifecycle tests were written before the implementation;
+fifteen fail on baseline. All 860 final unit/contract tests pass (2,984 corpus
+fixtures intentionally skipped), typecheck and Node/browser builds pass, and
+dataset validation confirms unchanged PDF/case fingerprints and split isolation.
+
+| split | baseline iteration 180 | iteration 181 | changed records |
+| --- | ---: | ---: | ---: |
+| dev | 416/523 (79.54%) | 416/523 (79.54%) | 0 |
+| holdout regression | 460/540 (85.19%) | 460/540 (85.19%) | 0 |
+
+Both npm eval commands exit zero. The strict comparator verifies identical
+selected IDs/order, raw/calibrated scores and confidence on all 1,063 records;
+separate checks verify labels, correctness, dataset and configuration provenance.
+Train/external were not rerun for this lifecycle-only change. No scorer,
+selection threshold, runtime dependency, or medical rule changed. Memory
+reduction was not benchmarked. The historical holdout remains a regression set.
+
+Runtime fingerprint: edfd5e552f45173e1c7496b1218b57a032fbe24a114a4dc3c7611e39d61b6b4e.
+Reports use tag r181-lifecycle. The tracked summary is
+[2026-10-02-lifecycle-results.json](experiments/2026-10-02-lifecycle-results.json).

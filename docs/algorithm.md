@@ -5,6 +5,17 @@
 
 ## Input
 
+PDF extraction caches successful runtime data and shares in-flight requests.
+Failed requests are evicted so the next call can retry. Cache clearing invalidates
+both explicit/URL keys and object identity entries, without cancelling callers
+already in flight. An older failure cannot evict a newer cached request.
+
+Extraction awaits PDF.js loading-task destruction in `finally`, falling back to
+document destruction for custom adapters. Adapters without either hook remain
+supported. Cleanup failures propagate after successful extraction; if extraction
+also failed, its original error is preserved. The cache retains plain extracted
+text/layout and search indexes, not the PDF.js document or worker.
+
 `npm run predict` accepts either a JSON request file or CLI flags.
 
 JSON shape:

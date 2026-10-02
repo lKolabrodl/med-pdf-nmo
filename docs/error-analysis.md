@@ -371,3 +371,18 @@ Therefore the dominant unresolved class is still relation/ownership ambiguity,
 not missing retrieval or a globally wrong cardinality threshold. The safe
 structural signals are highly precise but now mostly overlap questions the
 predictor already solves.
+
+
+## Iteration 181: operational PDF failures
+
+Three failures are reproduced independently of answer labels: permanent reuse
+of a rejected extraction promise, incomplete object-identity cache clearing,
+and missing PDF.js destruction after extraction. These can prevent retry or
+retain obsolete runtime/resources in long-lived applications. They are not
+newly discovered medical ranking errors and are not counted as accuracy gains.
+
+Regression checks cover keyed and object caches, shared concurrent failures,
+clear/settle races, page/text/structure/load failures, and cleanup-error
+precedence. The implementation repairs these paths without changing scorer
+weights or selected-set rules. Memory reduction is not benchmarked. The corpus
+comparison and acceptance result are recorded in iteration-log.md.
