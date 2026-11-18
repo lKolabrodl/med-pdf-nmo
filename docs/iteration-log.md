@@ -2076,3 +2076,36 @@ npm run eval:loo -- --report-tag i169-quote-off --config quotedContinuation=fals
 npm run eval:loo -- --report-tag i172-quote-final
 node scripts/diff-results.mjs .cache/eval/loo-all-i169-quote-off.json .cache/eval/loo-all-i172-quote-final.json
 ```
+
+## Iteration 182 — two-sided quotations for an explicit blank
+
+The existing continuation resolver skips prompts with blanks. This experiment
+looked for an entire answer between the literal tokens immediately before and
+after a single marked blank on one PDF page. It used up to four tokens on each
+side, required four word tokens across the two sides, and allowed a filling
+of one to twelve tokens within a sentence. Competing fillings or two matching
+answer options caused abstention.
+
+The control was `fb23a4c`. Before scoring, the candidate was frozen at Git blob
+`cddfb10d452bc1a3c917f4523361879a6033a520`. The gate was a positive net
+change in exact answers on dev and a nonnegative change on train. Seven
+synthetic checks covered positive matching, option permutation, an unlisted
+competing filling, decimal and sign differences, page boundaries, and duplicate
+options. The candidate had no access to keys, case identifiers, or split names.
+
+| Frozen split | PDFs | Keyed questions | Unique matches | Changed answers | Fixed | Broken |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Train | 25 | 1541 | 26 | 0 | 0 | 0 |
+| Dev | 9 | 523 | 7 | 0 | 0 | 0 |
+
+All 33 matches agreed with the production prediction. The ordinary evaluator
+also ran the full dev split and measured 417/523 (79.73%). Abstentions use the
+control selection, so the candidate scores exactly 417/523 as well. The dev
+gate failed. No thresholds were revised, no holdout or external predictions were
+evaluated, and the candidate remains an experiment under `scripts/`.
+
+To reproduce the paired comparison, run `node --import tsx scripts/cloze-quote-experiment.ts train`
+and repeat with `dev`. Each run requires every group in the requested split and
+prints a SHA-256 digest over its group names, PDF contents and case files.
+The measured digests were `acb69683029e951b225ed1f24ec9c0e93d646a034e90a08c5817bb05db0c093d`
+(train) and `ca253fd6c6d5ab7123653d842bf8325c9154d18a237607579aac1a3168daa4b1` (dev).
