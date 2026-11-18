@@ -6,6 +6,7 @@ import {
   resolveExplicitOrdinalRangeSet,
 } from "../scorers/multi-set/index.js";
 import { applySingleRelationTupleResolver } from "../scorers/relation-tuple/index.js";
+import { applyNumericTieConditionBreak } from "../scorers/tie-break/index.js";
 import { applyFrozenFeatureRanker } from "../selection.js";
 import type {
   QuestionIntent,
@@ -178,6 +179,27 @@ export class ClauseLocalCountTupleProcessor
       topQuestionPages: context.topQuestionPages,
       question: context.question,
       answers: context.answers,
+    });
+  }
+}
+
+/**
+ * Итерация A / Теория 1: разрывает точную ничью одиночного ответа по
+ * со-встречаемости значения варианта со специфичными токенами условия в одной
+ * строке PDF. Включается флагом `numericTieConditionBreak` (по умолчанию on).
+ */
+export class NumericTieConditionProcessor implements ScoreAdjustmentProcessor {
+  readonly id = "numeric-tie-condition";
+
+  apply(scores: AnswerScore[], context: ScoreAdjustmentContext) {
+    if (context.mode !== "single" || !context.config.numericTieConditionBreak) {
+      return scores;
+    }
+    return applyNumericTieConditionBreak(scores, {
+      mode: context.mode,
+      pages: context.runtime.pdfText.pages,
+      topQuestionPages: context.topQuestionPages,
+      question: context.question,
     });
   }
 }

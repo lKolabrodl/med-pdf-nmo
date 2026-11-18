@@ -1,4 +1,5 @@
 import { ConfidenceCalculator } from "./predictor/confidence-calculator.js";
+import { QuotedContinuationProcessor } from "./predictor/scorers/quoted-continuation/index.js";
 import { PredictionContextBuilder } from "./predictor/context-builder.js";
 import { PredictorEngine } from "./predictor/engine.js";
 import { AnswerScoringPipeline } from "./predictor/pipelines/answer-scoring-pipeline.js";
@@ -11,6 +12,7 @@ import {
   GeneSentenceSetProcessor,
   LatinOcrSetProcessor,
   NegationPairProcessor,
+  NumericTieConditionProcessor,
   RelationTupleProcessor,
   SharedMultiSegmentProcessor,
 } from "./predictor/pipelines/score-adjustment-processors.js";
@@ -55,6 +57,8 @@ export function createPredictorEngine() {
       new RelationTupleProcessor(),
       new ClauseLocalCountTupleProcessor(),
       new NegationPairProcessor(),
+      new NumericTieConditionProcessor(),
+      new QuotedContinuationProcessor(),
     ]),
     answerSelector: new AnswerSelector(),
     confidenceCalculator: new ConfidenceCalculator(),

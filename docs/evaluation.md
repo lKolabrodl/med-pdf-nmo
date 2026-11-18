@@ -493,3 +493,37 @@ new blind estimate. All 860 unit/contract tests, typecheck, three builds and
 dataset validation pass. Nineteen new tests exercise failure recovery, complete
 cache invalidation, races and PDF.js resource destruction. See the
 [tracked summary](experiments/2026-10-02-lifecycle-results.json).
+
+## Historical 47-PDF evaluation
+
+The following two reports use the earlier 47-PDF manifest and branch-local iteration numbers. The commands in the November report used that historical manifest. The mainline 2,936-question corpus includes an additional external PDF.
+
+## Iteration 166 exact-tie condition break
+
+The `numericTieConditionBreak` selection processor breaks an EXACT raw tie
+between short/numeric single-answer variants by preferring the value that
+co-occurs, in one physical PDF line, with the rarest condition tokens of the
+question. It reads no labels, ids, expected counts, or medical facts.
+
+| split | before | after | delta |
+| --- | ---: | ---: | ---: |
+| train | `1074/1541 = 0.6970` | `1077/1541 = 0.6989` | `+3` |
+| dev | `416/523 = 0.7954` | `416/523 = 0.7954` | `0` |
+| holdout regression | `460/540 = 0.8519` | `460/540 = 0.8519` | `0` |
+| external transfer | `175/263 = 0.6654` | `175/263 = 0.6654` | `0` |
+| all keyed | `2125/2867 = 0.7412` | `2128/2867 = 0.7422` | `+3` |
+
+Repaired cases: `20-hron#17`, `20-hron#55`, `39-glaurova#54`. Zero regressions;
+holdout stays above the `0.80` gate. Two same-round theories were measured and
+rolled back: cross-line hyphenation repair (`0` changed selections on dev and on
+the highest-repair groups) and an adaptive within-question multi-cardinality
+elbow (dev `-9`). Details in `docs/iteration-log.md`, iterations 166–169.
+
+## Iterations 170–172
+
+The default `quotedContinuation` resolver raised exact matches from 2128 to
+2131 across 2867 keyed questions (74.22% to 74.33%). Train, dev and historical
+holdout each gained one single-answer case. External stayed at 175/263. The
+uniqueness requirement was introduced after examining a holdout regression.
+The [iteration log](iteration-log.md#round-2026-11-18--literal-evidence-at-the-question-boundary)
+contains the three independent experiments, per-split counts and reproduction commands.

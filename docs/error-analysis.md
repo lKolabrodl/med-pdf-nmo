@@ -386,3 +386,47 @@ clear/settle races, page/text/structure/load failures, and cleanup-error
 precedence. The implementation repairs these paths without changing scorer
 weights or selected-set rules. Memory reduction is not benchmarked. The corpus
 comparison and acceptance result are recorded in iteration-log.md.
+
+## Fresh census 2026-07-29 and the exact-tie sub-class
+
+A full independent re-run reproduced the frozen default byte for byte
+(`2125/2867 = 0.7412`). The `742` errors split `327` single / `415` multi.
+
+Single errors, ranked by where the correct answer actually landed in raw score:
+
+| correct-answer rank | count | reading |
+| --- | ---: | --- |
+| 1 (top, selection overridden) | 3 | tie-break/pairwise ranker flipped a correct top |
+| 2 | 183 | correct is the runner-up; `123` are within `90%` of the top raw |
+| 3 | 87 | genuine scoring gap |
+| 4+ | 54 | genuine scoring gap |
+
+Of the rank-≥2 single errors, `30` are an EXACT raw tie whose correct answer is
+inside the tied top cluster. These are dose/threshold/generation cloze questions
+where several numeric options score identically and the selector keeps original
+option order (usually "A"). This is the one single sub-class with a safe,
+document-grounded fix, and it is the basis of the accepted iteration-166 change
+(`numericTieConditionBreak`): on an exact tie, prefer the option whose value
+co-occurs, in one physical line, with the rarest condition tokens of the
+question. It repaired `20-hron#17`, `20-hron#55`, `39-glaurova#54` with zero
+regressions.
+
+Multi errors by option count (`n` = errors, direction relative to expected `K`):
+
+| options | errors | under | over | wrong-member |
+| ---: | ---: | ---: | ---: | ---: |
+| 4 | 103 | 0 | 0 | 103 |
+| 5 | 214 | 128 | 86 | 0 |
+| 6 | 49 | 12 | 6 | 31 |
+| 7 | 31 | 16 | 15 | 0 |
+| 8–11 | 18 | 5 | 11 | 2 |
+
+The 5-option cluster is the largest, but its under/over split is balanced, which
+is exactly why a within-question score-shape "elbow" (tried and rejected in
+iteration 168, dev `-9`) trades one direction for the other, reproducing the
+iteration-84 ceiling. The 4-option and wrong-member classes are pure
+relation/ownership and remain unaddressed by any non-semantic signal.
+
+Final result after this round: `2128/2867 = 0.7422` (`+3` from the exact-tie
+break); train `1077/1541 = 0.6989`, dev `416/523 = 0.7954`,
+holdout `460/540 = 0.8519`, external `175/263 = 0.6654`.

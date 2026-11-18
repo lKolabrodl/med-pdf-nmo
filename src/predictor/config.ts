@@ -29,6 +29,8 @@ export const DEFAULT_CONFIG = {
   intervalRelationTupleResolver: true,
   clauseLocalCountTupleResolver: true,
   negationPairClauseResolver: false,
+  numericTieConditionBreak: true,
+  quotedContinuation: true,
   documentTokenRepair: true,
   documentTokenRepairMinFrequency: 2,
   documentTokenRepairStructuralOnly: true,
